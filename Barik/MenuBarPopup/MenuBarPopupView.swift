@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuBarPopupView<Content: View>: View {
     let content: Content
     let isPreview: Bool
+    let widgetRect: CGRect
 
     @ObservedObject var configManager = ConfigManager.shared
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
@@ -21,7 +22,12 @@ struct MenuBarPopupView<Content: View>: View {
     private let willChangeContent = NotificationCenter.default.publisher(
         for: .willChangeContent)
 
-    init(isPreview: Bool = false, @ViewBuilder content: () -> Content) {
+    init(
+        widgetRect: CGRect = .zero,
+        isPreview: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.widgetRect = widgetRect
         self.content = content()
         self.isPreview = isPreview
         if isPreview {
@@ -29,16 +35,23 @@ struct MenuBarPopupView<Content: View>: View {
         }
     }
 
+    var popupTopPosition: CGFloat {
+        foregroundHeight
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             content
                 .background(Color.black)
                 .cornerRadius(((1.0 - animationValue) * 1) + 40)
-                .padding(.top, foregroundHeight + 5)
-                .offset(x: computedOffset, y: computedYOffset)
                 .shadow(radius: 30)
                 .blur(radius: (1.0 - (0.1 + 0.9 * animationValue)) * 20)
-                .scaleEffect(x: 0.2 + 0.8 * animationValue, y: animationValue)
+                .scaleEffect(
+                    x: 0.2 + 0.8 * animationValue,
+                    y: animationValue,
+                    anchor: .top
+                )
+                .offset(x: computedOffset, y: popupTopPosition)
                 .opacity(animationValue)
                 .transaction { transaction in
                     if isHideAnimation {
@@ -137,21 +150,23 @@ struct MenuBarPopupView<Content: View>: View {
 
     var computedOffset: CGFloat {
         let screenWidth = NSScreen.main?.frame.width ?? 0
-        let W = viewFrame.width
-        let M = viewFrame.midX
-        let newLeft = (M - W / 2) - 20
-        let newRight = (M + W / 2) + 20
+        let contentWidth = viewFrame.width > 0 ? viewFrame.width : 200
+        var xOffset = widgetRect.midX - contentWidth / 2
 
-        if newRight > screenWidth {
-            return screenWidth - newRight
-        } else if newLeft < 0 {
-            return -newLeft
+        let rightEdge = xOffset + contentWidth + 20
+        let leftEdge = xOffset - 20
+
+        if rightEdge > screenWidth {
+            xOffset -= (rightEdge - screenWidth)
+        } else if leftEdge < 0 {
+            xOffset -= leftEdge
         }
-        return 0
+
+        return xOffset
     }
 
     var computedYOffset: CGFloat {
-        return viewFrame.height / 2
+        return 0
     }
 }
 
