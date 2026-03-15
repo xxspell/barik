@@ -1,7 +1,12 @@
 import Foundation
+import OSLog
 
 class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
     typealias SpaceType = YabaiSpace
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "barik",
+        category: "YabaiSpacesProvider"
+    )
     let executablePath = ConfigManager.shared.config.yabai.path
 
     private func runYabaiCommand(arguments: [String]) -> Data? {
@@ -13,7 +18,7 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
         do {
             try process.run()
         } catch {
-            print("Yabai error: \(error)")
+            logger.error("Yabai error: \(error.localizedDescription)")
             return nil
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -32,7 +37,7 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
             let spaces = try decoder.decode([YabaiSpace].self, from: data)
             return spaces
         } catch {
-            print("Decode yabai spaces error: \(error)")
+            logger.error("Decode yabai spaces error: \(error.localizedDescription)")
             return nil
         }
     }
@@ -48,7 +53,7 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
             let windows = try decoder.decode([YabaiWindow].self, from: data)
             return windows
         } catch {
-            print("Decode yabai windows error: \(error)")
+            logger.error("Decode yabai windows error: \(error.localizedDescription)")
             return nil
         }
     }

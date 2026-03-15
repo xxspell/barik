@@ -1,8 +1,13 @@
 import Combine
 import EventKit
 import Foundation
+import OSLog
 
 class CalendarManager: ObservableObject {
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "barik",
+        category: "CalendarManager"
+    )
     let configProvider: ConfigProvider
     var config: ConfigData? {
         configProvider.config["calendar"]?.dictionaryValue
@@ -58,7 +63,7 @@ class CalendarManager: ObservableObject {
                 self?.fetchTomorrowsEvents()
                 self?.fetchNextEvent()
             } else {
-                print(
+                self?.logger.error(
                     "Calendar access not granted: \(String(describing: error))")
             }
         }
@@ -83,7 +88,7 @@ class CalendarManager: ObservableObject {
             let endOfDay = calendar.date(
                 bySettingHour: 23, minute: 59, second: 59, of: now)
         else {
-            print("Failed to get end of day.")
+            logger.error("Failed to get end of day.")
             return
         }
         let predicate = eventStore.predicateForEvents(
@@ -108,7 +113,7 @@ class CalendarManager: ObservableObject {
             let endOfDay = calendar.date(
                 bySettingHour: 23, minute: 59, second: 59, of: now)
         else {
-            print("Failed to get end of day.")
+            logger.error("Failed to get end of day.")
             return
         }
         let predicate = eventStore.predicateForEvents(
@@ -133,7 +138,7 @@ class CalendarManager: ObservableObject {
             let endOfTomorrow = calendar.date(
                 bySettingHour: 23, minute: 59, second: 59, of: startOfTomorrow)
         else {
-            print("Failed to get tomorrow's date range.")
+            logger.error("Failed to get tomorrow's date range.")
             return
         }
         let predicate = eventStore.predicateForEvents(

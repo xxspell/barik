@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Foundation
+import OSLog
 
 // MARK: - Playback State
 
@@ -60,6 +61,10 @@ import AppKit
 /// An observable manager that updates the now playing song using MediaRemote Adapter.
 final class NowPlayingManager: ObservableObject {
     static let shared = NowPlayingManager()
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "barik",
+        category: "NowPlayingManager"
+    )
 
     @Published private(set) var nowPlaying: NowPlayingSong?
     private var process: Process?
@@ -141,7 +146,7 @@ final class NowPlayingManager: ObservableObject {
                     for line in completeErrorLines {
                         let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
                         if !trimmedLine.isEmpty {
-                            print("MediaRemote Adapter Error: \(trimmedLine)")
+                            self.logger.error("MediaRemote Adapter error: \(trimmedLine)")
                         }
                     }
                 }
@@ -152,7 +157,7 @@ final class NowPlayingManager: ObservableObject {
             try process.run()
             self.process = process
         } catch {
-            print("Failed to start media-control stream: \(error). Attempting fallback...")
+            logger.error("Failed to start media-control stream: \(error.localizedDescription). Attempting fallback...")
 
             // Fallback to distributed notification system if media-control is not available
             setupDistributedNotificationObserver()
@@ -170,7 +175,7 @@ final class NowPlayingManager: ObservableObject {
 
         for path in possiblePaths {
             if FileManager.default.fileExists(atPath: path) {
-                print("Using media-control from: \(path)")
+                logger.debug("Using media-control from: \(path)")
                 return path
             }
         }
@@ -178,12 +183,12 @@ final class NowPlayingManager: ObservableObject {
         // If not found in specific paths, try to find using which
         if let pathFromWhich = executeShellCommand("which media-control")?.trimmingCharacters(in: .whitespacesAndNewlines),
            !pathFromWhich.isEmpty {
-            print("Using media-control from: \(pathFromWhich)")
+            logger.debug("Using media-control from: \(pathFromWhich)")
             return pathFromWhich
         }
 
         // If still not found, return a generic reference which will likely fail but be informative
-        print("media-control not found in common paths. Using 'media-control' command directly.")
+        logger.debug("media-control not found in common paths. Using 'media-control' command directly.")
         return "media-control"
     }
 
@@ -249,7 +254,7 @@ final class NowPlayingManager: ObservableObject {
 
             // Print raw JSON for debugging, truncating artworkData if too long
             let debugJsonLine = truncateArtworkData(jsonLine)
-            print("DEBUG RAW JSON: \(debugJsonLine)")
+            logger.debug("Raw MediaRemote JSON: \(debugJsonLine)")
 
             // The MediaRemote Adapter outputs JSON lines in the format:
             // {"type": "data", "diff": true/false, "payload": {...}}
@@ -270,7 +275,7 @@ final class NowPlayingManager: ObservableObject {
                     if !isPlaying && title.isEmpty {
                         // No title and not playing - clear the now playing info
                         DispatchQueue.main.async { [weak self] in
-                            print("NowPlaying cleared - no title and not playing")
+                            self?.logger.debug("NowPlaying cleared because title is empty and playback is stopped")
                             self?.nowPlaying = nil
                         }
                         continue
@@ -292,25 +297,25 @@ final class NowPlayingManager: ObservableObject {
 
                         // Check if this payload contains only artworkData (separate artwork update)
                         if let artworkData = payload["artworkData"] as? String {
-                            print("DEBUG: Processing artworkData of length: \(artworkData.count)")
+                            self?.logger.debug("Processing artworkData of length: \(artworkData.count)")
 
                             // Convert base64 to data and store in memory
                             if let imageData = Data(base64Encoded: artworkData) {
-                                print("DEBUG: Successfully decoded artwork image data of size: \(imageData.count)")
+                                self?.logger.debug("Decoded artwork image data of size: \(imageData.count)")
 
                                 // Create NSImage directly from the data
                                 if let image = NSImage(data: imageData) {
                                     albumArtImage = image
-                                    print("DEBUG: Successfully created NSImage from artwork data")
+                                    self?.logger.debug("Created NSImage from artwork data")
                                     // Use in-memory image only, no temporary file creation
                                 } else {
-                                    print("DEBUG: Failed to create NSImage from image data")
+                                    self?.logger.debug("Failed to create NSImage from image data")
                                 }
                             } else {
-                                print("DEBUG: Failed to decode artwork data from base64")
+                                self?.logger.debug("Failed to decode artwork data from base64")
                             }
                         } else {
-                            print("DEBUG: artworkData is not a string or is nil")
+                            self?.logger.debug("artworkData is not a string or is nil")
                         }
 
                         // Extract other metadata - if this is just artwork data, we may need to update the existing song
@@ -333,7 +338,7 @@ final class NowPlayingManager: ObservableObject {
                                     positionTimestamp: existingSong.positionTimestamp
                                 )
 
-                                print("NowPlaying Artwork Update via MediaRemote Adapter: \(updatedSong.title) by \(updatedSong.artist) [\(updatedSong.state.rawValue)] from \(updatedSong.appName), albumArtURL: \(albumArtURL != nil ? "available" : "none"), albumArtImage: \(albumArtImage != nil ? "available" : "none")")
+                                self?.logger.debug("NowPlaying artwork update via MediaRemote Adapter: \(updatedSong.title) by \(updatedSong.artist) [\(updatedSong.state.rawValue)] from \(updatedSong.appName), albumArtURL: \(albumArtURL != nil ? "available" : "none"), albumArtImage: \(albumArtImage != nil ? "available" : "none")")
                                 self?.nowPlaying = updatedSong
                                 return // Exit early since we're just updating artwork
                             }
@@ -395,21 +400,21 @@ final class NowPlayingManager: ObservableObject {
                             )
 
                             // Log for debugging
-                            print("NowPlaying Update via MediaRemote Adapter: \(song.title) by \(song.artist) [\(song.state.rawValue)] from \(song.appName), albumArtImage: \(finalAlbumArtImage != nil ? "available" : "none")")
+                            self?.logger.debug("NowPlaying update via MediaRemote Adapter: \(song.title) by \(song.artist) [\(song.state.rawValue)] from \(song.appName), albumArtImage: \(finalAlbumArtImage != nil ? "available" : "none")")
 
                             self?.nowPlaying = song
                         }
 
                         // Debug: Print all available keys in payload
-                        print("DEBUG: Available keys in payload: \(payload.keys)")
+                        self?.logger.debug("Available keys in payload: \(String(describing: Array(payload.keys)))")
                         if let artworkDataRaw = payload["artworkData"] {
                             let artworkDataStr = String(describing: artworkDataRaw)
                             let truncatedArtworkData = artworkDataStr.count > 60 ?
                                 "\(artworkDataStr.prefix(30))...\(artworkDataStr.suffix(30))" :
                                 artworkDataStr
-                            print("DEBUG: artworkData type: \(type(of: artworkDataRaw)), value: \(truncatedArtworkData)")
+                            self?.logger.debug("artworkData type: \(String(describing: type(of: artworkDataRaw))), value: \(truncatedArtworkData)")
                         } else {
-                            print("DEBUG: artworkData key not found in payload")
+                            self?.logger.debug("artworkData key not found in payload")
                         }
                     }
                 }
@@ -419,7 +424,7 @@ final class NowPlayingManager: ObservableObject {
                 // Only log if it's not a parsing issue related to partial data
                 if !jsonLine.contains("{") || jsonLine.hasPrefix("{\"type\"") {
                     // Log only if it looks like it should be a proper JSON object
-                    print("Error parsing MediaRemote Adapter JSON (line: \(jsonLine.prefix(100))...): \(error)")
+                    logger.error("Error parsing MediaRemote Adapter JSON (line: \(String(jsonLine.prefix(100)))...): \(error.localizedDescription)")
                 }
             }
         }
@@ -470,7 +475,7 @@ final class NowPlayingManager: ObservableObject {
         )
 
         DispatchQueue.main.async { [weak self] in
-            print("NowPlaying Update via Music notification: \(song.title) by \(song.artist) [\(song.state.rawValue)] from \(song.appName)")
+            self?.logger.debug("NowPlaying update via Music notification: \(song.title) by \(song.artist) [\(song.state.rawValue)] from \(song.appName)")
             self?.nowPlaying = song
         }
     }
@@ -498,7 +503,7 @@ final class NowPlayingManager: ObservableObject {
         )
 
         DispatchQueue.main.async { [weak self] in
-            print("NowPlaying Update via Spotify notification: \(song.title) by \(song.artist) [\(song.state.rawValue)] from \(song.appName)")
+            self?.logger.debug("NowPlaying update via Spotify notification: \(song.title) by \(song.artist) [\(song.state.rawValue)] from \(song.appName)")
             self?.nowPlaying = song
         }
     }
@@ -536,7 +541,7 @@ final class NowPlayingManager: ObservableObject {
             try task.run()
             task.waitUntilExit()
         } catch {
-            print("Failed to execute media-control command: \(error). Using fallback...")
+            logger.error("Failed to execute media-control command: \(error.localizedDescription). Using fallback...")
 
             // Fallback to AppleScript if media-control fails
             executeAppleScriptFallback(commandId: commandId)
@@ -569,7 +574,7 @@ final class NowPlayingManager: ObservableObject {
         appleScript.executeAndReturnError(&error)
 
         if let error = error {
-            print("AppleScript Error: \(error)")
+            logger.error("AppleScript error: \(String(describing: error))")
         }
     }
 

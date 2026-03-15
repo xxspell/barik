@@ -1,9 +1,14 @@
 import Foundation
+import OSLog
 import SwiftUI
 import TOMLDecoder
 
 final class ConfigManager: ObservableObject {
     static let shared = ConfigManager()
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "barik",
+        category: "ConfigManager"
+    )
 
     @Published private(set) var config = Config()
     @Published private(set) var initError: String?
@@ -32,7 +37,7 @@ final class ConfigManager: ObservableObject {
                 chosenPath = path1
             } catch {
                 initError = "Error creating default config: \(error.localizedDescription)"
-                print("Error when creating default config:", error)
+                logger.error("Error creating default config: \(error.localizedDescription)")
                 return
             }
         }
@@ -54,7 +59,7 @@ final class ConfigManager: ObservableObject {
             }
         } catch {
             initError = "Error parsing TOML file: \(error.localizedDescription)"
-            print("Error when parsing TOML file:", error)
+            logger.error("Error when parsing TOML file: \(error.localizedDescription)")
         }
     }
 
@@ -128,7 +133,7 @@ final class ConfigManager: ObservableObject {
 
     func updateConfigValue(key: String, newValue: String) {
         guard let path = configFilePath else {
-            print("Config file path is not set")
+            logger.error("Config file path is not set")
             return
         }
         do {
@@ -141,7 +146,7 @@ final class ConfigManager: ObservableObject {
                 self.parseConfigFile(at: path)
             }
         } catch {
-            print("Error updating config:", error)
+            logger.error("Error updating config: \(error.localizedDescription)")
         }
     }
 

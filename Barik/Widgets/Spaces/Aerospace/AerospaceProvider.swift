@@ -1,7 +1,12 @@
 import Foundation
+import OSLog
 
 class AerospaceSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
     typealias SpaceType = AeroSpace
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "barik",
+        category: "AerospaceSpacesProvider"
+    )
     let executablePath = ConfigManager.shared.config.aerospace.path
 
     func getSpacesWithWindows() -> [AeroSpace]? {
@@ -57,7 +62,7 @@ class AerospaceSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
         do {
             try process.run()
         } catch {
-            print("Aerospace error: \(error)")
+            logger.error("Aerospace error: \(error.localizedDescription)")
             return nil
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -77,7 +82,7 @@ class AerospaceSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
         do {
             return try decoder.decode([AeroSpace].self, from: data)
         } catch {
-            print("Decode spaces error: \(error)")
+            logger.error("Decode spaces error: \(error.localizedDescription)")
             return nil
         }
     }
@@ -95,7 +100,7 @@ class AerospaceSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
         do {
             return try decoder.decode([AeroWindow].self, from: data)
         } catch {
-            print("Decode windows error: \(error)")
+            logger.error("Decode windows error: \(error.localizedDescription)")
             return nil
         }
     }
@@ -112,7 +117,7 @@ class AerospaceSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
         do {
             return try decoder.decode([AeroSpace].self, from: data).first
         } catch {
-            print("Decode focused space error: \(error)")
+            logger.error("Decode focused space error: \(error.localizedDescription)")
             return nil
         }
     }
@@ -129,7 +134,7 @@ class AerospaceSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
         do {
             return try decoder.decode([AeroWindow].self, from: data).first
         } catch {
-            print("Decode focused window error: \(error)")
+            logger.error("Decode focused window error: \(error.localizedDescription)")
             return nil
         }
     }

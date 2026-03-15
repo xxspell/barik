@@ -1,6 +1,11 @@
 import Foundation
+import OSLog
 
 final class AppUpdater: ObservableObject {
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "barik",
+        category: "AppUpdater"
+    )
     // Published properties to notify the UI
     @Published var latestVersion: String?
     @Published var updateAvailable = false
@@ -46,7 +51,7 @@ final class AppUpdater: ObservableObject {
         else { return }
         URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
             if let error = error {
-                print("Error fetching release info: \(error)")
+                self?.logger.error("Error fetching release info: \(error.localizedDescription)")
                 return
             }
             guard let data = data,
@@ -112,28 +117,28 @@ final class AppUpdater: ObservableObject {
         } else if let fallbackURL = fallbackDownloadURL(for: version) {
             assetURL = fallbackURL
         } else {
-            print("Invalid update URL")
+            logger.error("Invalid update URL")
             completion(nil)
             return
         }
 
-        print("Downloading update from: \(assetURL.absoluteString)")
+        logger.debug("Downloading update from: \(assetURL.absoluteString)")
         let downloadTask = URLSession.shared.downloadTask(with: assetURL) {
             localURL, response, error in
             if let error = error {
-                print("Update download error: \(error)")
+                self.logger.error("Update download error: \(error.localizedDescription)")
                 completion(nil)
                 return
             }
             guard let httpResponse = response as? HTTPURLResponse,
                 httpResponse.statusCode == 200
             else {
-                print("Download failed with HTTP error")
+                self.logger.error("Download failed with HTTP error")
                 completion(nil)
                 return
             }
             guard let localURL = localURL else {
-                print("No update file found")
+                self.logger.error("No update file found")
                 completion(nil)
                 return
             }
@@ -160,13 +165,13 @@ final class AppUpdater: ObservableObject {
                         completion(tempDir)
                     }
                 } else {
-                    print("Unzipping failed: Barik.app not found in archive")
+                    self.logger.error("Unzipping failed: Barik.app not found in archive")
                     DispatchQueue.main.async {
                         completion(nil)
                     }
                 }
             } catch {
-                print("Error unzipping update: \(error)")
+                self.logger.error("Error unzipping update: \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     completion(nil)
                 }
@@ -199,7 +204,7 @@ final class AppUpdater: ObservableObject {
     /// - Parameter version: The latest version string.
     func installUpdate(latest version: String) {
         guard let downloadedPath = downloadedUpdatePath else {
-            print("No downloaded update to install")
+            logger.error("No downloaded update to install")
             return
         }
         let newAppURL = URL(fileURLWithPath: downloadedPath)
@@ -230,7 +235,7 @@ final class AppUpdater: ObservableObject {
             process.executableURL = scriptURL
             try process.run()
         } catch {
-            print("Error installing update: \(error)")
+            logger.error("Error installing update: \(error.localizedDescription)")
         }
     }
 }
