@@ -22,6 +22,11 @@
 
 **barik** is a lightweight macOS menu bar replacement. If you use [**yabai**](https://github.com/koekeishiya/yabai) or [**AeroSpace**](https://github.com/nikitabobko/AeroSpace) for tiling WM, you can display the current space in a sleek macOS-style panel with smooth animations. This makes it easy to see which number to press to switch spaces.
 
+It also supports compact usage widgets for **Claude Code** and **Codex**:
+
+- **Claude Usage** reads your Claude Code credentials from Keychain, shows current 5-hour usage as a ring in the menu bar, and exposes 5-hour plus weekly usage in the popup.
+- **Codex Usage** reads local `~/.codex/auth.json` and recent session snapshots, shows the current rate-limit window in the menu bar, and exposes the active window details in the popup.
+
 <br>
 
 <div align="center">
@@ -80,6 +85,8 @@ theme = "system" # system, light, dark
 displayed = [ # widgets on menu bar
     "default.spaces",
     "spacer",
+    "default.claude-usage",
+    "default.codex-usage",
     "default.nowplaying",
     "default.network",
     "default.battery",
@@ -92,6 +99,12 @@ displayed = [ # widgets on menu bar
 space.show-key = true        # show space number (or character, if you use AeroSpace)
 window.show-title = true
 window.title.max-length = 50
+
+[widgets.default.claude-usage]
+# plan = "Max" # optional manual badge override
+
+[widgets.default.codex-usage]
+# plan = "Pro" # optional manual badge override
 
 # A list of applications that will always be displayed by application name.
 # Other applications will show the window title if there is more than one window.
@@ -133,6 +146,15 @@ spacing = 15              # spacing between widgets
 displayed = false                            # wrap widgets in their own background
 blur = 3                                     # background type: from 1 to 6 for blur intensity
 ```
+
+## Usage Widgets
+
+Two usage widgets are available out of the box:
+
+- `default.claude-usage` tracks Claude Code usage from the `Claude Code-credentials` Keychain item. The popup shows the rolling 5-hour window and weekly usage.
+- `default.codex-usage` tracks Codex usage from local auth and session data in `~/.codex`. The popup shows the active rate-limit window, reset time, and recent activity.
+
+If you already have an existing `~/.barik-config.toml`, add these widget IDs manually to `widgets.displayed` to make them appear.
 
 Currently, you can customize the order of widgets (time, indicators, etc.) and adjust some of their settings. Soon, you’ll also be able to add custom widgets and completely change **barik**'s appearance—making it almost unrecognizable (hello, r/unixporn!).
 
