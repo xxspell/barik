@@ -60,6 +60,11 @@ private enum CodexUsageLoadState {
     case failed
 }
 
+private struct CodexSessionScanResult {
+    var latestSnapshot: (bucket: CodexSessionEvent.Bucket, plan: String?, timestamp: Date)?
+    var latestActivity: Date?
+}
+
 private struct CodexAuthState {
     let plan: String
     let accountID: String?
@@ -97,6 +102,22 @@ final class CodexUsageManager: ObservableObject {
     private var currentConfig: ConfigData = [:]
 
     private static let refreshInterval: TimeInterval = 30
+    private static let sessionEventDecoder = JSONDecoder()
+    private static let tokenCountMarker = Data(#""type":"token_count""#.utf8)
+    private static let rateLimitsMarker = Data(#""rate_limits":"#.utf8)
+    private static let timestampParseQueue = DispatchQueue(
+        label: "barik.codex-usage.timestamp-parse"
+    )
+    private static let fractionalTimestampFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private static let plainTimestampFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
 
     private init() {
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -193,11 +214,12 @@ final class CodexUsageManager: ObservableObject {
 
         let plan = formatPlan(planOverride ?? auth.plan)
         let cutoffDate = accountSwitchCutoffDate(for: auth)
-        let activity = latestTokenActivity(in: sessionsURL)
+        let sessionFiles = recentSessionFiles(in: sessionsURL)
+        let scanResult = scanRecentSessionFiles(sessionFiles, after: cutoffDate)
 
-        guard let snapshot = latestUsageSnapshot(in: sessionsURL, after: cutoffDate) else {
+        guard let snapshot = scanResult.latestSnapshot else {
             var data = CodexUsageData(plan: plan)
-            data.lastActivityDate = activity
+            data.lastActivityDate = scanResult.latestActivity
             return .connectedWithoutSnapshot(data: data)
         }
 
@@ -210,7 +232,7 @@ final class CodexUsageManager: ObservableObject {
             primaryWindowMinutes: snapshot.bucket.windowMinutes,
             plan: formatPlan(planOverride ?? snapshot.plan ?? auth.plan),
             lastUpdated: snapshot.timestamp,
-            lastActivityDate: activity,
+            lastActivityDate: scanResult.latestActivity,
             isAvailable: true
         )
         return .connected(data: data)
@@ -267,49 +289,108 @@ final class CodexUsageManager: ObservableObject {
         return nil
     }
 
-    nonisolated private static func latestUsageSnapshot(
-        in sessionsURL: URL,
+    nonisolated private static func scanRecentSessionFiles(
+        _ files: [URL],
         after cutoffDate: Date?
-    ) -> (bucket: CodexSessionEvent.Bucket, plan: String?, timestamp: Date)? {
-        var latestSnapshot: (bucket: CodexSessionEvent.Bucket, plan: String?, timestamp: Date)?
+    ) -> CodexSessionScanResult {
+        var result = CodexSessionScanResult()
 
-        for fileURL in recentSessionFiles(in: sessionsURL) {
-            guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
+        for fileURL in files {
+            guard let content = try? Data(contentsOf: fileURL) else {
                 continue
             }
 
-            for line in content.split(separator: "\n").reversed() {
-                guard line.contains(#""type":"token_count""#),
-                      line.contains(#""rate_limits":"#) else {
-                    continue
+            enumerateLinesBackwards(in: content) { line in
+                let containsTokenCount = line.range(of: tokenCountMarker) != nil
+                guard containsTokenCount else {
+                    return true
                 }
+
+                if result.latestActivity == nil,
+                   let event = decodeEvent(from: line),
+                   event.type == "event_msg",
+                   event.payload.type == "token_count",
+                   let timestamp = parseTimestamp(event.timestamp) {
+                    result.latestActivity = timestamp
+                }
+
+                guard result.latestSnapshot == nil || line.range(of: rateLimitsMarker) != nil else {
+                    return result.latestActivity == nil
+                }
+
                 guard let event = decodeEvent(from: line),
                       event.type == "event_msg",
                       event.payload.type == "token_count",
                       let rateLimits = event.payload.rateLimits,
                       let bucket = rateLimits.primary,
                       let timestamp = parseTimestamp(event.timestamp) else {
-                    continue
+                    return result.latestActivity == nil || result.latestSnapshot == nil
                 }
 
                 if let cutoffDate, timestamp < cutoffDate {
-                    continue
+                    return result.latestActivity == nil || result.latestSnapshot == nil
                 }
 
-                if let latestSnapshot, latestSnapshot.timestamp >= timestamp {
-                    continue
+                if let latestSnapshot = result.latestSnapshot,
+                   latestSnapshot.timestamp >= timestamp {
+                    return result.latestActivity == nil || result.latestSnapshot == nil
                 }
 
-                latestSnapshot = (
+                result.latestSnapshot = (
                     bucket: bucket,
                     plan: rateLimits.planType,
                     timestamp: timestamp
                 )
+
+                return result.latestActivity == nil || result.latestSnapshot == nil
+            }
+
+            if result.latestActivity != nil, result.latestSnapshot != nil {
                 break
             }
         }
 
-        return latestSnapshot
+        return result
+    }
+
+    nonisolated private static func enumerateLinesBackwards(
+        in data: Data,
+        _ body: (Data) -> Bool
+    ) {
+        guard !data.isEmpty else { return }
+
+        var end = data.endIndex
+
+        while end > data.startIndex {
+            var lineEnd = end
+            if lineEnd > data.startIndex,
+               data[data.index(before: lineEnd)] == 0x0A {
+                lineEnd = data.index(before: lineEnd)
+            }
+
+            var lineStart = lineEnd
+            while lineStart > data.startIndex,
+                  data[data.index(before: lineStart)] != 0x0A {
+                lineStart = data.index(before: lineStart)
+            }
+
+            if lineStart < lineEnd {
+                var line = data.subdata(in: lineStart..<lineEnd)
+                if line.last == 0x0D {
+                    line.removeLast()
+                }
+
+                if !line.isEmpty, body(line) == false {
+                    return
+                }
+            }
+
+            end = lineStart
+            if end > data.startIndex,
+               data[data.index(before: end)] == 0x0A {
+                end = data.index(before: end)
+            }
+        }
     }
 
     nonisolated private static func accountSwitchCutoffDate(for auth: CodexAuthState) -> Date? {
@@ -344,35 +425,6 @@ final class CodexUsageManager: ObservableObject {
         }
     }
 
-    nonisolated private static func latestTokenActivity(in sessionsURL: URL) -> Date? {
-        var latestActivity: Date?
-
-        for fileURL in recentSessionFiles(in: sessionsURL) {
-            guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
-                continue
-            }
-
-            for line in content.split(separator: "\n").reversed() {
-                guard line.contains(#""type":"token_count""#) else { continue }
-                guard let event = decodeEvent(from: line),
-                      event.type == "event_msg",
-                      event.payload.type == "token_count",
-                      let timestamp = parseTimestamp(event.timestamp) else {
-                    continue
-                }
-
-                if let latestActivity, latestActivity >= timestamp {
-                    break
-                }
-
-                latestActivity = timestamp
-                break
-            }
-        }
-
-        return latestActivity
-    }
-
     nonisolated private static func recentSessionFiles(in sessionsURL: URL) -> [URL] {
         guard let enumerator = FileManager.default.enumerator(
             at: sessionsURL,
@@ -397,24 +449,18 @@ final class CodexUsageManager: ObservableObject {
             .map { $0 }
     }
 
-    nonisolated private static func decodeEvent(from line: Substring) -> CodexSessionEvent? {
-        guard let data = String(line).data(using: .utf8) else {
-            return nil
-        }
-
-        return try? JSONDecoder().decode(CodexSessionEvent.self, from: data)
+    nonisolated private static func decodeEvent(from line: Data) -> CodexSessionEvent? {
+        try? sessionEventDecoder.decode(CodexSessionEvent.self, from: line)
     }
 
     nonisolated private static func parseTimestamp(_ rawValue: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        timestampParseQueue.sync {
+            if let date = fractionalTimestampFormatter.date(from: rawValue) {
+                return date
+            }
 
-        if let date = formatter.date(from: rawValue) {
-            return date
+            return plainTimestampFormatter.date(from: rawValue)
         }
-
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: rawValue)
     }
 
     nonisolated private static func decodeJWTPayload(_ token: String) -> [String: Any]? {
