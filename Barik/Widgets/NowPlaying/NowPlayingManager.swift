@@ -9,6 +9,8 @@ enum PlaybackState: String {
     case playing, paused, stopped
 }
 
+import AppKit
+
 // MARK: - Now Playing Song Model
 
 /// A model representing the currently playing song.
@@ -18,21 +20,37 @@ struct NowPlayingSong: Equatable, Identifiable {
     let state: PlaybackState
     let title: String
     let artist: String
-    let albumArtURL: URL?
+    let albumArtURL: URL?  // Still keep for compatibility with existing UI components
+    let albumArtImage: NSImage?  // New property to hold the image directly in memory
     let position: Double?
     let duration: Double?  // Duration in seconds
 
-    /// Initializes a song model with all parameters.
+    /// Initializes a song model with all parameters (new version with image).
+    init(appName: String, state: PlaybackState, title: String, artist: String, albumArtURL: URL?, albumArtImage: NSImage?, position: Double?, duration: Double?) {
+        self.appName = appName
+        self.state = state
+        self.title = title
+        self.artist = artist
+        self.albumArtURL = albumArtURL
+        self.albumArtImage = albumArtImage
+        self.position = position
+        self.duration = duration
+    }
+
+    /// Initializes a song model with all parameters (legacy version without image).
     init(appName: String, state: PlaybackState, title: String, artist: String, albumArtURL: URL?, position: Double?, duration: Double?) {
         self.appName = appName
         self.state = state
         self.title = title
         self.artist = artist
         self.albumArtURL = albumArtURL
+        self.albumArtImage = nil  // Legacy initialization
         self.position = position
         self.duration = duration
     }
 }
+
+import AppKit
 
 // MARK: - Now Playing Manager
 
@@ -45,6 +63,9 @@ final class NowPlayingManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let decoder = JSONDecoder()
     private var outputBuffer = ""
+
+    // Cache for artwork images to avoid temporary files
+    private let artworkCache = NSCache<NSString, NSImage>()
 
     private init() {
         startMediaRemoteStreaming()
@@ -63,7 +84,7 @@ final class NowPlayingManager: ObservableObject {
 
         process.arguments = [
             "-c",
-            "\(mediaControlPath) stream"
+            "\(mediaControlPath) stream --no-diff"
         ]
 
         let outputPipe = Pipe()
@@ -181,6 +202,39 @@ final class NowPlayingManager: ObservableObject {
         }
     }
 
+    /// Helper function to truncate artworkData in JSON for debugging
+    private func truncateArtworkData(_ jsonString: String) -> String {
+        guard let jsonData = jsonString.data(using: .utf8),
+              let jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+            return jsonString
+        }
+
+        var mutableJsonObject = jsonObject
+
+        // Check if payload exists and contains artworkData
+        if var payload = mutableJsonObject["payload"] as? [String: Any],
+           let artworkData = payload["artworkData"] as? String {
+            if artworkData.count > 60 { // If artworkData is longer than 60 characters
+                let startIndex = artworkData.startIndex
+                let prefixEndIndex = artworkData.index(startIndex, offsetBy: min(30, artworkData.count))
+                let suffixStartIndex = artworkData.index(artworkData.endIndex, offsetBy: -min(30, artworkData.count))
+
+                let prefix = String(artworkData[startIndex..<prefixEndIndex])
+                let suffix = String(artworkData[suffixStartIndex...])
+                payload["artworkData"] = "\(prefix)...\(suffix)"
+                mutableJsonObject["payload"] = payload
+
+                // Convert back to JSON string
+                if let truncatedData = try? JSONSerialization.data(withJSONObject: mutableJsonObject),
+                   let truncatedString = String(data: truncatedData, encoding: .utf8) {
+                    return truncatedString
+                }
+            }
+        }
+
+        return jsonString
+    }
+
     /// Parses the JSON output from the MediaRemote Adapter
     private func parseMediaRemoteOutput(_ rawJsonLine: String) {
         // Split by newlines in case multiple JSON objects came in one chunk
@@ -189,6 +243,10 @@ final class NowPlayingManager: ObservableObject {
         for line in lines {
             let jsonLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !jsonLine.isEmpty else { continue }
+
+            // Print raw JSON for debugging, truncating artworkData if too long
+            let debugJsonLine = truncateArtworkData(jsonLine)
+            print("DEBUG RAW JSON: \(debugJsonLine)")
 
             // The MediaRemote Adapter outputs JSON lines in the format:
             // {"type": "data", "diff": true/false, "payload": {...}}
@@ -202,16 +260,22 @@ final class NowPlayingManager: ObservableObject {
                     // Check if playing state exists
                     let isPlaying = payload["playing"] as? Bool ?? false
 
-                    // Only update if we have at least a title (some payloads might be just metadata updates)
+                    // Get the title
                     let title = payload["title"] as? String ?? ""
-                    if title.isEmpty {
-                        // If no title, check if this is a stop event
-                        if !isPlaying && payload.keys.contains("title") {
-                            // Explicitly stopped - clear the now playing info
-                            DispatchQueue.main.async { [weak self] in
-                                self?.nowPlaying = nil
-                            }
+
+                    // Handle the case when playback stops or pauses
+                    if !isPlaying && title.isEmpty {
+                        // No title and not playing - clear the now playing info
+                        DispatchQueue.main.async { [weak self] in
+                            print("NowPlaying cleared - no title and not playing")
+                            self?.nowPlaying = nil
                         }
+                        continue
+                    } else if !isPlaying && !title.isEmpty {
+                        // Title exists but playback is paused - still show the song but with paused state
+                        // This will be handled below
+                    } else if title.isEmpty {
+                        // No title but might be playing (rare case) - skip
                         continue
                     }
 
@@ -219,57 +283,120 @@ final class NowPlayingManager: ObservableObject {
                     DispatchQueue.main.async { [weak self] in
                         let state: PlaybackState = isPlaying ? .playing : .paused
 
-                        // Extract other metadata
-                        let title = payload["title"] as? String ?? "Unknown Title"
-                        let artist = payload["artist"] as? String ?? "Unknown Artist"
-
-                        // Handle artwork data (base64 encoded)
+                        // Handle artwork data (base64 encoded) first
                         var albumArtURL: URL?
-                        if let artworkData = payload["artworkData"] as? String {
-                            // Convert base64 to data and save temporarily
-                            if let imageData = Data(base64Encoded: artworkData) {
-                                let fileName = "\(bundleId)_\(title.replacingOccurrences(of: " ", with: "_")).jpg"
-                                let tempDir = FileManager.default.temporaryDirectory
-                                let fileURL = tempDir.appendingPathComponent(fileName)
+                        var albumArtImage: NSImage?
 
-                                do {
-                                    try imageData.write(to: fileURL)
-                                    albumArtURL = fileURL
-                                } catch {
-                                    print("Could not save artwork: \(error)")
+                        // Check if this payload contains only artworkData (separate artwork update)
+                        if let artworkData = payload["artworkData"] as? String {
+                            print("DEBUG: Processing artworkData of length: \(artworkData.count)")
+
+                            // Convert base64 to data and store in memory
+                            if let imageData = Data(base64Encoded: artworkData) {
+                                print("DEBUG: Successfully decoded artwork image data of size: \(imageData.count)")
+
+                                // Create NSImage directly from the data
+                                if let image = NSImage(data: imageData) {
+                                    albumArtImage = image
+                                    print("DEBUG: Successfully created NSImage from artwork data")
+                                    // Use in-memory image only, no temporary file creation
+                                } else {
+                                    print("DEBUG: Failed to create NSImage from image data")
                                 }
+                            } else {
+                                print("DEBUG: Failed to decode artwork data from base64")
+                            }
+                        } else {
+                            print("DEBUG: artworkData is not a string or is nil")
+                        }
+
+                        // Extract other metadata - if this is just artwork data, we may need to update the existing song
+                        let title = payload["title"] as? String ?? ""
+                        let artist = payload["artist"] as? String ?? ""
+
+                        // If this is just artwork data without track info, update the existing song with artwork
+                        if title.isEmpty && artist.isEmpty && albumArtImage != nil {
+                            // This is a separate artwork update - update the existing song if it matches the bundleId
+                            if let existingSong = self?.nowPlaying, existingSong.appName == bundleId {
+                                let updatedSong = NowPlayingSong(
+                                    appName: existingSong.appName,
+                                    state: existingSong.state,
+                                    title: existingSong.title,
+                                    artist: existingSong.artist,
+                                    albumArtURL: albumArtURL,
+                                    albumArtImage: albumArtImage,
+                                    position: existingSong.position,
+                                    duration: existingSong.duration
+                                )
+
+                                print("NowPlaying Artwork Update via MediaRemote Adapter: \(updatedSong.title) by \(updatedSong.artist) [\(updatedSong.state.rawValue)] from \(updatedSong.appName), albumArtURL: \(albumArtURL != nil ? "available" : "none"), albumArtImage: \(albumArtImage != nil ? "available" : "none")")
+                                self?.nowPlaying = updatedSong
+                                return // Exit early since we're just updating artwork
                             }
                         }
 
-                        // Handle duration and elapsed time
-                        var duration: Double?
-                        var position: Double?
+                        // If we have track info, create a new song object
+                        if !title.isEmpty || !artist.isEmpty {
+                            // Extract other metadata
+                            let actualTitle = title.isEmpty ? (self?.nowPlaying?.title ?? "Unknown Title") : title
+                            let actualArtist = artist.isEmpty ? (self?.nowPlaying?.artist ?? "Unknown Artist") : artist
 
-                        // The adapter may provide duration in microseconds with durationMicros key
-                        if let durationMicros = payload["durationMicros"] as? Int {
-                            duration = Double(durationMicros) / 1_000_000.0
-                        } else if let durationSec = payload["duration"] as? Double {
-                            duration = durationSec
+                            // Handle duration and elapsed time
+                            var duration: Double?
+                            var position: Double?
+
+                            // The adapter may provide duration in microseconds with durationMicros key
+                            if let durationMicros = payload["durationMicros"] as? Int {
+                                duration = Double(durationMicros) / 1_000_000.0
+                            } else if let durationSec = payload["duration"] as? Double {
+                                duration = durationSec
+                            }
+
+                            if let elapsedTimeMicros = payload["elapsedTimeMicros"] as? Int {
+                                position = Double(elapsedTimeMicros) / 1_000_000.0
+                            } else if let elapsedTime = payload["elapsedTime"] as? Double {
+                                position = elapsedTime
+                            }
+
+                            // Use existing artwork if new artwork isn't available
+                            var finalAlbumArtURL = albumArtURL
+                            var finalAlbumArtImage = albumArtImage
+
+                            if finalAlbumArtImage == nil, let existingSong = self?.nowPlaying, existingSong.appName == bundleId {
+                                // Preserve existing artwork if we're updating the same track
+                                finalAlbumArtImage = existingSong.albumArtImage
+                                finalAlbumArtURL = existingSong.albumArtURL
+                            }
+
+                            // Create the song object
+                            let song = NowPlayingSong(
+                                appName: bundleId,
+                                state: state,
+                                title: actualTitle,
+                                artist: actualArtist,
+                                albumArtURL: nil, // No more temporary files
+                                albumArtImage: finalAlbumArtImage,
+                                position: position,
+                                duration: duration
+                            )
+
+                            // Log for debugging
+                            print("NowPlaying Update via MediaRemote Adapter: \(song.title) by \(song.artist) [\(song.state.rawValue)] from \(song.appName), albumArtImage: \(finalAlbumArtImage != nil ? "available" : "none")")
+
+                            self?.nowPlaying = song
                         }
 
-                        if let elapsedTimeMicros = payload["elapsedTimeMicros"] as? Int {
-                            position = Double(elapsedTimeMicros) / 1_000_000.0
-                        } else if let elapsedTime = payload["elapsedTime"] as? Double {
-                            position = elapsedTime
+                        // Debug: Print all available keys in payload
+                        print("DEBUG: Available keys in payload: \(payload.keys)")
+                        if let artworkDataRaw = payload["artworkData"] {
+                            let artworkDataStr = String(describing: artworkDataRaw)
+                            let truncatedArtworkData = artworkDataStr.count > 60 ?
+                                "\(artworkDataStr.prefix(30))...\(artworkDataStr.suffix(30))" :
+                                artworkDataStr
+                            print("DEBUG: artworkData type: \(type(of: artworkDataRaw)), value: \(truncatedArtworkData)")
+                        } else {
+                            print("DEBUG: artworkData key not found in payload")
                         }
-
-                        // Create the song object
-                        let song = NowPlayingSong(
-                            appName: bundleId,
-                            state: state,
-                            title: title,
-                            artist: artist,
-                            albumArtURL: albumArtURL,
-                            position: position,
-                            duration: duration
-                        )
-
-                        self?.nowPlaying = song
                     }
                 }
             } catch {
@@ -322,11 +449,13 @@ final class NowPlayingManager: ObservableObject {
             title: title,
             artist: artist,
             albumArtURL: nil, // Not available through notifications
+            albumArtImage: nil, // Not available through notifications
             position: position,
             duration: duration
         )
 
         DispatchQueue.main.async { [weak self] in
+            print("NowPlaying Update via Music notification: \(song.title) by \(song.artist) [\(song.state.rawValue)] from \(song.appName)")
             self?.nowPlaying = song
         }
     }
@@ -347,11 +476,13 @@ final class NowPlayingManager: ObservableObject {
             title: title,
             artist: artist,
             albumArtURL: nil, // Not available through notifications
+            albumArtImage: nil, // Not available through notifications
             position: position,
             duration: duration
         )
 
         DispatchQueue.main.async { [weak self] in
+            print("NowPlaying Update via Spotify notification: \(song.title) by \(song.artist) [\(song.state.rawValue)] from \(song.appName)")
             self?.nowPlaying = song
         }
     }

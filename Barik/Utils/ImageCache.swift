@@ -46,15 +46,15 @@ final class ImageLoader: ObservableObject {
     func load() {
         // Cancel any ongoing request before starting a new one.
         cancellable?.cancel()
-        
+
         guard let url = url, let key = cacheKey else { return }
-        
+
         // Check for cached image.
         if let cachedImage = ImageCache.shared.object(forKey: key) {
             self.image = cachedImage
             return
         }
-        
+
         // Download image asynchronously.
         cancellable = URLSession.shared.dataTaskPublisher(for: url)
             .tryMap { [weak self] data, _ -> NSImage? in

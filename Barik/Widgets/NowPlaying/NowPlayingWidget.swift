@@ -126,14 +126,32 @@ struct AlbumArtView: View {
 
     var body: some View {
         ZStack {
-            FadeAnimatedCachedImage(
-                url: song.albumArtURL,
-                targetSize: CGSize(width: 20, height: 20)
-            )
-            .frame(width: 20, height: 20)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            .scaleEffect(song.state == .paused ? 0.9 : 1)
-            .brightness(song.state == .paused ? -0.3 : 0)
+            // Use in-memory image if available, otherwise use URL-based cached image
+            if let albumArtImage = song.albumArtImage {
+                // Directly display the NSImage
+                Image(nsImage: albumArtImage)
+                    .resizable()
+                    .frame(width: 20, height: 20)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .scaleEffect(song.state == .paused ? 0.9 : 1)
+                    .brightness(song.state == .paused ? -0.3 : 0)
+            } else if let albumArtURL = song.albumArtURL {
+                // Fallback to URL-based caching system
+                FadeAnimatedCachedImage(
+                    url: albumArtURL,
+                    targetSize: CGSize(width: 20, height: 20)
+                )
+                .frame(width: 20, height: 20)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .scaleEffect(song.state == .paused ? 0.9 : 1)
+                .brightness(song.state == .paused ? -0.3 : 0)
+            } else {
+                // Placeholder when no image is available
+                Rectangle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 20, height: 20)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
 
             if song.state == .paused {
                 Image(systemName: "pause.fill")
