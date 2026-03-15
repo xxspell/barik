@@ -6,13 +6,26 @@ class SpacesViewModel: ObservableObject {
     @Published var spaces: [AnySpace] = []
     private var timer: Timer?
     private var provider: AnySpacesProvider?
+    private var yabaiSignalMonitor: YabaiSignalMonitor?
+    private let loadQueue = DispatchQueue(
+        label: "barik.spaces.load",
+        qos: .utility
+    )
+    private var isLoading = false
+    private var pendingReload = false
 
     init() {
         let runningApps = NSWorkspace.shared.runningApplications.compactMap {
             $0.localizedName?.lowercased()
         }
         if runningApps.contains("yabai") {
-            provider = AnySpacesProvider(YabaiSpacesProvider())
+            let yabaiProvider = YabaiSpacesProvider()
+            provider = AnySpacesProvider(yabaiProvider)
+            yabaiSignalMonitor = YabaiSignalMonitor(
+                executablePath: yabaiProvider.executablePath
+            ) { [weak self] in
+                self?.loadSpaces()
+            }
         } else if runningApps.contains("aerospace") {
             provider = AnySpacesProvider(AerospaceSpacesProvider())
         } else {
@@ -26,9 +39,17 @@ class SpacesViewModel: ObservableObject {
     }
 
     private func startMonitoring() {
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) {
-            [weak self] _ in
-            self?.loadSpaces()
+        if yabaiSignalMonitor != nil {
+            timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) {
+                [weak self] _ in
+                self?.loadSpaces()
+            }
+            yabaiSignalMonitor?.start()
+        } else {
+            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) {
+                [weak self] _ in
+                self?.loadSpaces()
+            }
         }
         loadSpaces()
     }
@@ -36,21 +57,38 @@ class SpacesViewModel: ObservableObject {
     private func stopMonitoring() {
         timer?.invalidate()
         timer = nil
+        yabaiSignalMonitor?.stop()
     }
 
     private func loadSpaces() {
-        DispatchQueue.global(qos: .background).async {
-            guard let provider = self.provider,
-                let spaces = provider.getSpacesWithWindows()
-            else {
-                DispatchQueue.main.async {
-                    self.spaces = []
-                }
+        loadQueue.async { [weak self] in
+            guard let self else { return }
+
+            if self.isLoading {
+                self.pendingReload = true
                 return
             }
-            let sortedSpaces = spaces.sorted { $0.id < $1.id }
+
+            self.isLoading = true
+
+            let nextSpaces: [AnySpace]
+            if let provider = self.provider,
+               let spaces = provider.getSpacesWithWindows() {
+                nextSpaces = spaces.sorted { $0.id < $1.id }
+            } else {
+                nextSpaces = []
+            }
+
             DispatchQueue.main.async {
-                self.spaces = sortedSpaces
+                if self.spaces != nextSpaces {
+                    self.spaces = nextSpaces
+                }
+            }
+
+            self.isLoading = false
+            if self.pendingReload {
+                self.pendingReload = false
+                self.loadSpaces()
             }
         }
     }
