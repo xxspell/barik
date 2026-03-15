@@ -4,9 +4,11 @@ struct MenuBarPopupView<Content: View>: View {
     let content: Content
     let isPreview: Bool
     let widgetRect: CGRect
+    let screenFrame: CGRect
 
     @ObservedObject var configManager = ConfigManager.shared
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
+    private let horizontalMargin: CGFloat = 16
 
     @State private var contentHeight: CGFloat = 0
     @State private var viewFrame: CGRect = .zero
@@ -24,10 +26,12 @@ struct MenuBarPopupView<Content: View>: View {
 
     init(
         widgetRect: CGRect = .zero,
+        screenFrame: CGRect = .zero,
         isPreview: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.widgetRect = widgetRect
+        self.screenFrame = screenFrame
         self.content = content()
         self.isPreview = isPreview
         if isPreview {
@@ -149,18 +153,14 @@ struct MenuBarPopupView<Content: View>: View {
     }
 
     var computedOffset: CGFloat {
-        let screenWidth = NSScreen.main?.frame.width ?? 0
         let contentWidth = viewFrame.width > 0 ? viewFrame.width : 200
-        var xOffset = widgetRect.midX - contentWidth / 2
-
-        let rightEdge = xOffset + contentWidth + 20
-        let leftEdge = xOffset - 20
-
-        if rightEdge > screenWidth {
-            xOffset -= (rightEdge - screenWidth)
-        } else if leftEdge < 0 {
-            xOffset -= leftEdge
-        }
+        let localMidX = widgetRect.midX - screenFrame.minX
+        let minOffset = horizontalMargin
+        let maxOffset = screenFrame.width - contentWidth - horizontalMargin
+        let centeredOffset = localMidX - contentWidth / 2
+        let xOffset = maxOffset >= minOffset
+            ? min(max(centeredOffset, minOffset), maxOffset)
+            : minOffset
 
         return xOffset
     }

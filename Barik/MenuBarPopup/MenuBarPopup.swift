@@ -2,6 +2,42 @@ import SwiftUI
 
 private var panel: NSPanel?
 
+private extension NSScreen {
+    static func popupTarget(for rect: CGRect) -> NSScreen? {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+
+        if let containing = screens.first(where: { $0.frame.contains(center) }) {
+            return containing
+        }
+
+        return screens.min { lhs, rhs in
+            lhs.distance(to: center) < rhs.distance(to: center)
+        }
+    }
+
+    func distance(to point: CGPoint) -> CGFloat {
+        let dx: CGFloat
+        if point.x < frame.minX {
+            dx = frame.minX - point.x
+        } else if point.x > frame.maxX {
+            dx = point.x - frame.maxX
+        } else {
+            dx = 0
+        }
+
+        let dy: CGFloat
+        if point.y < frame.minY {
+            dy = frame.minY - point.y
+        } else if point.y > frame.maxY {
+            dy = point.y - frame.maxY
+        } else {
+            dy = 0
+        }
+
+        return hypot(dx, dy)
+    }
+}
+
 class HidingPanel: NSPanel, NSWindowDelegate {
     var hideWorkItem: DispatchWorkItem?
 
@@ -43,7 +79,13 @@ class MenuBarPopup {
     static func show<Content: View>(
         rect: CGRect, id: String, @ViewBuilder content: @escaping () -> Content
     ) {
-        guard let panel = panel else { return }
+        guard let panel,
+              let screen = NSScreen.popupTarget(for: rect) else { return }
+
+        let panelFrame = screen.frame
+        if panel.frame != panelFrame {
+            panel.setFrame(panelFrame, display: true)
+        }
 
         if panel.isKeyWindow, lastContentIdentifier == id {
             NotificationCenter.default.post(name: .willHideWindow, object: nil)
@@ -77,7 +119,7 @@ class MenuBarPopup {
             DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
                 panel.contentView = NSHostingView(
                     rootView:
-                        MenuBarPopupView(widgetRect: rect) {
+                        MenuBarPopupView(widgetRect: rect, screenFrame: panelFrame) {
                             content()
                         }
                         .frame(
@@ -96,7 +138,7 @@ class MenuBarPopup {
         } else {
             panel.contentView = NSHostingView(
                 rootView:
-                    MenuBarPopupView(widgetRect: rect) {
+                    MenuBarPopupView(widgetRect: rect, screenFrame: panelFrame) {
                         content()
                     }
                     .frame(
