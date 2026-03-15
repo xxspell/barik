@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.6.0
+
+### Added
+- Added Claude usage widget that reads Claude Code credentials from Keychain and shows current 5-hour usage as a ring in the menu bar
+- Added Codex usage widget that reads local ~/.codex/auth.json and shows current rate-limit window in the menu bar
+- Added configurable system monitor widget with support for CPU, RAM, disk, GPU, and network metrics
+- Added system monitor popup strings for internationalization
+
+### Fixed
+- Fixed popup positioning on the correct screen for multi-monitor setups
+- Fixed Now Playing artwork handling with improved MediaRemote Adapter for cross-platform support
+- Fixed popup anchor positioning to properly attach to widget frames
+- Adapted popup playback state to mediaremote adapter updates and reduced widget height
+
+### Performance
+- Reduced session parsing overhead in Codex usage widget
+- Improved yabai state refresh from signals for better performance
+- Optimized NowPlaying artwork handling with in-memory storage
+
+### Changed
+- Refactored logging system to replace print debugging with structured OSLog output
+- Implemented MediaRemote Adapter for cross-platform now playing support
+- Refactored display system to support multiple screens with dynamic panel creation and cleanup
+
+
 ## 0.5.1
 
 > This release was supported by **ALinuxPerson** _(help with the appearance configuration, 1 issue)_, **bake** _(1 issue)_ and **Oery** _(1 issue)_
