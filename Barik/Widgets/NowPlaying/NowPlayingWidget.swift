@@ -1,5 +1,11 @@
 import SwiftUI
 
+private enum NowPlayingWidgetLayout {
+    static let compactHeight: CGFloat = 34
+    static let capsuleHeight: CGFloat = 28
+    static let albumArtSize: CGFloat = 18
+}
+
 // MARK: - Now Playing Widget
 
 struct NowPlayingWidget: View {
@@ -68,7 +74,7 @@ struct NowPlayingContent: View {
                     SongTextView(song: song)
                 }
                 .padding(.horizontal, foregroundHeight < 45 ? 8 : 12)
-                .frame(height: foregroundHeight < 45 ? 30 : 38)
+                .frame(height: foregroundHeight < 45 ? NowPlayingWidgetLayout.capsuleHeight : NowPlayingWidgetLayout.compactHeight)
                 .background(configManager.config.experimental.foreground.widgetsBackground.blur)
                 .clipShape(Capsule())
                 .overlay(
@@ -112,7 +118,7 @@ struct VisibleNowPlayingContent: View {
 
     var body: some View {
         NowPlayingContent(song: song)
-            .frame(width: width, height: 38)
+            .frame(width: width, height: NowPlayingWidgetLayout.compactHeight)
             .animation(.smooth(duration: 0.1), value: song)
             .transition(.blurReplace)
     }
@@ -131,7 +137,7 @@ struct AlbumArtView: View {
                 // Directly display the NSImage
                 Image(nsImage: albumArtImage)
                     .resizable()
-                    .frame(width: 20, height: 20)
+                    .frame(width: NowPlayingWidgetLayout.albumArtSize, height: NowPlayingWidgetLayout.albumArtSize)
                     .clipShape(RoundedRectangle(cornerRadius: 4))
                     .scaleEffect(song.state == .paused ? 0.9 : 1)
                     .brightness(song.state == .paused ? -0.3 : 0)
@@ -139,9 +145,9 @@ struct AlbumArtView: View {
                 // Fallback to URL-based caching system
                 FadeAnimatedCachedImage(
                     url: albumArtURL,
-                    targetSize: CGSize(width: 20, height: 20)
+                    targetSize: CGSize(width: NowPlayingWidgetLayout.albumArtSize, height: NowPlayingWidgetLayout.albumArtSize)
                 )
-                .frame(width: 20, height: 20)
+                .frame(width: NowPlayingWidgetLayout.albumArtSize, height: NowPlayingWidgetLayout.albumArtSize)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 .scaleEffect(song.state == .paused ? 0.9 : 1)
                 .brightness(song.state == .paused ? -0.3 : 0)
@@ -149,7 +155,7 @@ struct AlbumArtView: View {
                 // Placeholder when no image is available
                 Rectangle()
                     .fill(Color.gray.opacity(0.3))
-                    .frame(width: 20, height: 20)
+                    .frame(width: NowPlayingWidgetLayout.albumArtSize, height: NowPlayingWidgetLayout.albumArtSize)
                     .clipShape(RoundedRectangle(cornerRadius: 4))
             }
 

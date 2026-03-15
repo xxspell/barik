@@ -24,9 +24,10 @@ struct NowPlayingSong: Equatable, Identifiable {
     let albumArtImage: NSImage?  // New property to hold the image directly in memory
     let position: Double?
     let duration: Double?  // Duration in seconds
+    let positionTimestamp: Date?
 
     /// Initializes a song model with all parameters (new version with image).
-    init(appName: String, state: PlaybackState, title: String, artist: String, albumArtURL: URL?, albumArtImage: NSImage?, position: Double?, duration: Double?) {
+    init(appName: String, state: PlaybackState, title: String, artist: String, albumArtURL: URL?, albumArtImage: NSImage?, position: Double?, duration: Double?, positionTimestamp: Date?) {
         self.appName = appName
         self.state = state
         self.title = title
@@ -35,10 +36,11 @@ struct NowPlayingSong: Equatable, Identifiable {
         self.albumArtImage = albumArtImage
         self.position = position
         self.duration = duration
+        self.positionTimestamp = positionTimestamp
     }
 
     /// Initializes a song model with all parameters (legacy version without image).
-    init(appName: String, state: PlaybackState, title: String, artist: String, albumArtURL: URL?, position: Double?, duration: Double?) {
+    init(appName: String, state: PlaybackState, title: String, artist: String, albumArtURL: URL?, position: Double?, duration: Double?, positionTimestamp: Date? = nil) {
         self.appName = appName
         self.state = state
         self.title = title
@@ -47,6 +49,7 @@ struct NowPlayingSong: Equatable, Identifiable {
         self.albumArtImage = nil  // Legacy initialization
         self.position = position
         self.duration = duration
+        self.positionTimestamp = positionTimestamp
     }
 }
 
@@ -326,7 +329,8 @@ final class NowPlayingManager: ObservableObject {
                                     albumArtURL: albumArtURL,
                                     albumArtImage: albumArtImage,
                                     position: existingSong.position,
-                                    duration: existingSong.duration
+                                    duration: existingSong.duration,
+                                    positionTimestamp: existingSong.positionTimestamp
                                 )
 
                                 print("NowPlaying Artwork Update via MediaRemote Adapter: \(updatedSong.title) by \(updatedSong.artist) [\(updatedSong.state.rawValue)] from \(updatedSong.appName), albumArtURL: \(albumArtURL != nil ? "available" : "none"), albumArtImage: \(albumArtImage != nil ? "available" : "none")")
@@ -358,6 +362,15 @@ final class NowPlayingManager: ObservableObject {
                                 position = elapsedTime
                             }
 
+                            let positionTimestamp: Date?
+                            if let timestampEpochMicros = payload["timestampEpochMicros"] as? Int {
+                                positionTimestamp = Date(timeIntervalSince1970: Double(timestampEpochMicros) / 1_000_000.0)
+                            } else if payload["timestamp"] != nil {
+                                positionTimestamp = Date()
+                            } else {
+                                positionTimestamp = nil
+                            }
+
                             // Use existing artwork if new artwork isn't available
                             var finalAlbumArtURL = albumArtURL
                             var finalAlbumArtImage = albumArtImage
@@ -377,7 +390,8 @@ final class NowPlayingManager: ObservableObject {
                                 albumArtURL: nil, // No more temporary files
                                 albumArtImage: finalAlbumArtImage,
                                 position: position,
-                                duration: duration
+                                duration: duration,
+                                positionTimestamp: positionTimestamp
                             )
 
                             // Log for debugging
@@ -451,7 +465,8 @@ final class NowPlayingManager: ObservableObject {
             albumArtURL: nil, // Not available through notifications
             albumArtImage: nil, // Not available through notifications
             position: position,
-            duration: duration
+            duration: duration,
+            positionTimestamp: Date()
         )
 
         DispatchQueue.main.async { [weak self] in
@@ -478,7 +493,8 @@ final class NowPlayingManager: ObservableObject {
             albumArtURL: nil, // Not available through notifications
             albumArtImage: nil, // Not available through notifications
             position: position,
-            duration: duration
+            duration: duration,
+            positionTimestamp: Date()
         )
 
         DispatchQueue.main.async { [weak self] in

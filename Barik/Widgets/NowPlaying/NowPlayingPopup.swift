@@ -29,7 +29,7 @@ struct NowPlayingPopup: View {
            let variant = MenuBarPopupVariant(rawValue: variantString) {
             selectedVariant = variant
         } else {
-            selectedVariant = .box
+            selectedVariant = .horizontal
         }
     }
     
@@ -47,25 +47,9 @@ private struct NowPlayingVerticalPopup: View {
     @ObservedObject private var playingManager = NowPlayingManager.shared
 
     var body: some View {
-        if let song = playingManager.nowPlaying,
-           let duration = song.duration,
-           let position = song.position {
+        if let song = playingManager.nowPlaying {
             VStack(spacing: 15) {
-                RotateAnimatedCachedImage(
-                    url: song.albumArtURL,
-                    targetSize: CGSize(width: 200, height: 200)
-                ) { image in
-                    image.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-                .frame(width: 200, height: 200)
-                .scaleEffect(song.state == .paused ? 0.9 : 1)
-                .overlay(
-                    song.state == .paused ?
-                    Color.black.opacity(0.3)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    : nil
-                )
-                .animation(.smooth(duration: 0.5, extraBounce: 0.4), value: song.state == .paused)
+                PopupAlbumArtView(song: song, size: CGSize(width: 200, height: 200))
 
                 VStack(alignment: .center) {
                     Text(song.title)
@@ -78,17 +62,7 @@ private struct NowPlayingVerticalPopup: View {
                         .fontWeight(.light)
                 }
 
-                HStack {
-                    Text(timeString(from: position))
-                        .font(.caption)
-                    ProgressView(value: position, total: duration)
-                        .progressViewStyle(LinearProgressViewStyle())
-                        .tint(.white)
-                    Text("-" + timeString(from: duration - position))
-                        .font(.caption)
-                }
-                .foregroundColor(.gray)
-                .monospacedDigit()
+                PlaybackProgressView(song: song)
 
                 HStack(spacing: 40) {
                     Image(systemName: "backward.fill")
@@ -105,7 +79,7 @@ private struct NowPlayingVerticalPopup: View {
             .padding(.horizontal, 25)
             .padding(.vertical, 30)
             .frame(width: 300)
-            .animation(.easeInOut, value: song.albumArtURL)
+            .animation(.easeInOut, value: song.id)
         }
     }
 }
@@ -115,26 +89,10 @@ struct NowPlayingHorizontalPopup: View {
     @ObservedObject private var playingManager = NowPlayingManager.shared
 
     var body: some View {
-        if let song = playingManager.nowPlaying,
-           let duration = song.duration,
-           let position = song.position {
+        if let song = playingManager.nowPlaying {
             VStack(spacing: 15) {
                 HStack(spacing: 15) {
-                    RotateAnimatedCachedImage(
-                        url: song.albumArtURL,
-                        targetSize: CGSize(width: 200, height: 200)
-                    ) { image in
-                        image.clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .frame(width: 60, height: 60)
-                    .scaleEffect(song.state == .paused ? 0.9 : 1)
-                    .overlay(
-                        song.state == .paused ?
-                        Color.black.opacity(0.3)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        : nil
-                    )
-                    .animation(.smooth(duration: 0.5, extraBounce: 0.4), value: song.state == .paused)
+                    PopupAlbumArtView(song: song, size: CGSize(width: 60, height: 60))
 
                     VStack(alignment: .leading, spacing: 0) {
                         Text(song.title)
@@ -149,17 +107,7 @@ struct NowPlayingHorizontalPopup: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                HStack {
-                    Text(timeString(from: position))
-                        .font(.caption)
-                    ProgressView(value: position, total: duration)
-                        .progressViewStyle(LinearProgressViewStyle())
-                        .tint(.white)
-                    Text("-" + timeString(from: duration - position))
-                        .font(.caption)
-                }
-                .foregroundColor(.gray)
-                .monospacedDigit()
+                PlaybackProgressView(song: song)
 
                 HStack(spacing: 40) {
                     Image(systemName: "backward.fill")
@@ -175,9 +123,92 @@ struct NowPlayingHorizontalPopup: View {
             }
             .padding(.horizontal, 25)
             .padding(.vertical, 20)
-            .frame(width: 300, height: 180)
-            .animation(.easeInOut, value: song.albumArtURL)
+            .frame(width: 300)
+            .frame(minHeight: 140)
+            .animation(.easeInOut, value: song.id)
         }
+    }
+}
+
+private struct PopupAlbumArtView: View {
+    let song: NowPlayingSong
+    let size: CGSize
+
+    var body: some View {
+        ZStack {
+            if let albumArtImage = song.albumArtImage {
+                Image(nsImage: albumArtImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else if let albumArtURL = song.albumArtURL {
+                RotateAnimatedCachedImage(
+                    url: albumArtURL,
+                    targetSize: size
+                )
+            } else {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.gray.opacity(0.2))
+                    .overlay(
+                        Image(systemName: "music.note")
+                            .font(.system(size: min(size.width, size.height) * 0.28))
+                            .foregroundStyle(.white.opacity(0.55))
+                    )
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .scaleEffect(song.state == .paused ? 0.9 : 1)
+        .overlay {
+            if song.state == .paused {
+                Color.black.opacity(0.3)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+        .animation(.smooth(duration: 0.5, extraBounce: 0.4), value: song.state == .paused)
+    }
+}
+
+private struct PlaybackProgressView: View {
+    let song: NowPlayingSong
+
+    var body: some View {
+        if let duration = song.duration, duration > 0 {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let position = estimatedPosition(for: song, at: context.date)
+
+                HStack {
+                    Text(timeString(from: position))
+                        .font(.caption)
+                    ProgressView(value: position, total: duration)
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .tint(.white)
+                    Text("-" + timeString(from: max(duration - position, 0)))
+                        .font(.caption)
+                }
+                .foregroundColor(.gray)
+                .monospacedDigit()
+            }
+        }
+    }
+
+    private func estimatedPosition(for song: NowPlayingSong, at date: Date) -> Double {
+        guard let basePosition = song.position else {
+            return 0
+        }
+
+        let progressedPosition: Double
+        if song.state == .playing,
+           let timestamp = song.positionTimestamp {
+            progressedPosition = basePosition + max(date.timeIntervalSince(timestamp), 0)
+        } else {
+            progressedPosition = basePosition
+        }
+
+        if let duration = song.duration {
+            return min(max(progressedPosition, 0), duration)
+        }
+
+        return max(progressedPosition, 0)
     }
 }
 
