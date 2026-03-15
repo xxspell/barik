@@ -59,6 +59,10 @@ struct MenuBarView: View {
             NowPlayingWidget()
                 .environmentObject(config)
 
+        case "default.claude-usage":
+            ClaudeUsageWidget()
+                .environmentObject(config)
+
         case "default.codex-usage":
             CodexUsageWidget()
                 .environmentObject(config)

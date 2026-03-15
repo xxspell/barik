@@ -77,6 +77,7 @@ final class ConfigManager: ObservableObject {
             displayed = [ # widgets on menu bar
                 "default.spaces",
                 "spacer",
+                "default.claude-usage",
                 "default.codex-usage",
                 "default.network",
                 "default.battery",
@@ -89,6 +90,8 @@ final class ConfigManager: ObservableObject {
             space.show-key = true        # show space number (or character, if you use AeroSpace)
             window.show-title = true
             window.title.max-length = 50
+
+            [widgets.default.claude-usage]
 
             [widgets.default.codex-usage]
 
