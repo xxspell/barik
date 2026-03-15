@@ -1,8 +1,9 @@
 import SwiftUI
+import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var backgroundPanel: NSPanel?
-    private var menuBarPanel: NSPanel?
+    private var backgroundPanels: [NSPanel] = []
+    private var menuBarPanels: [NSPanel] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let error = ConfigManager.shared.initError {
@@ -35,29 +36,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Configures and displays the background and menu bar panels.
     private func setupPanels() {
-        guard let screenFrame = NSScreen.main?.frame else { return }
-        setupPanel(
-            &backgroundPanel,
-            frame: screenFrame,
-            level: Int(CGWindowLevelForKey(.desktopWindow)),
-            hostingRootView: AnyView(BackgroundView()))
-        setupPanel(
-            &menuBarPanel,
-            frame: screenFrame,
-            level: Int(CGWindowLevelForKey(.backstopMenu)),
-            hostingRootView: AnyView(MenuBarView()))
+        // Clean up existing panels
+        cleanupPanels()
+
+        // Create panels for each screen
+        let screens = NSScreen.screens
+        for screen in screens {
+            let screenFrame = screen.frame
+
+            // Create background panel for this screen
+            let backgroundPanel = createPanel(
+                frame: screenFrame,
+                level: Int(CGWindowLevelForKey(.desktopWindow)),
+                hostingRootView: AnyView(BackgroundView()))
+            backgroundPanels.append(backgroundPanel)
+
+            // Create menu bar panel for this screen
+            let menuBarPanel = createPanel(
+                frame: screenFrame,
+                level: Int(CGWindowLevelForKey(.backstopMenu)),
+                hostingRootView: AnyView(MenuBarView()))
+            menuBarPanels.append(menuBarPanel)
+        }
     }
 
-    /// Sets up an NSPanel with the provided parameters.
-    private func setupPanel(
-        _ panel: inout NSPanel?, frame: CGRect, level: Int,
+    /// Creates an NSPanel with the provided parameters.
+    private func createPanel(
+        frame: CGRect, level: Int,
         hostingRootView: AnyView
-    ) {
-        if let existingPanel = panel {
-            existingPanel.setFrame(frame, display: true)
-            return
-        }
-
+    ) -> NSPanel {
         let newPanel = NSPanel(
             contentRect: frame,
             styleMask: [.nonactivatingPanel],
@@ -66,10 +73,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         newPanel.level = NSWindow.Level(rawValue: level)
         newPanel.backgroundColor = .clear
         newPanel.hasShadow = false
-        newPanel.collectionBehavior = [.canJoinAllSpaces]
+        newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenPrimary] // Add fullScreenPrimary to allow on all screens
         newPanel.contentView = NSHostingView(rootView: hostingRootView)
         newPanel.orderFront(nil)
-        panel = newPanel
+        return newPanel
+    }
+
+    /// Cleans up existing panels
+    private func cleanupPanels() {
+        for panel in backgroundPanels {
+            panel.close()
+        }
+        backgroundPanels.removeAll()
+
+        for panel in menuBarPanels {
+            panel.close()
+        }
+        menuBarPanels.removeAll()
     }
     
     private func showFatalConfigError(message: String) {
