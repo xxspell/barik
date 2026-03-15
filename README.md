@@ -87,6 +87,7 @@ displayed = [ # widgets on menu bar
     "spacer",
     "default.claude-usage",
     "default.codex-usage",
+    "default.system-monitor",
     "default.nowplaying",
     "default.network",
     "default.battery",
@@ -105,6 +106,27 @@ window.title.max-length = 50
 
 [widgets.default.codex-usage]
 # plan = "Pro" # optional manual badge override
+
+[widgets.default.system-monitor]
+show-icon = false
+use-metric-icons = false
+show-usage-bars = true
+metrics-per-column = 2
+layout = "rows" # rows, stacked
+dividers = "none" # none, horizontal, vertical, both
+metrics = ["cpu", "ram", "disk", "gpu", "network"] # order controls display order
+
+cpu-warning-level = 70   # CPU warning threshold (%)
+cpu-critical-level = 90  # CPU critical threshold (%)
+
+ram-warning-level = 70   # RAM warning threshold (%)
+ram-critical-level = 90  # RAM critical threshold (%)
+
+disk-warning-level = 80  # Disk warning threshold (%)
+disk-critical-level = 90 # Disk critical threshold (%)
+
+gpu-warning-level = 70   # GPU warning threshold (%)
+gpu-critical-level = 90  # GPU critical threshold (%)
 
 # A list of applications that will always be displayed by application name.
 # Other applications will show the window title if there is more than one window.
@@ -155,6 +177,32 @@ Two usage widgets are available out of the box:
 - `default.codex-usage` tracks Codex usage from local auth and session data in `~/.codex`. The popup shows the active rate-limit window, reset time, and recent activity.
 
 If you already have an existing `~/.barik-config.toml`, add these widget IDs manually to `widgets.displayed` to make them appear.
+
+## System Monitor
+
+`default.system-monitor` is a configurable multi-metric widget for system health.
+
+- Supported metrics: `cpu`, `ram`, `disk`, `gpu`, `network`
+- The `metrics` array controls both which metrics are shown and the order they appear in the widget and popup
+- `use-metric-icons` replaces text labels with SF Symbols in the menu bar widget
+- `show-usage-bars` hides the mini progress bars when disabled, leaving only the label or icon and the value
+- `metrics-per-column` controls how many metrics are stacked vertically before the widget starts a new column
+- `layout = "stacked"` switches the menu bar widget to a Stats-style layout with the title on top and the value below
+- `dividers` adds separators between rows, columns, or both in the menu bar widget
+- GPU usage is best-effort and may be unavailable on some systems or macOS configurations
+
+Example:
+
+```toml
+[widgets.default.system-monitor]
+show-icon = false
+use-metric-icons = false
+show-usage-bars = true
+metrics-per-column = 2
+layout = "rows"
+dividers = "none"
+metrics = ["cpu", "ram", "disk", "gpu", "network"]
+```
 
 Currently, you can customize the order of widgets (time, indicators, etc.) and adjust some of their settings. Soon, you’ll also be able to add custom widgets and completely change **barik**'s appearance—making it almost unrecognizable (hello, r/unixporn!).
 

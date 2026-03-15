@@ -216,6 +216,11 @@ extension TOMLValue {
         if case let .dictionary(dict) = self { return dict }
         return nil
     }
+
+    var stringArrayValue: [String]? {
+        guard case let .array(values) = self else { return nil }
+        return values.compactMap(\.stringValue)
+    }
 }
 
 struct YabaiConfig: Decodable {
@@ -446,4 +451,3 @@ enum BackgroundForegroundHeight: Decodable {
         )
     }
 }
-

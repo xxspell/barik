@@ -79,6 +79,7 @@ final class ConfigManager: ObservableObject {
                 "spacer",
                 "default.claude-usage",
                 "default.codex-usage",
+                "default.system-monitor",
                 "default.network",
                 "default.battery",
                 "divider",
@@ -94,6 +95,23 @@ final class ConfigManager: ObservableObject {
             [widgets.default.claude-usage]
 
             [widgets.default.codex-usage]
+
+            [widgets.default.system-monitor]
+            show-icon = false
+            use-metric-icons = false
+            show-usage-bars = true
+            metrics-per-column = 2
+            layout = "rows"
+            dividers = "none"
+            metrics = ["cpu", "ram", "disk", "gpu", "network"]
+            cpu-warning-level = 70   # CPU warning threshold (%)
+            cpu-critical-level = 90  # CPU critical threshold (%)
+            ram-warning-level = 70   # RAM warning threshold (%)
+            ram-critical-level = 90  # RAM critical threshold (%)
+            disk-warning-level = 80  # Disk warning threshold (%)
+            disk-critical-level = 90 # Disk critical threshold (%)
+            gpu-warning-level = 70   # GPU warning threshold (%)
+            gpu-critical-level = 90  # GPU critical threshold (%)
 
             [widgets.default.battery]
             show-percentage = true
