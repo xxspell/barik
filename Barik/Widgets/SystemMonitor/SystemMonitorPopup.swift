@@ -37,30 +37,30 @@ struct SystemMonitorPopup: View {
     private func section(for metric: SystemMonitorMetric) -> some View {
         switch metric {
         case .cpu:
-            monitorSection(title: "CPU Usage", percentage: systemMonitor.cpuLoad, color: cpuColor) {
-                detailRow(title: "User", value: "\(Int(systemMonitor.userLoad))%")
-                detailRow(title: "System", value: "\(Int(systemMonitor.systemLoad))%")
-                detailRow(title: "Idle", value: "\(Int(systemMonitor.idleLoad))%")
+            monitorSection(title: String(localized: "CPU Usage"), percentage: systemMonitor.cpuLoad, color: cpuColor) {
+                detailRow(title: String(localized: "User"),   value: "\(Int(systemMonitor.userLoad))%")
+                detailRow(title: String(localized: "System"), value: "\(Int(systemMonitor.systemLoad))%")
+                detailRow(title: String(localized: "Idle"),   value: "\(Int(systemMonitor.idleLoad))%")
             }
         case .ram:
-            monitorSection(title: "Memory Usage", percentage: systemMonitor.ramUsage, color: ramColor) {
-                detailRow(title: "Used", value: "\(usedRAMString) / \(totalRAMString)")
-                detailRow(title: "Active", value: gbString(systemMonitor.activeRAM))
-                detailRow(title: "Wired", value: gbString(systemMonitor.wiredRAM))
-                detailRow(title: "Compressed", value: gbString(systemMonitor.compressedRAM))
+            monitorSection(title: String(localized: "Memory Usage"), percentage: systemMonitor.ramUsage, color: ramColor) {
+                detailRow(title: String(localized: "Used"),       value: "\(usedRAMString) / \(totalRAMString)")
+                detailRow(title: String(localized: "Active"),     value: gbString(systemMonitor.activeRAM))
+                detailRow(title: String(localized: "Wired"),      value: gbString(systemMonitor.wiredRAM))
+                detailRow(title: String(localized: "Compressed"), value: gbString(systemMonitor.compressedRAM))
             }
         case .disk:
-            monitorSection(title: "Disk Usage", percentage: systemMonitor.diskUsage, color: diskColor) {
-                detailRow(title: "Used", value: "\(gbString(systemMonitor.usedDisk)) / \(gbString(systemMonitor.totalDisk))")
-                detailRow(title: "Free", value: gbString(systemMonitor.freeDisk))
+            monitorSection(title: String(localized: "Disk Usage"), percentage: systemMonitor.diskUsage, color: diskColor) {
+                detailRow(title: String(localized: "Used"), value: "\(gbString(systemMonitor.usedDisk)) / \(gbString(systemMonitor.totalDisk))")
+                detailRow(title: String(localized: "Free"), value: gbString(systemMonitor.freeDisk))
             }
         case .gpu:
             if let gpuLoad = systemMonitor.gpuLoad {
-                monitorSection(title: "GPU Usage", percentage: gpuLoad, color: gpuColor) {
-                    detailRow(title: "Utilization", value: "\(Int(gpuLoad))%")
+                monitorSection(title: String(localized: "GPU Usage"), percentage: gpuLoad, color: gpuColor) {
+                    detailRow(title: String(localized: "Utilization"), value: "\(Int(gpuLoad))%")
                 }
             } else {
-                unavailableSection(title: "GPU Usage", description: "Unavailable on this system")
+                unavailableSection(title: String(localized: "GPU Usage"), description: String(localized: "Unavailable on this system"))
             }
         case .network:
             networkSection
