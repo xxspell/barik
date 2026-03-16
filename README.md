@@ -1,24 +1,37 @@
-**NOTICE**: Unfortunately, I don’t have much free time to actively maintain this project. If you like the project but are not satisfied with its current state, you can explore the many forks or create your own. Even if you’re unfamiliar with **Swift**, tools like **Claude Code** and **Codex** can effectively help implement projects like this. This is a great opportunity to tailor **barik** to your needs and make it exactly the way you’d like.
 
-----
+[//]: # (<p align="center" dir="auto">)
 
-<p align="center" dir="auto">
-  <img src="resources/header-image.png" alt="Barik"">
-  <p align="center" dir="auto">
-    <a href="LICENSE">
-      <img alt="License Badge" src="https://img.shields.io/github/license/mocki-toki/barik.svg?color=green" style="max-width: 100%;">
-    </a>
-    <a href="https://github.com/mocki-toki/barik/issues">
-      <img alt="Issues Badge" src="https://img.shields.io/github/issues/mocki-toki/barik.svg?color=green" style="max-width: 100%;">
-    </a>
-    <a href="CHANGELOG.md">
-      <img alt="Changelog Badge" src="https://img.shields.io/badge/view-changelog-green.svg" style="max-width: 100%;">
-    </a>
-    <a href="https://github.com/mocki-toki/barik/releases">
-      <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/mocki-toki/barik/total">
-    </a>
-  </p>
-</p>
+[//]: # (  <img src="resources/header-image.png" alt="Barik"">)
+
+[//]: # (  <p align="center" dir="auto">)
+
+[//]: # (    <a href="LICENSE">)
+
+[//]: # (      <img alt="License Badge" src="https://img.shields.io/github/license/mocki-toki/barik.svg?color=green" style="max-width: 100%;">)
+
+[//]: # (    </a>)
+
+[//]: # (    <a href="https://github.com/mocki-toki/barik/issues">)
+
+[//]: # (      <img alt="Issues Badge" src="https://img.shields.io/github/issues/mocki-toki/barik.svg?color=green" style="max-width: 100%;">)
+
+[//]: # (    </a>)
+
+[//]: # (    <a href="CHANGELOG.md">)
+
+[//]: # (      <img alt="Changelog Badge" src="https://img.shields.io/badge/view-changelog-green.svg" style="max-width: 100%;">)
+
+[//]: # (    </a>)
+
+[//]: # (    <a href="https://github.com/mocki-toki/barik/releases">)
+
+[//]: # (      <img alt="GitHub Downloads &#40;all assets, all releases&#41;" src="https://img.shields.io/github/downloads/mocki-toki/barik/total">)
+
+[//]: # (    </a>)
+
+[//]: # (  </p>)
+
+[//]: # (</p>)
 
 **barik** is a lightweight macOS menu bar replacement. If you use [**yabai**](https://github.com/koekeishiya/yabai) or [**AeroSpace**](https://github.com/nikitabobko/AeroSpace) for tiling WM, you can display the current space in a sleek macOS-style panel with smooth animations. This makes it easy to see which number to press to switch spaces.
 
@@ -92,6 +105,7 @@ displayed = [ # widgets on menu bar
     "default.network",
     "default.battery",
     "divider",
+    "default.weather",
     # { "default.time" = { time-zone = "America/Los_Angeles", format = "E d, hh:mm" } },
     "default.time",
 ]
@@ -151,6 +165,11 @@ calendar.show-events = true
 [widgets.default.time.popup]
 view-variant = "box"
 
+[widgets.default.weather]
+unit = "celsius"      # Options: "celsius" or "fahrenheit" (default: "fahrenheit")
+latitude = "40.7128"  # Custom latitude (optional, uses device location if not set)
+longitude = "-74.0060" # Custom longitude (optional, uses device location if not set)
+
 
 
 ### EXPERIMENTAL, WILL BE REPLACED BY STYLE API IN THE FUTURE
@@ -191,7 +210,16 @@ If you already have an existing `~/.barik-config.toml`, add these widget IDs man
 - `dividers` adds separators between rows, columns, or both in the menu bar widget
 - GPU usage is best-effort and may be unavailable on some systems or macOS configurations
 
-Example:
+## Weather Widget
+
+`default.weather` displays current weather conditions in the menu bar and provides a detailed popup.
+
+- Shows current temperature with SF Symbols for conditions
+- Supports `celsius` and `fahrenheit`
+- Uses device location by default or custom `latitude`/`longitude` (If coordinates are not provided, the widget will automatically use the device location).
+- Popup includes hourly forecast, daily high/low, and precipitation probability
+- Weather data is fetched from the Open-Meteo API
+
 
 ```toml
 [widgets.default.system-monitor]

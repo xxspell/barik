@@ -71,6 +71,10 @@ struct MenuBarView: View {
             SystemMonitorWidget()
                 .environmentObject(config)
 
+        case "default.weather":
+            WeatherWidget()
+                .environmentObject(config)
+
         case "spacer":
             Spacer().frame(minWidth: 50, maxWidth: .infinity)
 

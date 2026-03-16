@@ -85,6 +85,8 @@ final class ConfigManager: ObservableObject {
                 "divider",
                 # { "default.time" = { time-zone = "America/Los_Angeles", format = "E d, hh:mm" } },
                 "default.time"
+                # Uncomment the line below to add the weather widget
+                # "default.weather"
             ]
 
             [widgets.default.spaces]
@@ -128,7 +130,12 @@ final class ConfigManager: ObservableObject {
 
             [popup.default.time]
             view-variant = "box"
-            
+
+            [widgets.default.weather]
+            unit = "celsius"  # Options: "celsius" or "fahrenheit" (default: "celsius")
+            # latitude = "51.773333"   # Custom latitude (if not provided, uses geolocation)
+            # longitude = "52.140278"  # Custom longitude (if not provided, uses geolocation)
+
             [background]
             enabled = true
             """
