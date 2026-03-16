@@ -65,7 +65,7 @@ struct QwenProxyStatsView: View {
         let healthy = usageManager.usageData.summary.healthy
         let total = usageManager.usageData.summary.total
         let color: Color = healthy == total ? .green : (healthy > 0 ? .orange : .red)
-        return Text("\(healthy)/\(total) alive")
+        return Text(String(localized: "\(healthy)/\(total) alive"))
             .font(.system(size: 11, weight: .medium))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -85,16 +85,16 @@ struct QwenProxyStatsView: View {
 
             let s = usageManager.usageData.summary
             HStack(spacing: 0) {
-                accountStat(label: "Total",   value: "\(s.total)",        color: .white)
+                accountStat(label: String(localized: "Total"),    value: "\(s.total)",        color: .white)
                 Spacer()
-                accountStat(label: "Healthy", value: "\(s.healthy)",      color: .green)
+                accountStat(label: String(localized: "Healthy"),  value: "\(s.healthy)",      color: .green)
                 Spacer()
-                accountStat(label: "Errors",  value: "\(s.failed)",       color: s.failed > 0 ? .red : .white.opacity(0.4))
+                accountStat(label: String(localized: "Errors"),   value: "\(s.failed)",       color: s.failed > 0 ? .red : .white.opacity(0.4))
                 Spacer()
-                accountStat(label: "Expiring",value: "\(s.expiringSoon)", color: s.expiringSoon > 0 ? .orange : .white.opacity(0.4))
+                accountStat(label: String(localized: "Expiring"), value: "\(s.expiringSoon)", color: s.expiringSoon > 0 ? .orange : .white.opacity(0.4))
                 Spacer()
-                accountStat(label: "Expired", value: "\(s.expired)",      color: s.expired > 0 ? .red : .white.opacity(0.4))
-            }
+                accountStat(label: String(localized: "Expired"),  value: "\(s.expired)",      color: s.expired > 0 ? .red : .white.opacity(0.4))
+        }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -186,11 +186,11 @@ struct QwenProxyStatsView: View {
                 .textCase(.uppercase)
 
             HStack(spacing: 16) {
-                serverInfoRow(icon: "clock",      label: "Uptime", value: formatUptime(info.uptimeSeconds))
+                serverInfoRow(icon: "clock",      label: String(localized: "Uptime"), value: formatUptime(info.uptimeSeconds))
                 Spacer()
-                serverInfoRow(icon: "memorychip", label: "RSS",    value: formatBytes(info.memoryRss))
+                serverInfoRow(icon: "memorychip", label: String(localized: "RSS"),    value: formatBytes(info.memoryRss))
                 Spacer()
-                serverInfoRow(icon: "cpu",        label: "Heap",   value: "\(formatBytes(info.memoryHeapUsed)) / \(formatBytes(info.memoryHeapTotal))")
+                serverInfoRow(icon: "cpu",        label: String(localized: "Heap"),   value: "\(formatBytes(info.memoryHeapUsed)) / \(formatBytes(info.memoryHeapTotal))")
             }
 
             if !info.nodeVersion.isEmpty {
