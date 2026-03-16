@@ -16,6 +16,10 @@ struct TimeWidget: View {
         calendarConfig?["show-events"]?.boolValue ?? true
     }
 
+    var stacked: Bool { config["stacked"]?.boolValue ?? false }
+    var stackedTimeFormat: String { config["stacked-time-format"]?.stringValue ?? "J:mm" }
+    var stackedDateFormat: String { config["stacked-date-format"]?.stringValue ?? "E d MMM" }
+
     @State private var currentTime = Date()
     let calendarManager: CalendarManager
 
@@ -25,16 +29,28 @@ struct TimeWidget: View {
         .autoconnect()
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            Text(formattedTime(pattern: format, from: currentTime))
-                .fontWeight(.semibold)
-            if let event = calendarManager.nextEvent, calendarShowEvents {
-                Text(eventText(for: event))
-                    .opacity(0.8)
-                    .font(.subheadline)
+        Group {
+            if stacked {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(formattedTime(pattern: stackedTimeFormat, from: currentTime))
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(formattedTime(pattern: stackedDateFormat, from: currentTime))
+                        .font(.system(size: 11, weight: .medium))
+                        .opacity(0.7)
+                }
+            } else {
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text(formattedTime(pattern: format, from: currentTime))
+                        .fontWeight(.semibold)
+                    if let event = calendarManager.nextEvent, calendarShowEvents {
+                        Text(eventText(for: event))
+                            .opacity(0.8)
+                            .font(.subheadline)
+                    }
+                }
+                .font(.headline)
             }
         }
-        .font(.headline)
         .foregroundStyle(.foregroundOutside)
         .shadow(color: .foregroundShadowOutside, radius: 3)
         .onReceive(timer) { date in

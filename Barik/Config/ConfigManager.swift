@@ -141,6 +141,21 @@ final class ConfigManager: ObservableObject {
             # calendar.allow-list = ["Home", "Personal"] # show only these calendars
             # calendar.deny-list = ["Work", "Boss"] # show all calendars except these
 
+            stacked = false
+            # Time on top in a larger font, date below in a smaller font.
+            # Overrides the default single-line `format` layout.
+            # Default: false
+
+            stacked-time-format = "J:mm"
+            # Time format used in stacked mode (top line, larger text).
+            # Uses Unicode date format patterns.
+            # Default: "J:mm"
+
+            stacked-date-format = "E d MMM"
+            # Date format used in stacked mode (bottom line, smaller text).
+            # Uses Unicode date format patterns.
+            # Default: "E d MMM"
+
             [popup.default.time]
             view-variant = "box"
 
