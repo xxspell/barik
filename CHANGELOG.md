@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.0
+
+### Added
+- Add weather widget with current conditions and forecast that integrates with Open-Meteo API
+- Add Qwen Proxy usage widget for monitoring proxy health and account status
+- Add stacked time and date layout option for the time widget with configurable formats
+- Add Russian localization for Qwen Proxy widget and system monitor popup
+- Add localization for weather conditions and improve forecast formatting
+- Add repository reference updates from mocki-toki to xxspell
+
+### Changed
+- Localize weather conditions using translation keys instead of hardcoded strings
+- Improve weather popup and hourly forecast formatting with locale-aware hour display
+- Update high/low temperature display to use ↑ ↓ format in weather widget
+
 ## 0.6.0
 
 ### Added
