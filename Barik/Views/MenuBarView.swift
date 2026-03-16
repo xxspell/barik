@@ -54,6 +54,10 @@ struct MenuBarView: View {
         case "default.time":
             TimeWidget(calendarManager: CalendarManager(configProvider: config))
                 .environmentObject(config)
+
+        case "default.qwen-proxy-usage":
+            QwenProxyUsageWidget()
+                .environmentObject(config)
             
         case "default.nowplaying":
             NowPlayingWidget()

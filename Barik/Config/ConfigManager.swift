@@ -98,6 +98,19 @@ final class ConfigManager: ObservableObject {
 
             [widgets.default.codex-usage]
 
+            # Qwen Proxy Usage widget — monitors your self-hosted Qwen proxy
+            # Uncomment and configure to enable:
+            # [widgets.default.qwen-proxy-usage]
+            # base_url = "http://192.168.1.110:9927"
+            # token = "sk-yourtoken"
+            # show_ring = false       # ring arc around the icon
+            # ring_logic = "failed"   # "failed" = arc grows on problems (Codex style)
+            #                         # "healthy" = arc shrinks on problems (Claude style)
+            # ring-warning-level = 60      # %
+            # ring-critical-level = 90  # %
+            # show_label = true       # healthy account count label
+            # All settings also available via popup gear icon
+
             [widgets.default.system-monitor]
             show-icon = false
             use-metric-icons = false
