@@ -42,14 +42,14 @@ struct WeatherPopup: View {
                             .symbolRenderingMode(.multicolor)
                             .font(.system(size: 28))
 
-                        Text(weather.condition)
+                        Text(LocalizedStringKey(weather.condition))
                             .font(.system(size: 13))
                             .opacity(0.8)
 
                         if let high = weatherManager.highTemp,
                            let low = weatherManager.lowTemp {
 
-                            Text("H:\(high) L:\(low)")
+                            Text("↑\(high) ↓\(low)")
                                 .font(.system(size: 12))
                                 .opacity(0.6)
                         }

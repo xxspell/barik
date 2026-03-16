@@ -281,7 +281,7 @@ final class WeatherManager: NSObject, ObservableObject {
                 // Current weather
                 let temp = Int(response.currentWeather.temperature.rounded())
                 let symbol = symbolName(for: response.currentWeather.weathercode)
-                let condition = conditionName(for: response.currentWeather.weathercode)
+                let condition = conditionKey(for: response.currentWeather.weathercode)
                 let unitSymbol = temperatureUnit == "celsius" ? "°C" : "°F"
 
                 self.currentWeather = CurrentWeather(
@@ -376,7 +376,7 @@ final class WeatherManager: NSObject, ObservableObject {
                 // Current weather
                 let temp = Int(response.currentWeather.temperature.rounded())
                 let symbol = symbolName(for: response.currentWeather.weathercode)
-                let condition = conditionName(for: response.currentWeather.weathercode)
+                let condition = conditionKey(for: response.currentWeather.weathercode)
                 let unitSymbol = temperatureUnit == "celsius" ? "°C" : "°F"
 
                 self.currentWeather = CurrentWeather(
@@ -416,8 +416,12 @@ final class WeatherManager: NSObject, ObservableObject {
                             let precip = hourly.precipitationProbability?[safe: i]
 
                             let timeFormatter = DateFormatter()
-                            timeFormatter.dateFormat = "ha"
-                            let label = forecasts.isEmpty ? "Now" : timeFormatter.string(from: date)
+                            timeFormatter.locale = Locale.current
+                            timeFormatter.setLocalizedDateFormatFromTemplate("j")
+
+                            let label = forecasts.isEmpty
+                                ? String(localized: "Now")
+                                : timeFormatter.string(from: date)
 
                             forecasts.append(HourlyForecast(
                                 time: date,
@@ -502,40 +506,40 @@ final class WeatherManager: NSObject, ObservableObject {
     }
 
     /// Maps Open-Meteo weather codes to condition names
-    func conditionName(for code: Int) -> String {
+    func conditionKey(for code: Int) -> String {
         switch code {
         case 0:
-            return "Clear"
+            return "weather.clear"
         case 1:
-            return "Mainly Clear"
+            return "weather.mainly_clear"
         case 2:
-            return "Partly Cloudy"
+            return "weather.partly_cloudy"
         case 3:
-            return "Overcast"
+            return "weather.overcast"
         case 45, 48:
-            return "Foggy"
+            return "weather.foggy"
         case 51, 53, 55:
-            return "Drizzle"
+            return "weather.drizzle"
         case 56, 57:
-            return "Freezing Drizzle"
+            return "weather.freezing_drizzle"
         case 61, 63, 65:
-            return "Rain"
+            return "weather.rain"
         case 66, 67:
-            return "Freezing Rain"
+            return "weather.freezing_rain"
         case 71, 73, 75:
-            return "Snow"
+            return "weather.snow"
         case 77:
-            return "Snow Grains"
+            return "weather.snow_grains"
         case 80, 81, 82:
-            return "Rain Showers"
+            return "weather.rain_showers"
         case 85, 86:
-            return "Snow Showers"
+            return "weather.snow_showers"
         case 95:
-            return "Thunderstorm"
+            return "weather.thunderstorm"
         case 96, 99:
-            return "Thunderstorm with Hail"
+            return "weather.thunderstorm_hail"
         default:
-            return "Unknown"
+            return "weather.unknown"
         }
     }
 }
