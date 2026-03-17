@@ -91,6 +91,10 @@ struct MenuBarView: View {
                 .fill(Color.active)
                 .frame(width: 2, height: 15)
                 .clipShape(Capsule())
+            
+        case "default.ticktick":
+            TickTickWidget()
+                .environmentObject(config)
 
         case "system-banner":
             SystemBannerWidget()

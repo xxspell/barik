@@ -26,11 +26,14 @@ class CalendarManager: ObservableObject {
     @Published var nextEvent: EKEvent?
     @Published var todaysEvents: [EKEvent] = []
     @Published var tomorrowsEvents: [EKEvent] = []
+    @Published var calendarAccessGranted: Bool = false
+    @Published var monthlyEventsByDay: [DateComponents: [EKEvent]] = [:]
     private let eventStore = EKEventStore()
     private var timer: Timer?
 
     init(configProvider: ConfigProvider) {
         self.configProvider = configProvider
+        calendarAccessGranted = EKEventStore.authorizationStatus(for: .event) == .fullAccess
         requestAccess()
         startMonitoring()
     }
@@ -45,10 +48,12 @@ class CalendarManager: ObservableObject {
             self?.fetchTodaysEvents()
             self?.fetchTomorrowsEvents()
             self?.fetchNextEvent()
+            self?.fetchMonthEvents()
         }
         fetchTodaysEvents()
         fetchTomorrowsEvents()
         fetchNextEvent()
+        fetchMonthEvents()
     }
 
     private func stopMonitoring() {
@@ -59,10 +64,16 @@ class CalendarManager: ObservableObject {
     private func requestAccess() {
         eventStore.requestFullAccessToEvents { [weak self] granted, error in
             if granted && error == nil {
+                DispatchQueue.main.async {
+                    self?.calendarAccessGranted = true
+                }
                 self?.fetchTodaysEvents()
                 self?.fetchTomorrowsEvents()
                 self?.fetchNextEvent()
             } else {
+                DispatchQueue.main.async {
+                    self?.calendarAccessGranted = false
+                }
                 self?.logger.error(
                     "Calendar access not granted: \(String(describing: error))")
             }
@@ -151,5 +162,45 @@ class CalendarManager: ObservableObject {
         DispatchQueue.main.async {
             self.tomorrowsEvents = filteredEvents
         }
+    }
+
+    func fetchMonthEvents() {
+        guard calendarAccessGranted else { return }
+        let calendar = Calendar.current
+        let now = Date()
+        let comps = calendar.dateComponents([.year, .month], from: now)
+        guard let startOfMonth = calendar.date(from: comps) else { return }
+        guard let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth),
+              let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: endOfMonth) else { return }
+
+        let calendars = eventStore.calendars(for: .event)
+        let predicate = eventStore.predicateForEvents(
+            withStart: startOfMonth, end: endOfDay, calendars: calendars
+        )
+        let events = eventStore.events(matching: predicate).sorted { $0.startDate < $1.startDate }
+        let filteredEvents = filterEvents(events)
+        var byDay: [DateComponents: [EKEvent]] = [:]
+        for event in filteredEvents {
+            let dc = calendar.dateComponents([.year, .month, .day], from: event.startDate)
+            byDay[dc, default: []].append(event)
+        }
+        DispatchQueue.main.async {
+            self.monthlyEventsByDay = byDay
+        }
+    }
+
+    func events(for date: Date) -> [EKEvent] {
+        guard calendarAccessGranted else { return [] }
+        let calendars = eventStore.calendars(for: .event)
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
+        guard let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: startOfDay) else {
+            return []
+        }
+        let predicate = eventStore.predicateForEvents(
+            withStart: startOfDay, end: endOfDay, calendars: calendars
+        )
+        let events = eventStore.events(matching: predicate).sorted { $0.startDate < $1.startDate }
+        return filterEvents(events)
     }
 }
