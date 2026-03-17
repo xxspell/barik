@@ -248,7 +248,26 @@ dividers = "none"
 metrics = ["cpu", "ram", "disk", "gpu", "network"]
 ```
 
-Currently, you can customize the order of widgets (time, indicators, etc.) and adjust some of their settings. Soon, you’ll also be able to add custom widgets and completely change **barik**'s appearance—making it almost unrecognizable (hello, r/unixporn!).
+## TickTick Widget
+
+`default.ticktick` integrates with TickTick to display tasks, habits, and priorities in the menu bar with a detailed popup for task management.
+
+- Shows the number of pending tasks in the menu bar (with badge counter)
+- Supports both OAuth2 and username/password authentication methods
+- Integrates with calendar popup to show tasks alongside calendar events
+- Provides full task management: create, update, complete, delete tasks
+- Supports Eisenhower matrix for task prioritization (urgent/important)
+- Includes habit tracking with streak calculation and daily check-ins
+- Implements background refresh with retry and automatic re-authentication
+- Securely stores credentials using Keychain
+- Offers local caching for improved startup performance
+- Popup view includes task filtering, priority indicators, and due dates
+
+
+```toml
+[widgets.default.ticktick]
+private-api = true # Optional, default: determined automatically based on what is stored in Keychain
+```
 
 ## Future Plans
 
