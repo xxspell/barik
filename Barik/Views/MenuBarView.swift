@@ -63,6 +63,10 @@ struct MenuBarView: View {
             NowPlayingWidget()
                 .environmentObject(config)
 
+        case "default.homebrew":
+            HomebrewWidget()
+                .environmentObject(config)
+
         case "default.claude-usage":
             ClaudeUsageWidget()
                 .environmentObject(config)

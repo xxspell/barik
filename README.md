@@ -98,6 +98,7 @@ theme = "system" # system, light, dark
 displayed = [ # widgets on menu bar
     "default.spaces",
     "spacer",
+    "default.homebrew",
     "default.claude-usage",
     "default.codex-usage",
     "default.system-monitor",
@@ -170,7 +171,8 @@ unit = "celsius"      # Options: "celsius" or "fahrenheit" (default: "fahrenheit
 latitude = "40.7128"  # Custom latitude (optional, uses device location if not set)
 longitude = "-74.0060" # Custom longitude (optional, uses device location if not set)
 
-
+[widgets.default.homebrew]
+display-mode = "label" # label, icon, badge
 
 ### EXPERIMENTAL, WILL BE REPLACED BY STYLE API IN THE FUTURE
 [experimental.background] # settings for blurred background
@@ -219,6 +221,20 @@ If you already have an existing `~/.barik-config.toml`, add these widget IDs man
 - Uses device location by default or custom `latitude`/`longitude` (If coordinates are not provided, the widget will automatically use the device location).
 - Popup includes hourly forecast, daily high/low, and precipitation probability
 - Weather data is fetched from the Open-Meteo API
+
+## Homebrew Widget
+
+`default.homebrew` displays Homebrew package updates in the menu bar and provides a detailed popup with package management tools.
+
+- Shows the number of outdated packages directly in the menu bar
+- Supports multiple display modes: `label`, `icon`, and `badge`
+- Popup lists outdated formulae and casks with version information
+- Displays Homebrew version, installed package count, and last update time
+- Includes built-in actions to run `brew update` and `brew upgrade`
+- Streams live progress output during updates
+- Detects packages that require `sudo` for upgrade and highlights them
+- Uses caching to avoid frequent Homebrew calls and reduce CPU usage
+
 
 
 ```toml
