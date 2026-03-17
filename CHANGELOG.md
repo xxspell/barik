@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.0
+
+### Added
+- Add TickTick widget with tasks, habits and Eisenhower matrix support
+- Add Homebrew widget with update monitoring and popup functionality
+- Integrate TickTick tasks into calendar popup for combined task and event view
+- Add localization for TickTick widget and related UI elements
+- Add restoration and reorganization of localization strings
+- Add calendar integration labels (today, overdue, etc.) for TickTick tasks
+
+### Changed
+- Improve localization consistency across widgets
+- Enhance calendar popup with TickTick task visualization (highlight rings, priority colors)
+- Add filter tabs in calendar popup to show only TickTick tasks
+- Add task visualization in calendar grid with priority-based coloring
+- Add overdue and important task highlighting in daily view
+
 ## 0.7.0
 
 ### Added
