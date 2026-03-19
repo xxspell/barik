@@ -219,3 +219,7 @@ xcuserdata/
 
 .idea/
 .serena/
+.dev/
+CLAUDE.md
+.claude/
+.gstack/
