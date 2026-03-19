@@ -25,6 +25,21 @@ struct TickTickTask: Identifiable, Equatable {
     var items: [TickTickChecklistItem]
     var subtasks: [TickTickTask]
 
+    // Private API metadata (kept for batch completion/update payload fidelity)
+    var creator: Int? = nil
+    var createdTimeRaw: String? = nil
+    var modifiedTimeRaw: String? = nil
+    var completedTimeRaw: String? = nil
+    var completedUserId: Int? = nil
+    var etag: String? = nil
+    var sortOrder: Int64? = nil
+    var timeZone: String? = nil
+    var startDateRaw: String? = nil
+    var dueDateRaw: String? = nil
+    var isAllDay: Bool? = nil
+    var assignee: Int? = nil
+    var progress: Int? = nil
+
     var isSubtask: Bool { parentId != nil }
     var isCompleted: Bool { status == 2 }
 
@@ -85,6 +100,11 @@ struct TickTickHabitCheckin: Identifiable, Codable {
     var localArchived: Bool
 }
 
+struct TickTickTaskCompletionToast: Identifiable, Equatable {
+    let id: String
+    let title: String
+}
+
 // MARK: - Private API raw models
 
 private struct BatchCheckResponse: Decodable {
@@ -113,6 +133,19 @@ private struct RawTask: Decodable {
     let items: [RawChecklistItem]?
     let kind: String?
     let tags: [String]?
+
+    // Private API metadata used to preserve task payload fidelity
+    let creator: Int?
+    let createdTime: String?
+    let modifiedTime: String?
+    let completedTime: String?
+    let completedUserId: Int?
+    let etag: String?
+    let sortOrder: Int64?
+    let timeZone: String?
+    let isAllDay: Bool?
+    let assignee: Int?
+    let progress: Int?
 }
 
 private struct RawChecklistItem: Decodable {
@@ -256,6 +289,7 @@ final class TickTickManager: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var totalPendingCount: Int = 0
+    @Published private(set) var taskCompletionToast: TickTickTaskCompletionToast?
 
     // Config
     var clientId:     String = "rW76D80NVRiKqPun0a"
@@ -284,10 +318,13 @@ final class TickTickManager: ObservableObject {
     private var isRefreshingHabits = false
     private var reAuthAttempts = 0
     private let maxReAuth      = 2
+    private let taskCompletionUndoDelayNs: UInt64 = 2_000_000_000
     private var privateUserId: String?
     private var habitRawById: [String: APIHabit] = [:]
     private var todayCheckinIdByHabit: [String: String] = [:]
     private var habitCheckinsByHabit: [String: [TickTickHabitCheckin]] = [:]
+    private var pendingTaskCompletionWork: [String: Task<Void, Never>] = [:]
+    private var pendingTaskCompletions: [String: (task: TickTickTask, originalIndex: Int?)] = [:]
 
     // Cache
     private var cacheURL: URL? {
@@ -349,7 +386,7 @@ final class TickTickManager: ObservableObject {
             let (data, response) = try await URLSession.shared.data(for: req)
             guard let http = response as? HTTPURLResponse else { return }
             logger.debug("signInPrivate() — HTTP \(http.statusCode)")
-            logger.debug("signInPrivate() — response (first 200): \(String((String(data: data, encoding: .utf8) ?? "").prefix(200)))")
+            logger.debug("signInPrivate() — raw response: \(self.truncatedRawString(data))")
 
             guard http.statusCode == 200 else {
                 if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -548,9 +585,11 @@ final class TickTickManager: ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw TickTickError.apiError(-1) }
         logger.debug("fetchPrivateBatch() — HTTP \(http.statusCode), \(data.count) bytes")
+        logger.debug("fetchPrivateBatch() — raw response: \(self.truncatedRawString(data))")
         try checkStatus(http.statusCode)
 
         let batch = try JSONDecoder().decode(BatchCheckResponse.self, from: data)
+        updatePrivateUserIdIfNeeded(from: batch)
 
         let rawProjects = (batch.projectProfiles ?? [])
             .filter { !($0.closed ?? false) && ($0.kind ?? "TASK") == "TASK" }
@@ -607,14 +646,118 @@ final class TickTickManager: ObservableObject {
 
     // MARK: - Task Actions
 
+    func scheduleTaskCompletion(_ task: TickTickTask) {
+        logger.info("scheduleTaskCompletion() — '\(task.title)'")
+
+        pendingTaskCompletionWork[task.id]?.cancel()
+        let originalIndex = tasksByProject[task.projectId]?.firstIndex(where: { $0.id == task.id })
+        let undoDelayNs = taskCompletionUndoDelayNs
+        pendingTaskCompletions[task.id] = (task, originalIndex)
+        removeLocally(task)
+        taskCompletionToast = TickTickTaskCompletionToast(id: task.id, title: task.title)
+
+        pendingTaskCompletionWork[task.id] = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: undoDelayNs)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            await self?.commitScheduledTaskCompletion(taskId: task.id)
+        }
+    }
+
+    func undoScheduledTaskCompletion(taskId: String) {
+        logger.info("undoScheduledTaskCompletion() — taskId=\(taskId)")
+        pendingTaskCompletionWork[taskId]?.cancel()
+        pendingTaskCompletionWork.removeValue(forKey: taskId)
+
+        guard let pending = pendingTaskCompletions.removeValue(forKey: taskId) else {
+            if taskCompletionToast?.id == taskId { taskCompletionToast = nil }
+            return
+        }
+
+        restoreLocally(pending.task, at: pending.originalIndex)
+        if taskCompletionToast?.id == taskId { taskCompletionToast = nil }
+    }
+
+    private func commitScheduledTaskCompletion(taskId: String) async {
+        pendingTaskCompletionWork.removeValue(forKey: taskId)
+        guard let pending = pendingTaskCompletions.removeValue(forKey: taskId) else { return }
+
+        logger.info("commitScheduledTaskCompletion() — '\(pending.task.title)'")
+        if taskCompletionToast?.id == taskId { taskCompletionToast = nil }
+        await completeTask(pending.task)
+    }
+
     func completeTask(_ task: TickTickTask) async {
         logger.info("completeTask() — '\(task.title)'")
-        removeLocally(task)
+
+        if authMode == .privateAPI {
+            await completeTaskPrivate(task)
+            return
+        }
+
         guard let req = taskActionRequest(task: task, action: "complete", method: "POST") else { return }
         do {
             let (_, resp) = try await URLSession.shared.data(for: req)
             if let http = resp as? HTTPURLResponse, http.statusCode >= 400 { await refresh() }
         } catch { await refresh() }
+    }
+
+    private func completeTaskPrivate(_ task: TickTickTask) async {
+        guard let token = loadKey(privTokenKey) else {
+            logger.warning("completeTaskPrivate() — missing private token")
+            await refresh()
+            return
+        }
+        guard let completedUserId = validPrivateUserId() else {
+            logger.warning("completeTaskPrivate() — invalid private user id, refreshing instead of sending")
+            await refresh()
+            return
+        }
+        guard let url = URL(string: "\(privBase)/batch/task") else {
+            await refresh()
+            return
+        }
+
+        let now = Date()
+        let payload = buildCompletedTaskPayloadPrivate(task: task, now: now, completedUserId: completedUserId)
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("OAuth \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json;charset=UTF-8", forHTTPHeaderField: "Content-Type")
+        req.setValue(xDevice, forHTTPHeaderField: "X-Device")
+        req.setValue("TickTick/M-8020", forHTTPHeaderField: "User-Agent")
+        req.timeoutInterval = 10
+        let requestBody = [
+            "add": [],
+            "update": [payload],
+            "delete": []
+        ] as [String: Any]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: requestBody)
+
+        do {
+            logger.debug("completeTaskPrivate() — request raw: \(self.truncatedRawJSONObject(requestBody))")
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse {
+                logger.debug("completeTaskPrivate() — HTTP \(http.statusCode)")
+                logger.debug("completeTaskPrivate() — raw response: \(self.truncatedRawString(data))")
+                if http.statusCode >= 400 {
+                    await refresh()
+                    return
+                }
+            } else {
+                logger.warning("completeTaskPrivate() — non-HTTP response")
+                await refresh()
+                return
+            }
+            await refresh()
+        } catch {
+            logger.error("completeTaskPrivate() — \(error.localizedDescription)")
+            await refresh()
+        }
     }
 
     func deleteTask(_ task: TickTickTask) async {
@@ -1003,13 +1146,29 @@ final class TickTickManager: ObservableObject {
     private func mapTask(_ t: RawTask) -> TickTickTask? {
         guard !t.title.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         return TickTickTask(
-            id: t.id, projectId: t.projectId ?? "inbox",
-            parentId: t.parentId, title: t.title, content: t.content,
+            id: t.id,
+            projectId: t.projectId ?? "inbox",
+            parentId: t.parentId,
+            title: t.title,
+            content: t.content,
             priority: TickTickPriority(rawValue: t.priority ?? 0) ?? .none,
             dueDate: (t.dueDate ?? t.startDate).flatMap { parseISO($0) },
             status: t.status ?? 0,
             items: (t.items ?? []).map { TickTickChecklistItem(id: $0.id, title: $0.title, status: $0.status ?? 0) },
-            subtasks: []
+            subtasks: [],
+            creator: t.creator,
+            createdTimeRaw: t.createdTime,
+            modifiedTimeRaw: t.modifiedTime,
+            completedTimeRaw: t.completedTime,
+            completedUserId: t.completedUserId,
+            etag: t.etag,
+            sortOrder: t.sortOrder,
+            timeZone: t.timeZone,
+            startDateRaw: t.startDate,
+            dueDateRaw: t.dueDate,
+            isAllDay: t.isAllDay,
+            assignee: t.assignee,
+            progress: t.progress
         )
     }
 
@@ -1029,6 +1188,21 @@ final class TickTickManager: ObservableObject {
             arr.removeAll { $0.id == task.id }
             tasksByProject[task.projectId] = arr
         }
+        recalc()
+    }
+
+    private func restoreLocally(_ task: TickTickTask, at index: Int?) {
+        var arr = tasksByProject[task.projectId] ?? []
+        guard !arr.contains(where: { $0.id == task.id }) else { return }
+
+        if let index {
+            let safeIndex = min(max(index, 0), arr.count)
+            arr.insert(task, at: safeIndex)
+        } else {
+            arr.append(task)
+        }
+
+        tasksByProject[task.projectId] = arr
         recalc()
     }
 
@@ -1185,6 +1359,98 @@ final class TickTickManager: ObservableObject {
             "repeatFrom": NSNull(),
             "columnId": NSNull()
         ]
+    }
+
+    private func validPrivateUserId() -> Int? {
+        let source = privateUserId ?? loadKey(privUserIdKey)
+        logger.debug("validPrivateUserId() — source raw: \(source ?? "nil")")
+        guard let source, let userId = Int(source), userId > 0 else { return nil }
+        if privateUserId != source { privateUserId = source }
+        return userId
+    }
+
+    private func updatePrivateUserIdIfNeeded(from batch: BatchCheckResponse) {
+        if let resolved = resolvedPrivateUserId(from: batch) {
+            let resolvedString = String(resolved)
+            if privateUserId != resolvedString {
+                privateUserId = resolvedString
+                saveKey(resolvedString, key: privUserIdKey)
+                logger.info("updatePrivateUserIdIfNeeded() — resolved private user id=\(resolved)")
+            }
+        } else {
+            logger.debug("updatePrivateUserIdIfNeeded() — could not resolve user id from batch")
+        }
+    }
+
+    private func resolvedPrivateUserId(from batch: BatchCheckResponse) -> Int? {
+        if let current = validPrivateUserId() {
+            logger.debug("resolvedPrivateUserId() — using cached user id=\(current)")
+            return current
+        }
+
+        if let inboxId = batch.inboxId,
+           let parsedInboxUserId = parsePrivateUserId(fromInboxId: inboxId) {
+            logger.debug("resolvedPrivateUserId() — from inboxId=\(inboxId) -> \(parsedInboxUserId)")
+            return parsedInboxUserId
+        }
+
+        let allRawTasks = (batch.syncTaskBean?.update ?? []) + (batch.syncTaskBean?.add ?? [])
+        if let creator = allRawTasks.lazy.compactMap(\.creator).first(where: { $0 > 0 }) {
+            logger.debug("resolvedPrivateUserId() — from task.creator=\(creator)")
+            return creator
+        }
+
+        return nil
+    }
+
+    private func parsePrivateUserId(fromInboxId inboxId: String) -> Int? {
+        let digits = inboxId.filter(\.isNumber)
+        guard let userId = Int(digits), userId > 0 else { return nil }
+        return userId
+    }
+
+    private func truncatedRawString(_ data: Data) -> String {
+        let raw = String(data: data, encoding: .utf8) ?? "<non-utf8 \(data.count) bytes>"
+        return raw
+    }
+
+    private func truncatedRawJSONObject(_ object: Any) -> String {
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
+              let raw = String(data: data, encoding: .utf8) else {
+            return "<invalid json object>"
+        }
+        return raw
+    }
+
+    private func buildCompletedTaskPayloadPrivate(task: TickTickTask, now: Date, completedUserId: Int) -> [String: Any] {
+        var payload: [String: Any] = [
+            "id": task.id,
+            "projectId": task.projectId,
+            "title": task.title,
+            "status": 2,
+            "modifiedTime": tickTickDateWithMillis(now),
+            "completedTime": tickTickDateWithMillis(now),
+            "completedUserId": completedUserId
+        ]
+
+        if let creator = task.creator { payload["creator"] = creator }
+        if let createdTime = task.createdTimeRaw { payload["createdTime"] = createdTime }
+        if let etag = task.etag { payload["etag"] = etag }
+        if let sortOrder = task.sortOrder { payload["sortOrder"] = sortOrder }
+        if let timeZone = task.timeZone { payload["timeZone"] = timeZone }
+        if let startDateRaw = task.startDateRaw { payload["startDate"] = startDateRaw }
+        if let dueDateRaw = task.dueDateRaw { payload["dueDate"] = dueDateRaw }
+        if let priority = task.priority.rawValue as Int? { payload["priority"] = priority }
+        if !task.items.isEmpty {
+            payload["items"] = task.items.map { ["id": $0.id, "title": $0.title, "status": $0.status] }
+        }
+        if let content = task.content { payload["content"] = content }
+        if let isAllDay = task.isAllDay { payload["isAllDay"] = isAllDay }
+        if let assignee = task.assignee { payload["assignee"] = assignee }
+        if let progress = task.progress { payload["progress"] = progress }
+
+        return payload
     }
 
     private func tickTickDate(_ date: Date) -> String {

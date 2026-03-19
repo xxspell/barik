@@ -68,6 +68,11 @@ struct TickTickPopup: View {
                         habitsView
                     }
 
+                    if let toast = manager.taskCompletionToast {
+                        Divider().background(Color.white.opacity(0.08))
+                        taskCompletionToastView(toast)
+                    }
+
                     Divider().background(Color.white.opacity(0.1))
                     footerView
                 }
@@ -415,7 +420,7 @@ struct TickTickPopup: View {
                                         expandedTaskId = expandedTaskId == task.id ? nil : task.id
                                     }
                                 },
-                                onComplete: { Task { await manager.completeTask(task) } },
+                                onComplete: { manager.scheduleTaskCompletion(task) },
                                 onDelete:   { Task { await manager.deleteTask(task) } }
                             )
                         }
@@ -503,7 +508,7 @@ struct TickTickPopup: View {
                             subtitle: localized("Important & Urgent"),
                             accentColor: Color(red: 0.95, green: 0.35, blue: 0.35),
                             tasks: q1, expandedTaskId: $expandedTaskId,
-                            onComplete: { t in Task { await manager.completeTask(t) } },
+                            onComplete: { t in manager.scheduleTaskCompletion(t) },
                             onMove: { id in Task { await manager.moveTaskInMatrix(taskId: id, urgent: true, important: true) } }
                         )
                         MatrixQuadrant(
@@ -511,7 +516,7 @@ struct TickTickPopup: View {
                             subtitle: localized("Important, Not Urgent"),
                             accentColor: Color(red: 0.35, green: 0.65, blue: 1.0),
                             tasks: q2, expandedTaskId: $expandedTaskId,
-                            onComplete: { t in Task { await manager.completeTask(t) } },
+                            onComplete: { t in manager.scheduleTaskCompletion(t) },
                             onMove: { id in Task { await manager.moveTaskInMatrix(taskId: id, urgent: false, important: true) } }
                         )
                     }
@@ -521,7 +526,7 @@ struct TickTickPopup: View {
                             subtitle: localized("Urgent, Not Important"),
                             accentColor: Color(red: 0.95, green: 0.65, blue: 0.2),
                             tasks: q3, expandedTaskId: $expandedTaskId,
-                            onComplete: { t in Task { await manager.completeTask(t) } },
+                            onComplete: { t in manager.scheduleTaskCompletion(t) },
                             onMove: { id in Task { await manager.moveTaskInMatrix(taskId: id, urgent: true, important: false) } }
                         )
                         MatrixQuadrant(
@@ -529,7 +534,7 @@ struct TickTickPopup: View {
                             subtitle: localized("Not Important, Not Urgent"),
                             accentColor: Color(red: 0.5, green: 0.5, blue: 0.5),
                             tasks: q4, expandedTaskId: $expandedTaskId,
-                            onComplete: { t in Task { await manager.completeTask(t) } },
+                            onComplete: { t in manager.scheduleTaskCompletion(t) },
                             onMove: { id in Task { await manager.moveTaskInMatrix(taskId: id, urgent: false, important: false) } }
                         )
                     }
@@ -670,6 +675,40 @@ struct TickTickPopup: View {
             .onHover { h in h ? NSCursor.pointingHand.push() : NSCursor.pop() }
         }
         .padding(.horizontal, 18).padding(.vertical, 9)
+    }
+
+    private func taskCompletionToastView(_ toast: TickTickTaskCompletionToast) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 13))
+                .foregroundStyle(.green.opacity(0.85))
+
+            Text("Task completed")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.9))
+
+            Text(toast.title)
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.35))
+                .lineLimit(1)
+
+            Spacer()
+
+            Button(action: { manager.undoScheduledTaskCompletion(taskId: toast.id) }) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(width: 26, height: 22)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            .buttonStyle(.plain)
+            .onHover { h in h ? NSCursor.pointingHand.push() : NSCursor.pop() }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background(Color.white.opacity(0.03))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     // MARK: - Shared
