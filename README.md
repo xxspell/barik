@@ -35,11 +35,17 @@
 
 **barik** is a lightweight macOS menu bar replacement. If you use [**yabai**](https://github.com/koekeishiya/yabai) or [**AeroSpace**](https://github.com/nikitabobko/AeroSpace) for tiling WM, you can display the current space in a sleek macOS-style panel with smooth animations. This makes it easy to see which number to press to switch spaces.
 
-It also supports compact usage widgets for **Claude Code**, **Codex**, and **CLIProxy**:
+It also supports compact usage widgets for **Claude Code**, **Codex**, and **CLIProxy**, plus practical widgets for **System Monitor**, **Weather**, **Homebrew**, **TickTick**, **Now Playing**, and a native macOS **screen recording stop** control:
 
 - **Claude Usage** reads your Claude Code credentials from Keychain, shows current 5-hour usage as a ring in the menu bar, and exposes 5-hour plus weekly usage in the popup.
 - **Codex Usage** reads local `~/.codex/auth.json` and recent session snapshots, shows the current rate-limit window in the menu bar, and exposes the active window details in the popup.
 - **CLIProxy Usage** connects to the local Management API, shows quota percentage in the menu bar, and exposes aggregated token stats plus quota switching settings in the popup.
+- **System Monitor** shows configurable CPU, RAM, disk, GPU, and network metrics in the menu bar with a detailed popup.
+- **Weather** displays current conditions with location-aware forecasts and a popup powered by Open-Meteo.
+- **Homebrew** shows outdated package counts in the menu bar and exposes update and upgrade actions in the popup.
+- **TickTick** shows pending task counts in the menu bar and provides tasks, habits, and an Eisenhower matrix in the popup.
+- **Now Playing** shows the currently playing song with album art and media state in the menu bar.
+- **Screen Recording Stop** appears only while a native macOS screen recording is active and stops it from the menu bar.
 
 <br>
 
@@ -99,6 +105,7 @@ theme = "system" # system, light, dark
 displayed = [ # widgets on menu bar
     "default.spaces",
     "spacer",
+    "default.screen-recording-stop",
     "default.homebrew",
     "default.claude-usage",
     "default.codex-usage",
@@ -175,6 +182,9 @@ longitude = "-74.0060" # Custom longitude (optional, uses device location if not
 [widgets.default.homebrew]
 display-mode = "label" # label, icon, badge
 
+[widgets.default.screen-recording-stop]
+show-label = true
+
 ### EXPERIMENTAL, WILL BE REPLACED BY STYLE API IN THE FUTURE
 [experimental.background] # settings for blurred background
 displayed = true          # display blurred background
@@ -215,6 +225,29 @@ show-label = true
 ```
 
 The widget accepts either the server root URL like `http://localhost:8317` or the full Management API path like `http://localhost:8317/v0/management`.
+
+## Screen Recording Stop Widget
+
+`default.screen-recording-stop` adds a native macOS screen recording stop control to Barik.
+
+- The widget is hidden by default and only appears while a native macOS screen recording is active
+- Clicking the widget triggers the same stop control exposed by macOS in the menu bar
+- The widget needs **Accessibility** permission to press the native stop control
+- Barik can detect an active recording and prompt for Accessibility automatically when the widget is enabled
+- `show-label = true` shows the `REC` text next to the stop icon
+- `show-label = false` keeps the widget in a compact icon-only mode
+
+Example config:
+
+```toml
+[widgets]
+displayed = [
+    "default.screen-recording-stop",
+]
+
+[widgets.default.screen-recording-stop]
+show-label = true
+```
 
 ## System Monitor
 
