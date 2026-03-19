@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuBarView: View {
     @ObservedObject var configManager = ConfigManager.shared
+    @StateObject private var screenRecordingManager = ScreenRecordingManager.shared
 
     var body: some View {
         let theme: ColorScheme? =
@@ -34,6 +35,12 @@ struct MenuBarView: View {
         .padding(.horizontal, configManager.config.experimental.foreground.horizontalPadding)
         .background(.black.opacity(0.001))
         .preferredColorScheme(theme)
+        .onAppear {
+            requestScreenRecordingAccessibilityPermissionIfNeeded(for: items)
+        }
+        .onChange(of: items.map(\.id)) { _, newItemIDs in
+            requestScreenRecordingAccessibilityPermissionIfNeeded(for: newItemIDs)
+        }
     }
 
     @ViewBuilder
@@ -87,6 +94,10 @@ struct MenuBarView: View {
             WeatherWidget()
                 .environmentObject(config)
 
+        case "default.screen-recording-stop":
+            ScreenRecordingWidget(manager: screenRecordingManager)
+                .environmentObject(config)
+
         case "spacer":
             Spacer().frame(minWidth: 50, maxWidth: .infinity)
 
@@ -106,5 +117,14 @@ struct MenuBarView: View {
         default:
             Text("?\(item.id)?").foregroundColor(.red)
         }
+    }
+
+    private func requestScreenRecordingAccessibilityPermissionIfNeeded(for items: [TomlWidgetItem]) {
+        requestScreenRecordingAccessibilityPermissionIfNeeded(for: items.map(\.id))
+    }
+
+    private func requestScreenRecordingAccessibilityPermissionIfNeeded(for itemIDs: [String]) {
+        guard itemIDs.contains("default.screen-recording-stop") else { return }
+        screenRecordingManager.requestAccessibilityPermissionIfNeeded()
     }
 }

@@ -87,6 +87,8 @@ final class ConfigManager: ObservableObject {
                 "default.time"
                 # Uncomment the line below to add the weather widget
                 # "default.weather"
+                # Uncomment the line below to add the screen recording stop widget
+                # "default.screen-recording-stop"
             ]
 
             [widgets.default.spaces]
@@ -167,6 +169,9 @@ final class ConfigManager: ObservableObject {
             # Date format used in stacked mode (bottom line, smaller text).
             # Uses Unicode date format patterns.
             # Default: "E d MMM"
+
+            [widgets.default.screen-recording-stop]
+            show-label = true
 
             [popup.default.time]
             view-variant = "box"
