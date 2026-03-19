@@ -477,10 +477,10 @@ struct TickTickPopup: View {
     private var matrixView: some View {
         let allTasks = manager.tasksByProject.values.flatMap { $0 }
 
-        let q1 = allTasks.filter {  isUrgent($0) &&  isImportant($0) }
-        let q2 = allTasks.filter { !isUrgent($0) &&  isImportant($0) }
-        let q3 = allTasks.filter {  isUrgent($0) && !isImportant($0) }
-        let q4 = allTasks.filter { !isUrgent($0) && !isImportant($0) }
+        let q1 = sortMatrixTasks(allTasks.filter {  isUrgent($0) &&  isImportant($0) })
+        let q2 = sortMatrixTasks(allTasks.filter { !isUrgent($0) &&  isImportant($0) })
+        let q3 = sortMatrixTasks(allTasks.filter {  isUrgent($0) && !isImportant($0) })
+        let q4 = sortMatrixTasks(allTasks.filter { !isUrgent($0) && !isImportant($0) })
 
         return VStack(spacing: 0) {
             // Column headers
@@ -514,7 +514,7 @@ struct TickTickPopup: View {
                         MatrixQuadrant(
                             title: localized("SCHEDULE"),
                             subtitle: localized("Important, Not Urgent"),
-                            accentColor: Color(red: 0.35, green: 0.65, blue: 1.0),
+                            accentColor: Color(red: 0.95, green: 0.75, blue: 0.18),
                             tasks: q2, expandedTaskId: $expandedTaskId,
                             onComplete: { t in manager.scheduleTaskCompletion(t) },
                             onMove: { id in Task { await manager.moveTaskInMatrix(taskId: id, urgent: false, important: true) } }
@@ -524,7 +524,7 @@ struct TickTickPopup: View {
                         MatrixQuadrant(
                             title: localized("DELEGATE"),
                             subtitle: localized("Urgent, Not Important"),
-                            accentColor: Color(red: 0.95, green: 0.65, blue: 0.2),
+                            accentColor: Color(red: 0.35, green: 0.65, blue: 1.0),
                             tasks: q3, expandedTaskId: $expandedTaskId,
                             onComplete: { t in manager.scheduleTaskCompletion(t) },
                             onMove: { id in Task { await manager.moveTaskInMatrix(taskId: id, urgent: true, important: false) } }
@@ -532,7 +532,7 @@ struct TickTickPopup: View {
                         MatrixQuadrant(
                             title: localized("ELIMINATE"),
                             subtitle: localized("Not Important, Not Urgent"),
-                            accentColor: Color(red: 0.5, green: 0.5, blue: 0.5),
+                            accentColor: Color(red: 0.33, green: 0.75, blue: 0.43),
                             tasks: q4, expandedTaskId: $expandedTaskId,
                             onComplete: { t in manager.scheduleTaskCompletion(t) },
                             onMove: { id in Task { await manager.moveTaskInMatrix(taskId: id, urgent: false, important: false) } }
@@ -567,13 +567,38 @@ struct TickTickPopup: View {
     }
 
     private func isUrgent(_ task: TickTickTask) -> Bool {
-        guard let due = task.dueDate else { return false }
-        let cal = Calendar.current
-        return due <= cal.date(byAdding: .day, value: 1, to: Date())!
+        // TickTick matrix urgency is not derived from due dates reliably.
+        // Until we decode the actual quadrant/source field from the private API,
+        // showing due-date-based urgency places tasks into the wrong quadrants.
+        _ = task
+        return false
     }
 
     private func isImportant(_ task: TickTickTask) -> Bool {
         task.priority == .high || task.priority == .medium
+    }
+
+    private func sortMatrixTasks(_ tasks: [TickTickTask]) -> [TickTickTask] {
+        tasks.sorted { lhs, rhs in
+            let lhsOverdue = lhs.dueDate.map { $0 < Date() } ?? false
+            let rhsOverdue = rhs.dueDate.map { $0 < Date() } ?? false
+            if lhsOverdue != rhsOverdue { return lhsOverdue }
+
+            if lhs.priority.rawValue != rhs.priority.rawValue {
+                return lhs.priority.rawValue > rhs.priority.rawValue
+            }
+
+            switch (lhs.dueDate, rhs.dueDate) {
+            case let (l?, r?) where l != r:
+                return l < r
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            default:
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+        }
     }
 
     // MARK: - Habits
@@ -737,6 +762,8 @@ struct TickTickPopup: View {
 // MARK: - Matrix Quadrant
 
 private struct MatrixQuadrant: View {
+    private let contentHeight: CGFloat = 160
+
     let title: String
     let subtitle: String
     let accentColor: Color
@@ -747,55 +774,12 @@ private struct MatrixQuadrant: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(title)
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(accentColor)
-                    Spacer()
-                    if !tasks.isEmpty {
-                        Text("\(tasks.count)")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(accentColor.opacity(0.7))
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(accentColor.opacity(0.12))
-                            .clipShape(Capsule())
-                    }
-                }
-                Text(subtitle)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.25))
-            }
-            .padding(.horizontal, 10).padding(.top, 9).padding(.bottom, 6)
+            headerView
 
             Divider().background(accentColor.opacity(0.15))
 
-            if tasks.isEmpty {
-                Text("No tasks")
-                    .font(.system(size: 10)).foregroundStyle(.white.opacity(0.18))
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 14)
-            } else {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(Array(tasks.prefix(20))) { task in
-                            MatrixTaskRow(
-                                task: task,
-                                accentColor: accentColor,
-                                isExpanded: expandedTaskId == task.id,
-                                onTap: {
-                                    withAnimation(.spring(response: 0.22, dampingFraction: 0.8)) {
-                                        expandedTaskId = expandedTaskId == task.id ? nil : task.id
-                                    }
-                                },
-                                onComplete: { onComplete(task) }
-                            )
-                        }
-                    }
-                }
-                .frame(maxHeight: 160)
-            }
+            contentView
+            .frame(height: contentHeight)
         }
         .frame(maxWidth: .infinity)
         .background(accentColor.opacity(0.04))
@@ -812,6 +796,61 @@ private struct MatrixQuadrant: View {
                 }
             }
             return true
+        }
+    }
+
+    private var headerView: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(accentColor)
+                Spacer()
+                if !tasks.isEmpty {
+                    Text("\(tasks.count)")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(accentColor.opacity(0.7))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(accentColor.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+            }
+            Text(subtitle)
+                .font(.system(size: 9))
+                .foregroundStyle(.white.opacity(0.25))
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 9)
+        .padding(.bottom, 6)
+    }
+
+    @ViewBuilder
+    private var contentView: some View {
+        if tasks.isEmpty {
+            Text("No tasks")
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.18))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        } else {
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(tasks.prefix(20))) { task in
+                        MatrixTaskRow(
+                            task: task,
+                            accentColor: accentColor,
+                            isExpanded: expandedTaskId == task.id,
+                            onTap: {
+                                withAnimation(.spring(response: 0.22, dampingFraction: 0.8)) {
+                                    expandedTaskId = expandedTaskId == task.id ? nil : task.id
+                                }
+                            },
+                            onComplete: { onComplete(task) }
+                        )
+                    }
+                }
+            }
+            .frame(maxHeight: contentHeight)
         }
     }
 }
