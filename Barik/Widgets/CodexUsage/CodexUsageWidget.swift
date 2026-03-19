@@ -7,11 +7,11 @@ struct CodexUsageWidget: View {
     @State private var widgetFrame: CGRect = .zero
 
     private var percentage: Double {
-        usageManager.usageData.primaryPercentage
+        normalizedProgress(usageManager.usageData.primaryPercentage)
     }
 
     private var remainingPercentage: Double {
-        max(0, min(1, 1 - percentage))
+        normalizedProgress(1 - percentage)
     }
 
     private var ringColor: Color {
@@ -23,17 +23,7 @@ struct CodexUsageWidget: View {
     var body: some View {
         ZStack {
             if usageManager.usageData.isAvailable {
-                Circle()
-                    .trim(
-                        from: 0.5 - min(percentage, 1.0) / 2,
-                        to: 0.5 + min(percentage, 1.0) / 2
-                    )
-                    .stroke(
-                        ringColor,
-                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(90))
-                    .animation(.easeOut(duration: 0.3), value: percentage)
+                ringShape
             }
 
             drainableIcon
@@ -76,16 +66,49 @@ struct CodexUsageWidget: View {
                 .opacity(0.28)
                 .frame(width: iconSize, height: iconSize)
 
-            Image("CodexIcon")
-                .resizable()
-                .scaledToFit()
-                .frame(width: iconSize, height: iconSize)
-                .mask(
-                    Rectangle()
-                        .frame(width: iconSize, height: iconSize * remainingPercentage)
-                        .frame(width: iconSize, height: iconSize, alignment: .bottom)
-                )
-                .animation(.easeOut(duration: 0.8), value: remainingPercentage)
+            if remainingPercentage >= 1 {
+                Image("CodexIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: iconSize, height: iconSize)
+            } else if remainingPercentage > 0 {
+                Image("CodexIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: iconSize, height: iconSize)
+                    .mask(
+                        Rectangle()
+                            .frame(width: iconSize, height: iconSize * remainingPercentage)
+                            .frame(width: iconSize, height: iconSize, alignment: .bottom)
+                    )
+            }
         }
+        .animation(.easeOut(duration: 0.8), value: remainingPercentage)
+    }
+
+    @ViewBuilder
+    private var ringShape: some View {
+        if percentage >= 1 {
+            Circle()
+                .stroke(ringColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+        } else {
+            Circle()
+                .trim(
+                    from: 0.5 - percentage / 2,
+                    to: 0.5 + percentage / 2
+                )
+                .stroke(
+                    ringColor,
+                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+                )
+                .rotationEffect(.degrees(90))
+        }
+    }
+
+    private func normalizedProgress(_ value: Double) -> Double {
+        let clamped = max(0, min(1, value))
+        if clamped >= 0.999 { return 1 }
+        if clamped <= 0.001 { return 0 }
+        return clamped
     }
 }

@@ -50,6 +50,30 @@ struct CLIProxyUsagePopup: View {
         selectedProvider == .all || quotaSummary.supported
     }
 
+    private var remainingQuotaFraction: Double {
+        normalizedProgress(quotaSummary.percentage)
+    }
+
+    private var warnThreshold: Double {
+        if let value = intConfig(named: ["warning-level", "warning_level"]) {
+            return Double(value) / 100.0
+        }
+        if let value = intConfig(named: ["ring-warning-level", "ring_warning_level"]) {
+            return normalizedProgress(Double(value) / 100.0)
+        }
+        return 0.15
+    }
+
+    private var criticalThreshold: Double {
+        if let value = intConfig(named: ["critical-level", "critical_level"]) {
+            return Double(value) / 100.0
+        }
+        if let value = intConfig(named: ["ring-critical-level", "ring_critical_level"]) {
+            return normalizedProgress(Double(value) / 100.0)
+        }
+        return 0.3
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if shouldShowWelcome {
@@ -109,9 +133,8 @@ struct CLIProxyUsagePopup: View {
     }
 
     private var statusBadgeColor: Color {
-        let ratio = quotaSummary.percentage
-        if ratio < 0.6 { return .red }
-        if ratio < 0.85 { return .orange }
+        if remainingQuotaFraction <= criticalThreshold { return .red }
+        if remainingQuotaFraction <= warnThreshold { return .orange }
         return .green
     }
 
@@ -670,4 +693,21 @@ struct CLIProxyUsagePopup: View {
     private func localized(_ key: String) -> String {
         NSLocalizedString(key, comment: "")
     }
+
+    private func intConfig(named keys: [String]) -> Int? {
+        for key in keys {
+            if let value = configProvider.config[key]?.intValue {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private func normalizedProgress(_ value: Double) -> Double {
+        let clamped = max(0, min(1, value))
+        if clamped >= 0.999 { return 1 }
+        if clamped <= 0.001 { return 0 }
+        return clamped
+    }
+
 }

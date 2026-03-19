@@ -431,8 +431,10 @@ final class CLIProxyUsageManager: ObservableObject {
     private var refreshTimer: Timer?
     private var currentConfig: ConfigData = [:]
     private var dataRefreshTask: Task<Void, Never>?
+    private var refreshInterval: TimeInterval = 300
 
-    private static let refreshInterval: TimeInterval = 300
+    private static let defaultRefreshInterval: TimeInterval = 300
+    private static let minimumRefreshInterval: TimeInterval = 15
     private static let cacheFileName = "barik/cliproxy-usage-cache.json"
     private static let quotaRefreshInterval: TimeInterval = 1800
     private static let recentCodexQuotaWindow: TimeInterval = 24 * 3600
@@ -465,9 +467,13 @@ final class CLIProxyUsageManager: ObservableObject {
         let newBaseURL = configString(named: ["base-url", "base_url"], in: config)
         let previousAPIKey = configString(named: ["api-key", "api_key"], in: currentConfig)
         let newAPIKey = configString(named: ["api-key", "api_key"], in: config)
+        let previousRefreshInterval = refreshIntervalFromConfig(currentConfig)
+        let newRefreshInterval = refreshIntervalFromConfig(config)
         let configChanged = previousBaseURL != newBaseURL || previousAPIKey != newAPIKey
+        let refreshIntervalChanged = previousRefreshInterval != newRefreshInterval
 
         currentConfig = config
+        refreshInterval = newRefreshInterval
 
         if configChanged {
             logger.debug("startUpdating() config changed, loading cache if available")
@@ -478,7 +484,9 @@ final class CLIProxyUsageManager: ObservableObject {
             fetchData()
         }
 
-        scheduleTimer()
+        if configChanged || refreshIntervalChanged || refreshTimer == nil {
+            scheduleTimer()
+        }
     }
 
     func refresh() {
@@ -522,11 +530,12 @@ final class CLIProxyUsageManager: ObservableObject {
 
     private func scheduleTimer() {
         refreshTimer?.invalidate()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: Self.refreshInterval, repeats: true) { [weak self] _ in
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: self.refreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.fetchData()
             }
         }
+        logger.debug("scheduleTimer() interval=\(Int(self.refreshInterval))s")
     }
 
     private func fetchData() {
@@ -990,6 +999,21 @@ final class CLIProxyUsageManager: ObservableObject {
             }
         }
         return ""
+    }
+
+    private func refreshIntervalFromConfig(_ config: ConfigData) -> TimeInterval {
+        for key in ["refresh-interval", "refresh_interval"] {
+            if let seconds = config[key]?.intValue {
+                return max(Self.minimumRefreshInterval, TimeInterval(seconds))
+            }
+
+            if let raw = config[key]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+               let seconds = TimeInterval(raw) {
+                return max(Self.minimumRefreshInterval, seconds)
+            }
+        }
+
+        return Self.defaultRefreshInterval
     }
 
     private func normalizedUsageProvider(_ source: String?) -> String {

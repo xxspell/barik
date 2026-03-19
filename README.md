@@ -219,12 +219,15 @@ base-url = "http://localhost:8317"
 api-key = "your-management-key"
 show-ring = true
 ring-logic = "failed"
-ring-warning-level = 15
-ring-critical-level = 30
+warning-level = 90
+critical-level = 80
 show-label = true
+refresh-interval = 300
 ```
 
 The widget accepts either the server root URL like `http://localhost:8317` or the full Management API path like `http://localhost:8317/v0/management`.
+`refresh-interval` is optional and is measured in seconds. The minimum supported value is `15`.
+`warning-level` and `critical-level` are based on remaining quota percentage. Older `ring-warning-level` and `ring-critical-level` keys are still supported for compatibility.
 
 ## Screen Recording Stop Widget
 

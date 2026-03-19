@@ -28,11 +28,11 @@ struct QwenProxyUsageWidget: View {
         guard totalCount > 0 else { return 0 }
         if ringLogic == "healthy" {
             // Like Claude: full arc when all alive, shrinks as accounts die
-            return min(1.0, Double(healthyCount) / Double(totalCount))
+            return normalizedProgress(Double(healthyCount) / Double(totalCount))
         } else {
             // Like Codex: no arc when all alive, grows as accounts die
             let failed = totalCount - healthyCount
-            return min(1.0, Double(failed) / Double(totalCount))
+            return normalizedProgress(Double(failed) / Double(totalCount))
         }
     }
 
@@ -74,14 +74,7 @@ struct QwenProxyUsageWidget: View {
     var body: some View {
         ZStack {
             if showArc {
-                Circle()
-                    .trim(
-                        from: 0.5 - min(ringFraction, 1.0) / 2,
-                        to:   0.5 + min(ringFraction, 1.0) / 2
-                    )
-                    .stroke(ringColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    .rotationEffect(.degrees(90))
-                    .animation(.easeOut(duration: 0.3), value: ringFraction)
+                ringShape
             }
 
             widgetContent
@@ -162,18 +155,50 @@ struct QwenProxyUsageWidget: View {
                 .foregroundStyle(.white.opacity(0.28))
                 .frame(width: size, height: size)
 
-            Image("QwenIcon")
-                .resizable()
-                .renderingMode(.template)
-                .scaledToFit()
-                .foregroundStyle(.white)
-                .frame(width: size, height: size)
-                .mask(
-                    Rectangle()
-                        .frame(width: size, height: size * fraction)
-                        .frame(width: size, height: size, alignment: .bottom)
-                )
-                .animation(.easeOut(duration: 0.8), value: fraction)
+            if fraction >= 1 {
+                Image("QwenIcon")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .foregroundStyle(.white)
+                    .frame(width: size, height: size)
+            } else if fraction > 0 {
+                Image("QwenIcon")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .foregroundStyle(.white)
+                    .frame(width: size, height: size)
+                    .mask(
+                        Rectangle()
+                            .frame(width: size, height: size * fraction)
+                            .frame(width: size, height: size, alignment: .bottom)
+                    )
+            }
         }
+        .animation(.easeOut(duration: 0.8), value: fraction)
+    }
+
+    @ViewBuilder
+    private var ringShape: some View {
+        if ringFraction >= 1 {
+            Circle()
+                .stroke(ringColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+        } else {
+            Circle()
+                .trim(
+                    from: 0.5 - ringFraction / 2,
+                    to:   0.5 + ringFraction / 2
+                )
+                .stroke(ringColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .rotationEffect(.degrees(90))
+        }
+    }
+
+    private func normalizedProgress(_ value: Double) -> Double {
+        let clamped = max(0, min(1, value))
+        if clamped >= 0.999 { return 1 }
+        if clamped <= 0.001 { return 0 }
+        return clamped
     }
 }

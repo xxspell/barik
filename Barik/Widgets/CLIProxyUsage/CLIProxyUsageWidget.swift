@@ -39,34 +39,35 @@ struct CLIProxyUsageWidget: View {
     private var ringFraction: Double {
         let healthyFraction = quotaSummary.percentage
         if ringLogic == "failed" {
-            return 1 - healthyFraction
+            return normalizedProgress(1 - healthyFraction)
         }
-        return healthyFraction
+        return normalizedProgress(healthyFraction)
     }
 
     private var warnThreshold: Double {
-        if let value = intConfig(named: ["ring-warning-level", "ring_warning_level"]) {
+        if let value = intConfig(named: ["warning-level", "warning_level"]) {
             return Double(value) / 100.0
         }
-        return ringLogic == "healthy" ? 0.8 : 0.2
+        if let value = intConfig(named: ["ring-warning-level", "ring_warning_level"]) {
+            return normalizedProgress(Double(value) / 100.0)
+        }
+        return 0.15
     }
 
     private var criticalThreshold: Double {
-        if let value = intConfig(named: ["ring-critical-level", "ring_critical_level"]) {
+        if let value = intConfig(named: ["critical-level", "critical_level"]) {
             return Double(value) / 100.0
         }
-        return ringLogic == "healthy" ? 0.6 : 0.4
+        if let value = intConfig(named: ["ring-critical-level", "ring_critical_level"]) {
+            return normalizedProgress(Double(value) / 100.0)
+        }
+        return 0.3
     }
 
     private var ringColor: Color {
-        if ringLogic == "healthy" {
-            if ringFraction < criticalThreshold { return .red }
-            if ringFraction < warnThreshold { return .orange }
-            return .white
-        }
-
-        if ringFraction >= criticalThreshold { return .red }
-        if ringFraction >= warnThreshold { return .orange }
+        let remainingFraction = normalizedProgress(quotaSummary.percentage)
+        if remainingFraction <= criticalThreshold { return .red }
+        if remainingFraction <= warnThreshold { return .orange }
         return .white
     }
 
@@ -77,64 +78,88 @@ struct CLIProxyUsageWidget: View {
     }
 
     var body: some View {
-        ZStack {
-            if showArc {
-                Circle()
-                    .trim(
-                        from: 0.5 - min(ringFraction, 1.0) / 2,
-                        to: 0.5 + min(ringFraction, 1.0) / 2
-                    )
-                    .stroke(ringColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    .rotationEffect(.degrees(90))
-                    .animation(.easeOut(duration: 0.3), value: ringFraction)
-            }
+        widgetBody
+    }
 
-            widgetContent
-        }
-        .frame(width: showRing ? 30 : nil, height: showRing ? 28 : nil)
-        .foregroundStyle(.foregroundOutside)
-        .shadow(color: .foregroundShadowOutside, radius: 3)
-        .experimentalConfiguration(cornerRadius: 15)
-        .frame(maxHeight: .infinity)
-        .background(.black.opacity(0.001))
-        .background(
-            GeometryReader { geometry in
-                Color.clear
-                    .onAppear { widgetFrame = geometry.frame(in: .global) }
-                    .onChange(of: geometry.frame(in: .global)) { _, frame in
-                        widgetFrame = frame
-                    }
-            }
+    private var widgetBody: AnyView {
+        let ring = ringLayerView()
+        let content = widgetContentView()
+        let stack = AnyView(ZStack {
+            ring
+            content
+        })
+        let sized = AnyView(stack.frame(width: showRing ? 30 : nil, height: showRing ? 28 : nil))
+        let styled = AnyView(
+            sized
+                .foregroundStyle(.foregroundOutside)
+                .shadow(color: .foregroundShadowOutside, radius: 3)
+                .experimentalConfiguration(cornerRadius: 15)
+                .frame(maxHeight: .infinity)
+                .background(.black.opacity(0.001))
+                .background(widgetFrameReader)
         )
-        .onTapGesture {
-            MenuBarPopup.show(rect: widgetFrame, id: "cliproxy-usage") {
-                CLIProxyUsagePopup()
-                    .environmentObject(configProvider)
-            }
+        let interactive = AnyView(
+            styled
+                .onTapGesture {
+                    MenuBarPopup.show(rect: widgetFrame, id: "cliproxy-usage") {
+                        CLIProxyUsagePopup()
+                            .environmentObject(configProvider)
+                    }
+                }
+                .onAppear {
+                    usageManager.startUpdating(config: configProvider.config)
+                }
+                .onChange(of: configProvider.config["base-url"]?.stringValue) { _, _ in
+                    usageManager.startUpdating(config: configProvider.config)
+                }
+                .onChange(of: configProvider.config["base_url"]?.stringValue) { _, _ in
+                    usageManager.startUpdating(config: configProvider.config)
+                }
+                .onChange(of: configProvider.config["api-key"]?.stringValue) { _, _ in
+                    usageManager.startUpdating(config: configProvider.config)
+                }
+                .onChange(of: configProvider.config["api_key"]?.stringValue) { _, _ in
+                    usageManager.startUpdating(config: configProvider.config)
+                }
+                .onChange(of: configProvider.config["refresh-interval"]?.intValue) { _, _ in
+                    usageManager.startUpdating(config: configProvider.config)
+                }
+                .onChange(of: configProvider.config["refresh_interval"]?.intValue) { _, _ in
+                    usageManager.startUpdating(config: configProvider.config)
+                }
+                .onChange(of: configProvider.config["refresh-interval"]?.stringValue) { _, _ in
+                    usageManager.startUpdating(config: configProvider.config)
+                }
+                .onChange(of: configProvider.config["refresh_interval"]?.stringValue) { _, _ in
+                    usageManager.startUpdating(config: configProvider.config)
+                }
+        )
+
+        return interactive
+    }
+
+    private func ringLayerView() -> AnyView {
+        if showArc {
+            return ringShapeView()
         }
-        .onAppear {
-            usageManager.startUpdating(config: configProvider.config)
-        }
-        .onChange(of: configProvider.config["base-url"]?.stringValue) { _, _ in
-            usageManager.startUpdating(config: configProvider.config)
-        }
-        .onChange(of: configProvider.config["base_url"]?.stringValue) { _, _ in
-            usageManager.startUpdating(config: configProvider.config)
-        }
-        .onChange(of: configProvider.config["api-key"]?.stringValue) { _, _ in
-            usageManager.startUpdating(config: configProvider.config)
-        }
-        .onChange(of: configProvider.config["api_key"]?.stringValue) { _, _ in
-            usageManager.startUpdating(config: configProvider.config)
+        return AnyView(EmptyView())
+    }
+
+    private var widgetFrameReader: some View {
+        GeometryReader { geometry in
+            Color.clear
+                .onAppear { widgetFrame = geometry.frame(in: .global) }
+                .onChange(of: geometry.frame(in: .global)) { _, frame in
+                    widgetFrame = frame
+                }
         }
     }
 
-    @ViewBuilder
-    private var widgetContent: some View {
+    private func widgetContentView() -> AnyView {
         let iconSize: CGFloat = 15
 
         if showRing {
-            ZStack(alignment: .bottomTrailing) {
+            return AnyView(ZStack(alignment: .bottomTrailing) {
                 proxyIcon(size: iconSize)
 
                 if showLabel, usageManager.usageData.isAvailable {
@@ -146,9 +171,9 @@ struct CLIProxyUsageWidget: View {
                         .clipShape(RoundedRectangle(cornerRadius: 3))
                         .offset(x: 6, y: 4)
                 }
-            }
+            })
         } else {
-            HStack(spacing: 4) {
+            return AnyView(HStack(spacing: 4) {
                 proxyIcon(size: iconSize)
 
                 if showLabel {
@@ -162,30 +187,63 @@ struct CLIProxyUsageWidget: View {
                             .foregroundColor(.red)
                     }
                 }
-            }
+            })
         }
     }
 
     private func proxyIcon(size: CGFloat) -> some View {
         let fraction = usageManager.usageData.isAvailable
-            ? max(0, min(1, quotaSummary.percentage))
+            ? normalizedProgress(quotaSummary.percentage)
             : 1.0
+        let icon = Image(systemName: "server.rack")
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
 
         return ZStack {
-            Image(systemName: "server.rack")
-                .font(.system(size: size, weight: .semibold))
+            icon
                 .foregroundStyle(.white.opacity(0.28))
 
-            Image(systemName: "server.rack")
-                .font(.system(size: size, weight: .semibold))
-                .foregroundStyle(.white)
-                .mask(
-                    Rectangle()
-                        .frame(width: size * 1.6, height: size * fraction)
-                        .frame(width: size * 1.6, height: size * 1.6, alignment: .bottom)
-                )
-                .animation(.easeOut(duration: 0.8), value: fraction)
+            if fraction >= 1 {
+                icon
+                    .foregroundStyle(.white)
+            } else if fraction > 0 {
+                icon
+                    .foregroundStyle(.white)
+                    .mask(
+                        Rectangle()
+                            .frame(width: size, height: size * fraction)
+                            .frame(width: size, height: size, alignment: .bottom)
+                    )
+            }
         }
+        .animation(.easeOut(duration: 0.8), value: fraction)
+    }
+
+    private func ringShapeView() -> AnyView {
+        if ringFraction >= 1 {
+            return AnyView(
+                Circle()
+                    .stroke(ringColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+            )
+        } else {
+            return AnyView(
+                Circle()
+                    .trim(
+                        from: 0.5 - ringFraction / 2,
+                        to: 0.5 + ringFraction / 2
+                    )
+                    .stroke(ringColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(90))
+            )
+        }
+    }
+
+    private func normalizedProgress(_ value: Double) -> Double {
+        let clamped = max(0, min(1, value))
+        if clamped >= 0.999 { return 1 }
+        if clamped <= 0.001 { return 0 }
+        return clamped
     }
 
     private func stringConfig(named keys: [String], default defaultValue: String) -> String {

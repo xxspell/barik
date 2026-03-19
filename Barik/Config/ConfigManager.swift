@@ -121,9 +121,10 @@ final class ConfigManager: ObservableObject {
             # show-ring = false          # arc around the icon
             # ring-logic = "failed"      # "failed" = arc grows on errors
             #                            # "healthy" = arc shrinks on errors
-            # ring-warning-level = 15    # %
-            # ring-critical-level = 30   # %
+            # warning-level = 90         # remaining quota % before warning color
+            # critical-level = 80        # remaining quota % before critical color
             # show-label = true          # show quota percentage near the icon
+            # refresh-interval = 300     # seconds between automatic refreshes (min 15)
 
             [widgets.default.system-monitor]
             show-icon = false
