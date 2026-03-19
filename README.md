@@ -35,10 +35,11 @@
 
 **barik** is a lightweight macOS menu bar replacement. If you use [**yabai**](https://github.com/koekeishiya/yabai) or [**AeroSpace**](https://github.com/nikitabobko/AeroSpace) for tiling WM, you can display the current space in a sleek macOS-style panel with smooth animations. This makes it easy to see which number to press to switch spaces.
 
-It also supports compact usage widgets for **Claude Code** and **Codex**:
+It also supports compact usage widgets for **Claude Code**, **Codex**, and **CLIProxy**:
 
 - **Claude Usage** reads your Claude Code credentials from Keychain, shows current 5-hour usage as a ring in the menu bar, and exposes 5-hour plus weekly usage in the popup.
 - **Codex Usage** reads local `~/.codex/auth.json` and recent session snapshots, shows the current rate-limit window in the menu bar, and exposes the active window details in the popup.
+- **CLIProxy Usage** connects to the local Management API, shows quota percentage in the menu bar, and exposes aggregated token stats plus quota switching settings in the popup.
 
 <br>
 
@@ -192,12 +193,28 @@ blur = 3                                     # background type: from 1 to 6 for 
 
 ## Usage Widgets
 
-Two usage widgets are available out of the box:
+Three usage widgets are available out of the box:
 
 - `default.claude-usage` tracks Claude Code usage from the `Claude Code-credentials` Keychain item. The popup shows the rolling 5-hour window and weekly usage.
 - `default.codex-usage` tracks Codex usage from local auth and session data in `~/.codex`. The popup shows the active rate-limit window, reset time, and recent activity.
+- `default.cliproxy-usage` tracks your CLIProxy Management API. The popup shows provider quota percentage, Codex/Qwen quota state, token usage filters, top API keys by usage, and current `quota-exceeded` behavior.
 
 If you already have an existing `~/.barik-config.toml`, add these widget IDs manually to `widgets.displayed` to make them appear.
+
+Example config:
+
+```toml
+[widgets.default.cliproxy-usage]
+base-url = "http://localhost:8317"
+api-key = "your-management-key"
+show-ring = true
+ring-logic = "failed"
+ring-warning-level = 15
+ring-critical-level = 30
+show-label = true
+```
+
+The widget accepts either the server root URL like `http://localhost:8317` or the full Management API path like `http://localhost:8317/v0/management`.
 
 ## System Monitor
 

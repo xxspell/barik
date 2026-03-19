@@ -58,6 +58,10 @@ struct MenuBarView: View {
         case "default.qwen-proxy-usage":
             QwenProxyUsageWidget()
                 .environmentObject(config)
+
+        case "default.cliproxy-usage":
+            CLIProxyUsageWidget()
+                .environmentObject(config)
             
         case "default.nowplaying":
             NowPlayingWidget()

@@ -111,6 +111,18 @@ final class ConfigManager: ObservableObject {
             # show_label = true       # healthy account count label
             # All settings also available via popup gear icon
 
+            # CLIProxy Usage widget — reads stats from the Management API
+            # Uncomment and configure to enable:
+            # [widgets.default.cliproxy-usage]
+            # base-url = "http://localhost:8317"
+            # api-key = "your-management-key"
+            # show-ring = false          # arc around the icon
+            # ring-logic = "failed"      # "failed" = arc grows on errors
+            #                            # "healthy" = arc shrinks on errors
+            # ring-warning-level = 15    # %
+            # ring-critical-level = 30   # %
+            # show-label = true          # show quota percentage near the icon
+
             [widgets.default.system-monitor]
             show-icon = false
             use-metric-icons = false
