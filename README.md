@@ -41,6 +41,7 @@ It also supports compact usage widgets for **Claude Code**, **Codex**, and **CLI
 - **Codex Usage** reads local `~/.codex/auth.json` and recent session snapshots, shows the current rate-limit window in the menu bar, and exposes the active window details in the popup.
 - **CLIProxy Usage** connects to the local Management API, shows quota percentage in the menu bar, and exposes aggregated token stats plus quota switching settings in the popup.
 - **System Monitor** shows configurable CPU, RAM, disk, GPU, and network metrics in the menu bar with a detailed popup.
+- **Keyboard Layout** shows the current macOS input source in the menu bar and lets you switch layouts from a popup list.
 - **Weather** displays current conditions with location-aware forecasts and a popup powered by Open-Meteo.
 - **Homebrew** shows outdated package counts in the menu bar and exposes update and upgrade actions in the popup.
 - **TickTick** shows pending task counts in the menu bar and provides tasks, habits, and an Eisenhower matrix in the popup.
@@ -112,6 +113,7 @@ displayed = [ # widgets on menu bar
     "default.system-monitor",
     "default.nowplaying",
     "default.network",
+    "default.keyboard-layout",
     "default.battery",
     "divider",
     "default.weather",
@@ -162,6 +164,10 @@ view-variant = "horizontal"
 show-percentage = true
 warning-level = 30
 critical-level = 10
+
+[widgets.default.keyboard-layout]
+show-text = true     # show current layout label in the widget
+show-outline = true  # draw a capsule outline around the label
 
 [widgets.default.time]
 format = "E d, J:mm"

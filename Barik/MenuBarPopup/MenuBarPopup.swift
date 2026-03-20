@@ -76,6 +76,19 @@ class HidingPanel: NSPanel, NSWindowDelegate {
 class MenuBarPopup {
     static var lastContentIdentifier: String? = nil
 
+    static func hide() {
+        guard let panel else { return }
+
+        NotificationCenter.default.post(name: .willHideWindow, object: nil)
+        let duration =
+            Double(Constants.menuBarPopupAnimationDurationInMilliseconds)
+            / 1000.0
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            panel.orderOut(nil)
+            lastContentIdentifier = nil
+        }
+    }
+
     static func show<Content: View>(
         rect: CGRect, id: String, @ViewBuilder content: @escaping () -> Content
     ) {
@@ -88,14 +101,7 @@ class MenuBarPopup {
         }
 
         if panel.isKeyWindow, lastContentIdentifier == id {
-            NotificationCenter.default.post(name: .willHideWindow, object: nil)
-            let duration =
-                Double(Constants.menuBarPopupAnimationDurationInMilliseconds)
-                / 1000.0
-            DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
-                panel.orderOut(nil)
-                lastContentIdentifier = nil
-            }
+            hide()
             return
         }
 

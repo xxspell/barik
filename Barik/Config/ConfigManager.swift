@@ -81,6 +81,7 @@ final class ConfigManager: ObservableObject {
                 "default.codex-usage",
                 "default.system-monitor",
                 "default.network",
+                "default.keyboard-layout",
                 "default.battery",
                 "divider",
                 # { "default.time" = { time-zone = "America/Los_Angeles", format = "E d, hh:mm" } },
@@ -147,6 +148,10 @@ final class ConfigManager: ObservableObject {
             show-percentage = true
             warning-level = 30
             critical-level = 10
+
+            [widgets.default.keyboard-layout]
+            show-text = true
+            show-outline = true
 
             [widgets.default.time]
             format = "E d, J:mm"

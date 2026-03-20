@@ -98,6 +98,10 @@ struct MenuBarView: View {
             ScreenRecordingWidget(manager: screenRecordingManager)
                 .environmentObject(config)
 
+        case "default.keyboard-layout":
+            KeyboardLayoutWidget()
+                .environmentObject(config)
+
         case "spacer":
             Spacer().frame(minWidth: 50, maxWidth: .infinity)
 
