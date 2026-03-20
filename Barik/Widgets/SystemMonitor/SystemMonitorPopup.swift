@@ -10,6 +10,8 @@ struct SystemMonitorPopup: View {
         let resolved = rawMetrics.compactMap(SystemMonitorMetric.init(rawValue:))
         return resolved.isEmpty ? [.cpu, .ram] : resolved
     }
+    private var temperatureWarningLevel: Int { config["temperature-warning-level"]?.intValue ?? 80 }
+    private var temperatureCriticalLevel: Int { config["temperature-critical-level"]?.intValue ?? 95 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -37,27 +39,69 @@ struct SystemMonitorPopup: View {
     private func section(for metric: SystemMonitorMetric) -> some View {
         switch metric {
         case .cpu:
-            monitorSection(title: String(localized: "CPU Usage"), percentage: systemMonitor.cpuLoad, color: cpuColor) {
+            monitorSection(
+                title: String(localized: "CPU Usage"),
+                headline: "\(Int(systemMonitor.cpuLoad))%",
+                progressValue: systemMonitor.cpuLoad,
+                color: cpuColor
+            ) {
                 detailRow(title: String(localized: "User"),   value: "\(Int(systemMonitor.userLoad))%")
                 detailRow(title: String(localized: "System"), value: "\(Int(systemMonitor.systemLoad))%")
                 detailRow(title: String(localized: "Idle"),   value: "\(Int(systemMonitor.idleLoad))%")
             }
+        case .temperature:
+            if let cpuTemperature = systemMonitor.cpuTemperature {
+                monitorSection(
+                    title: String(localized: "Temperature"),
+                    headline: temperatureString(cpuTemperature),
+                    progressValue: temperatureProgress(cpuTemperature),
+                    color: temperatureColor
+                ) {
+                    detailRow(title: "CPU", value: temperatureString(cpuTemperature))
+                    if let gpuTemperature = systemMonitor.gpuTemperature {
+                        detailRow(title: "GPU", value: temperatureString(gpuTemperature))
+                    }
+                }
+            } else {
+                unavailableSection(
+                    title: String(localized: "Temperature"),
+                    description: String(localized: "Unavailable on this system")
+                )
+            }
         case .ram:
-            monitorSection(title: String(localized: "Memory Usage"), percentage: systemMonitor.ramUsage, color: ramColor) {
+            monitorSection(
+                title: String(localized: "Memory Usage"),
+                headline: "\(Int(systemMonitor.ramUsage))%",
+                progressValue: systemMonitor.ramUsage,
+                color: ramColor
+            ) {
                 detailRow(title: String(localized: "Used"),       value: "\(usedRAMString) / \(totalRAMString)")
                 detailRow(title: String(localized: "Active"),     value: gbString(systemMonitor.activeRAM))
                 detailRow(title: String(localized: "Wired"),      value: gbString(systemMonitor.wiredRAM))
                 detailRow(title: String(localized: "Compressed"), value: gbString(systemMonitor.compressedRAM))
             }
         case .disk:
-            monitorSection(title: String(localized: "Disk Usage"), percentage: systemMonitor.diskUsage, color: diskColor) {
+            monitorSection(
+                title: String(localized: "Disk Usage"),
+                headline: "\(Int(systemMonitor.diskUsage))%",
+                progressValue: systemMonitor.diskUsage,
+                color: diskColor
+            ) {
                 detailRow(title: String(localized: "Used"), value: "\(gbString(systemMonitor.usedDisk)) / \(gbString(systemMonitor.totalDisk))")
                 detailRow(title: String(localized: "Free"), value: gbString(systemMonitor.freeDisk))
             }
         case .gpu:
             if let gpuLoad = systemMonitor.gpuLoad {
-                monitorSection(title: String(localized: "GPU Usage"), percentage: gpuLoad, color: gpuColor) {
+                monitorSection(
+                    title: String(localized: "GPU Usage"),
+                    headline: "\(Int(gpuLoad))%",
+                    progressValue: gpuLoad,
+                    color: gpuColor
+                ) {
                     detailRow(title: String(localized: "Utilization"), value: "\(Int(gpuLoad))%")
+                    if let gpuTemperature = systemMonitor.gpuTemperature {
+                        detailRow(title: String(localized: "Temperature"), value: temperatureString(gpuTemperature))
+                    }
                 }
             } else {
                 unavailableSection(title: String(localized: "GPU Usage"), description: String(localized: "Unavailable on this system"))
@@ -69,7 +113,8 @@ struct SystemMonitorPopup: View {
 
     private func monitorSection<Details: View>(
         title: String,
-        percentage: Double,
+        headline: String,
+        progressValue: Double?,
         color: Color,
         @ViewBuilder details: () -> Details
     ) -> some View {
@@ -78,21 +123,23 @@ struct SystemMonitorPopup: View {
                 Text(title)
                     .font(.system(size: 13, weight: .medium))
                 Spacer()
-                Text("\(Int(percentage))%")
+                Text(headline)
                     .font(.system(size: 22, weight: .semibold, design: .rounded))
                     .foregroundStyle(color)
             }
 
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.white.opacity(0.12))
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(color)
-                        .frame(width: geometry.size.width * min(percentage, 100) / 100)
+            if let progressValue {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.white.opacity(0.12))
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(color)
+                            .frame(width: geometry.size.width * min(progressValue, 100) / 100)
+                    }
                 }
+                .frame(height: 8)
             }
-            .frame(height: 8)
 
             details()
         }
@@ -164,6 +211,13 @@ struct SystemMonitorPopup: View {
         return .green
     }
 
+    private var temperatureColor: Color {
+        let temperature = Int(systemMonitor.cpuTemperature ?? 0)
+        if temperature >= temperatureCriticalLevel { return .red }
+        if temperature >= temperatureWarningLevel { return .yellow }
+        return .green
+    }
+
     private var usedRAM: Double {
         systemMonitor.activeRAM + systemMonitor.wiredRAM + systemMonitor.compressedRAM
     }
@@ -188,5 +242,14 @@ struct SystemMonitorPopup: View {
         } else {
             return "0 B/s"
         }
+    }
+
+    private func temperatureProgress(_ value: Double) -> Double {
+        let critical = max(Double(temperatureCriticalLevel), 1)
+        return min(100, max(0, (value / critical) * 100))
+    }
+
+    private func temperatureString(_ value: Double) -> String {
+        "\(Int(value.rounded()))°C"
     }
 }

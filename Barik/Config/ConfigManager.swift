@@ -134,9 +134,11 @@ final class ConfigManager: ObservableObject {
             metrics-per-column = 2
             layout = "rows"
             dividers = "none"
-            metrics = ["cpu", "ram", "disk", "gpu", "network"]
+            metrics = ["cpu", "temperature", "ram", "disk", "gpu", "network"]
             cpu-warning-level = 70   # CPU warning threshold (%)
             cpu-critical-level = 90  # CPU critical threshold (%)
+            temperature-warning-level = 80   # Temperature warning threshold (°C)
+            temperature-critical-level = 95  # Temperature critical threshold (°C)
             ram-warning-level = 70   # RAM warning threshold (%)
             ram-critical-level = 90  # RAM critical threshold (%)
             disk-warning-level = 80  # Disk warning threshold (%)

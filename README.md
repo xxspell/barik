@@ -139,10 +139,13 @@ show-usage-bars = true
 metrics-per-column = 2
 layout = "rows" # rows, stacked
 dividers = "none" # none, horizontal, vertical, both
-metrics = ["cpu", "ram", "disk", "gpu", "network"] # order controls display order
+metrics = ["cpu", "temperature", "ram", "disk", "gpu", "network"] # order controls display order
 
 cpu-warning-level = 70   # CPU warning threshold (%)
 cpu-critical-level = 90  # CPU critical threshold (%)
+
+temperature-warning-level = 80   # Temperature warning threshold (°C)
+temperature-critical-level = 95  # Temperature critical threshold (°C)
 
 ram-warning-level = 70   # RAM warning threshold (%)
 ram-critical-level = 90  # RAM critical threshold (%)
@@ -262,14 +265,15 @@ show-label = true
 
 `default.system-monitor` is a configurable multi-metric widget for system health.
 
-- Supported metrics: `cpu`, `ram`, `disk`, `gpu`, `network`
+- Supported metrics: `cpu`, `temperature`, `ram`, `disk`, `gpu`, `network`
 - The `metrics` array controls both which metrics are shown and the order they appear in the widget and popup
 - `use-metric-icons` replaces text labels with SF Symbols in the menu bar widget
 - `show-usage-bars` hides the mini progress bars when disabled, leaving only the label or icon and the value
 - `metrics-per-column` controls how many metrics are stacked vertically before the widget starts a new column
 - `layout = "stacked"` switches the menu bar widget to a Stats-style layout with the title on top and the value below
 - `dividers` adds separators between rows, columns, or both in the menu bar widget
-- GPU usage is best-effort and may be unavailable on some systems or macOS configurations
+- CPU temperature is read from SMC sensor keys with Apple Silicon fallbacks inspired by Stats
+- GPU usage and temperature are best-effort and may be unavailable on some systems or macOS configurations
 
 ## Weather Widget
 
@@ -304,7 +308,7 @@ show-usage-bars = true
 metrics-per-column = 2
 layout = "rows"
 dividers = "none"
-metrics = ["cpu", "ram", "disk", "gpu", "network"]
+metrics = ["cpu", "temperature", "ram", "disk", "gpu", "network"]
 ```
 
 ## TickTick Widget

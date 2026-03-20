@@ -59,7 +59,10 @@ struct SystemMonitorWidget: View {
         return showUsageBars ? 4 : 2
     }
     private var labelWidth: CGFloat {
-        usesExpandedRowsLayout ? 28 : 24
+        if layoutMode == .stacked {
+            return usesSingleMetricColumns ? 34 : 28
+        }
+        return usesExpandedRowsLayout ? 28 : 24
     }
     private var valueWidth: CGFloat {
         usesExpandedRowsLayout ? 34 : 28
@@ -103,6 +106,8 @@ struct SystemMonitorWidget: View {
     private var diskCriticalLevel: Int { config["disk-critical-level"]?.intValue ?? 90 }
     private var gpuWarningLevel: Int { config["gpu-warning-level"]?.intValue ?? 70 }
     private var gpuCriticalLevel: Int { config["gpu-critical-level"]?.intValue ?? 90 }
+    private var temperatureWarningLevel: Int { config["temperature-warning-level"]?.intValue ?? 80 }
+    private var temperatureCriticalLevel: Int { config["temperature-critical-level"]?.intValue ?? 95 }
 
     @ObservedObject private var systemMonitor = SystemMonitorManager.shared
     @State private var rect: CGRect = .zero
@@ -185,6 +190,17 @@ struct SystemMonitorWidget: View {
                 color: cpuColor,
                 percentValue: systemMonitor.cpuLoad
             )
+        case .temperature:
+            if let temperature = systemMonitor.cpuTemperature {
+                metricValueRow(
+                    metric: metric,
+                    valueText: shortTemperatureString(temperature),
+                    color: temperatureColor,
+                    percentValue: temperatureProgress(temperature)
+                )
+            } else {
+                unavailableMetricRow(metric: metric)
+            }
         case .ram:
             metricValueRow(
                 metric: metric,
@@ -226,6 +242,8 @@ struct SystemMonitorWidget: View {
             Text(metric.title)
                 .font(.system(size: usesExpandedRowsLayout ? 11 : (usesSingleMetricColumns ? 10 : 9), weight: .semibold))
                 .foregroundStyle(.foregroundOutside.opacity(0.8))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .frame(width: labelWidth, alignment: .leading)
         }
     }
@@ -286,7 +304,7 @@ struct SystemMonitorWidget: View {
             Text(valueText ?? "--")
                 .font(.system(size: usesSingleMetricColumns ? 11 : 10, weight: .semibold, design: .monospaced))
                 .foregroundStyle(color)
-                .frame(minWidth: 28, alignment: .leading)
+                .frame(minWidth: labelWidth, alignment: .leading)
         }
     }
 
@@ -387,5 +405,21 @@ struct SystemMonitorWidget: View {
         if gpu >= gpuCriticalLevel { return .red }
         if gpu >= gpuWarningLevel { return .yellow }
         return .foregroundOutside
+    }
+
+    private var temperatureColor: Color {
+        let temperature = Int(systemMonitor.cpuTemperature ?? 0)
+        if temperature >= temperatureCriticalLevel { return .red }
+        if temperature >= temperatureWarningLevel { return .yellow }
+        return .foregroundOutside
+    }
+
+    private func temperatureProgress(_ value: Double) -> Double {
+        let critical = max(Double(temperatureCriticalLevel), 1)
+        return min(100, max(0, (value / critical) * 100))
+    }
+
+    private func shortTemperatureString(_ value: Double) -> String {
+        "\(Int(value.rounded()))°"
     }
 }

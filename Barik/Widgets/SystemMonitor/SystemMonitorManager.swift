@@ -4,6 +4,7 @@ import IOKit
 
 enum SystemMonitorMetric: String, CaseIterable {
     case cpu
+    case temperature
     case ram
     case disk
     case gpu
@@ -12,6 +13,7 @@ enum SystemMonitorMetric: String, CaseIterable {
     var title: String {
         switch self {
         case .cpu: "CPU"
+        case .temperature: "Temp"
         case .ram: "RAM"
         case .disk: "Disk"
         case .gpu: "GPU"
@@ -22,6 +24,7 @@ enum SystemMonitorMetric: String, CaseIterable {
     var systemImageName: String {
         switch self {
         case .cpu: "cpu"
+        case .temperature: "thermometer.medium"
         case .ram: "memorychip"
         case .disk: "internaldrive"
         case .gpu: "sparkles.tv"
@@ -51,6 +54,8 @@ final class SystemMonitorManager: ObservableObject {
     @Published private(set) var freeDisk: Double = 0
 
     @Published private(set) var gpuLoad: Double?
+    @Published private(set) var cpuTemperature: Double?
+    @Published private(set) var gpuTemperature: Double?
 
     @Published private(set) var uploadSpeed: Double = 0
     @Published private(set) var downloadSpeed: Double = 0
@@ -85,7 +90,8 @@ final class SystemMonitorManager: ObservableObject {
             let cpuSnapshot = Self.readCPUUsage(previous: await self.previousCPUTicks)
             let ramSnapshot = Self.readRAMUsage()
             let diskSnapshot = Self.readDiskUsage()
-            let gpuLoad = Self.readGPULoad()
+            let gpuSnapshot = Self.readGPUStats()
+            let cpuTemperature = Self.readCPUTemperature()
             let networkSnapshot = Self.readNetworkActivity(
                 previous: await self.previousNetworkData,
                 lastUpdate: await self.lastNetworkUpdate
@@ -115,7 +121,9 @@ final class SystemMonitorManager: ObservableObject {
                     self.freeDisk = diskSnapshot.freeDisk
                 }
 
-                self.gpuLoad = gpuLoad
+                self.gpuLoad = gpuSnapshot.load
+                self.gpuTemperature = gpuSnapshot.temperature
+                self.cpuTemperature = cpuTemperature
 
                 if let networkSnapshot {
                     self.previousNetworkData = networkSnapshot.currentNetworkData
@@ -268,7 +276,7 @@ final class SystemMonitorManager: ObservableObject {
         )
     }
 
-    nonisolated private static func readGPULoad() -> Double? {
+    nonisolated private static func readGPUStats() -> (load: Double?, temperature: Double?) {
         var iterator: io_iterator_t = 0
         let result = IOServiceGetMatchingServices(
             kIOMainPortDefault,
@@ -276,8 +284,13 @@ final class SystemMonitorManager: ObservableObject {
             &iterator
         )
 
-        guard result == KERN_SUCCESS else { return nil }
+        guard result == KERN_SUCCESS else {
+            return (nil, fallbackGPUTemperature())
+        }
         defer { IOObjectRelease(iterator) }
+
+        var load: Double?
+        var temperature: Double?
 
         while true {
             let service = IOIteratorNext(iterator)
@@ -288,16 +301,93 @@ final class SystemMonitorManager: ObservableObject {
                 "PerformanceStatistics" as CFString,
                 kCFAllocatorDefault,
                 0
-            )?.takeRetainedValue() as? [String: Any],
-               let usage = stats["Device Utilization %"] as? NSNumber {
-                IOObjectRelease(service)
-                return min(100, max(0, usage.doubleValue))
+            )?.takeRetainedValue() as? [String: Any] {
+                if let usage = (stats["Device Utilization %"] as? NSNumber)?.doubleValue {
+                    load = min(100, max(0, usage))
+                } else if let usage = (stats["GPU Activity(%)"] as? NSNumber)?.doubleValue {
+                    load = min(100, max(0, usage))
+                }
+
+                if let value = (stats["Temperature(C)"] as? NSNumber)?.doubleValue,
+                   isPlausibleTemperature(value) {
+                    temperature = value
+                }
             }
 
             IOObjectRelease(service)
         }
 
+        return (load, temperature ?? fallbackGPUTemperature())
+    }
+
+    nonisolated private static func fallbackGPUTemperature() -> Double? {
+        if let value = SMCReader.shared.readValue(for: "TGDD"), isPlausibleTemperature(value) {
+            return value
+        }
+        if let value = SMCReader.shared.readValue(for: "TCGC"), isPlausibleTemperature(value) {
+            return value
+        }
         return nil
+    }
+
+    nonisolated private static func readCPUTemperature() -> Double? {
+        let directKeys = ["TC0D", "TC0E", "TC0F", "TC0P", "TC0H"]
+        for key in directKeys {
+            if let value = SMCReader.shared.readValue(for: key), isPlausibleTemperature(value) {
+                return value
+            }
+        }
+
+        let values = appleSiliconCPUTemperatureKeys()
+            .compactMap { SMCReader.shared.readValue(for: $0) }
+            .filter(isPlausibleTemperature)
+
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
+    }
+
+    nonisolated private static func appleSiliconCPUTemperatureKeys() -> [String] {
+        let chipName = systemChipName()
+
+        if chipName.contains("M4") {
+            return ["Te05", "Te09", "Te0H", "Te0S", "Tp01", "Tp05", "Tp09", "Tp0D", "Tp0V", "Tp0Y", "Tp0b", "Tp0e"]
+        }
+        if chipName.contains("M3") {
+            return ["Te05", "Te0L", "Te0P", "Te0S", "Tf04", "Tf09", "Tf0A", "Tf0B", "Tf0D", "Tf0E", "Tf44", "Tf49", "Tf4A", "Tf4B", "Tf4D", "Tf4E"]
+        }
+        if chipName.contains("M2") {
+            return ["Tp1h", "Tp1t", "Tp1p", "Tp1l", "Tp01", "Tp05", "Tp09", "Tp0D", "Tp0X", "Tp0b", "Tp0f", "Tp0j"]
+        }
+        if chipName.contains("M1") {
+            return ["Tp09", "Tp0T", "Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b"]
+        }
+
+        return [
+            "TC0D", "TC0E", "TC0F", "TC0P", "TC0H",
+            "Tp09", "Tp0T", "Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b",
+            "Tp1h", "Tp1t", "Tp1p", "Tp1l", "Tp0f", "Tp0j",
+            "Te05", "Te09", "Te0H", "Te0L", "Te0P", "Te0S", "Tp0V", "Tp0Y", "Tp0e",
+            "Tf04", "Tf09", "Tf0A", "Tf0B", "Tf0D", "Tf0E", "Tf44", "Tf49", "Tf4A", "Tf4B", "Tf4D", "Tf4E"
+        ]
+    }
+
+    nonisolated private static func systemChipName() -> String {
+        sysctlString("machdep.cpu.brand_string")
+            ?? sysctlString("hw.model")
+            ?? ""
+    }
+
+    nonisolated private static func sysctlString(_ name: String) -> String? {
+        var size = 0
+        guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else { return nil }
+
+        var buffer = [CChar](repeating: 0, count: size)
+        guard sysctlbyname(name, &buffer, &size, nil, 0) == 0 else { return nil }
+        return String(cString: buffer)
+    }
+
+    nonisolated private static func isPlausibleTemperature(_ value: Double) -> Bool {
+        value >= 0 && value < 120
     }
 
     nonisolated private static func readNetworkActivity(
