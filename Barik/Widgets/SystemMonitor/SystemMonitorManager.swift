@@ -1,6 +1,14 @@
 import Darwin
+import CoreServices
 import Foundation
 import IOKit
+import OSLog
+import SystemConfiguration
+
+private let systemMonitorLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "barik",
+    category: "SystemMonitor"
+)
 
 enum SystemMonitorMetric: String, CaseIterable {
     case cpu
@@ -12,12 +20,12 @@ enum SystemMonitorMetric: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .cpu: "CPU"
-        case .temperature: "Temp"
-        case .ram: "RAM"
-        case .disk: "Disk"
-        case .gpu: "GPU"
-        case .network: "Net"
+        case .cpu: String(localized: "CPU")
+        case .temperature: String(localized: "Temp")
+        case .ram: String(localized: "RAM")
+        case .disk: String(localized: "Disk")
+        case .gpu: String(localized: "GPU")
+        case .network: String(localized: "Net")
         }
     }
 
@@ -41,17 +49,27 @@ final class SystemMonitorManager: ObservableObject {
     @Published private(set) var userLoad: Double = 0
     @Published private(set) var systemLoad: Double = 0
     @Published private(set) var idleLoad: Double = 100
+    @Published private(set) var loadAverage: Double = 0
+    @Published private(set) var cpuCoreCount: Int = 0
 
     @Published private(set) var ramUsage: Double = 0
     @Published private(set) var totalRAM: Double = 0
+    @Published private(set) var usedRAM: Double = 0
     @Published private(set) var activeRAM: Double = 0
+    @Published private(set) var inactiveRAM: Double = 0
     @Published private(set) var wiredRAM: Double = 0
     @Published private(set) var compressedRAM: Double = 0
+    @Published private(set) var appRAM: Double = 0
+    @Published private(set) var cachedRAM: Double = 0
+    @Published private(set) var freeRAM: Double = 0
+    @Published private(set) var swapUsedRAM: Double = 0
+    @Published private(set) var memoryPressure: String = "Normal"
 
     @Published private(set) var diskUsage: Double = 0
     @Published private(set) var totalDisk: Double = 0
     @Published private(set) var usedDisk: Double = 0
     @Published private(set) var freeDisk: Double = 0
+    @Published private(set) var diskVolumeName: String = "/"
 
     @Published private(set) var gpuLoad: Double?
     @Published private(set) var cpuTemperature: Double?
@@ -59,6 +77,10 @@ final class SystemMonitorManager: ObservableObject {
 
     @Published private(set) var uploadSpeed: Double = 0
     @Published private(set) var downloadSpeed: Double = 0
+    @Published private(set) var totalUploadedBytes: UInt64 = 0
+    @Published private(set) var totalDownloadedBytes: UInt64 = 0
+    @Published private(set) var activeNetworkInterface: String = ""
+    @Published private(set) var networkLinkIsUp: Bool = false
 
     private var timer: Timer?
     private var previousCPUTicks: (user: UInt32, system: UInt32, idle: UInt32, nice: UInt32)?
@@ -92,6 +114,8 @@ final class SystemMonitorManager: ObservableObject {
             let diskSnapshot = Self.readDiskUsage()
             let gpuSnapshot = Self.readGPUStats()
             let cpuTemperature = Self.readCPUTemperature()
+            let loadAverage = Self.readLoadAverage()
+            let cpuCoreCount = Self.readCPUCoreCount()
             let networkSnapshot = Self.readNetworkActivity(
                 previous: await self.previousNetworkData,
                 lastUpdate: await self.lastNetworkUpdate
@@ -105,13 +129,22 @@ final class SystemMonitorManager: ObservableObject {
                     self.systemLoad = cpuSnapshot.systemLoad
                     self.idleLoad = cpuSnapshot.idleLoad
                 }
+                self.loadAverage = loadAverage
+                self.cpuCoreCount = cpuCoreCount
 
                 if let ramSnapshot {
                     self.ramUsage = ramSnapshot.ramUsage
                     self.totalRAM = ramSnapshot.totalRAM
+                    self.usedRAM = ramSnapshot.usedRAM
                     self.activeRAM = ramSnapshot.activeRAM
+                    self.inactiveRAM = ramSnapshot.inactiveRAM
                     self.wiredRAM = ramSnapshot.wiredRAM
                     self.compressedRAM = ramSnapshot.compressedRAM
+                    self.appRAM = ramSnapshot.appRAM
+                    self.cachedRAM = ramSnapshot.cachedRAM
+                    self.freeRAM = ramSnapshot.freeRAM
+                    self.swapUsedRAM = ramSnapshot.swapUsedRAM
+                    self.memoryPressure = ramSnapshot.memoryPressure
                 }
 
                 if let diskSnapshot {
@@ -119,6 +152,7 @@ final class SystemMonitorManager: ObservableObject {
                     self.totalDisk = diskSnapshot.totalDisk
                     self.usedDisk = diskSnapshot.usedDisk
                     self.freeDisk = diskSnapshot.freeDisk
+                    self.diskVolumeName = diskSnapshot.diskVolumeName
                 }
 
                 self.gpuLoad = gpuSnapshot.load
@@ -130,6 +164,10 @@ final class SystemMonitorManager: ObservableObject {
                     self.lastNetworkUpdate = networkSnapshot.currentTime
                     self.uploadSpeed = networkSnapshot.uploadSpeed
                     self.downloadSpeed = networkSnapshot.downloadSpeed
+                    self.totalUploadedBytes = networkSnapshot.totalUploadedBytes
+                    self.totalDownloadedBytes = networkSnapshot.totalDownloadedBytes
+                    self.activeNetworkInterface = networkSnapshot.activeInterface
+                    self.networkLinkIsUp = networkSnapshot.linkIsUp
                 }
             }
         }
@@ -206,9 +244,16 @@ final class SystemMonitorManager: ObservableObject {
     nonisolated private static func readRAMUsage() -> (
         ramUsage: Double,
         totalRAM: Double,
+        usedRAM: Double,
         activeRAM: Double,
+        inactiveRAM: Double,
         wiredRAM: Double,
-        compressedRAM: Double
+        compressedRAM: Double,
+        appRAM: Double,
+        cachedRAM: Double,
+        freeRAM: Double,
+        swapUsedRAM: Double,
+        memoryPressure: String
     )? {
         var vmStats = vm_statistics64()
         var count = mach_msg_type_number_t(
@@ -231,23 +276,66 @@ final class SystemMonitorManager: ObservableObject {
 
         let pageSize = UInt64(vm_page_size)
         let activeBytes = UInt64(vmStats.active_count) * pageSize
+        let inactiveBytes = UInt64(vmStats.inactive_count) * pageSize
+        let speculativeBytes = UInt64(vmStats.speculative_count) * pageSize
         let wiredBytes = UInt64(vmStats.wire_count) * pageSize
         let compressedBytes = UInt64(vmStats.compressor_page_count) * pageSize
-        let usedBytes = activeBytes + wiredBytes + compressedBytes
+        let purgeableBytes = UInt64(vmStats.purgeable_count) * pageSize
+        let externalBytes = UInt64(vmStats.external_page_count) * pageSize
+        let usedBytes = activeBytes + inactiveBytes + speculativeBytes + wiredBytes + compressedBytes
+            - min(purgeableBytes + externalBytes, activeBytes + inactiveBytes + speculativeBytes + wiredBytes + compressedBytes)
+        let freeBytes = totalMemory > usedBytes ? totalMemory - usedBytes : 0
+        let appBytes = usedBytes > (wiredBytes + compressedBytes) ? usedBytes - wiredBytes - compressedBytes : 0
+        let cachedBytes = purgeableBytes + externalBytes
+
+        var pressureLevel: Int32 = 0
+        var pressureLevelSize = MemoryLayout<Int32>.size
+        _ = sysctlbyname(
+            "kern.memorystatus_vm_pressure_level",
+            &pressureLevel,
+            &pressureLevelSize,
+            nil,
+            0
+        )
+
+        var swapUsage = xsw_usage()
+        var swapUsageSize = MemoryLayout<xsw_usage>.size
+        _ = sysctlbyname("vm.swapusage", &swapUsage, &swapUsageSize, nil, 0)
 
         let totalGB = Double(totalMemory) / 1_073_741_824
         let activeGB = Double(activeBytes) / 1_073_741_824
+        let inactiveGB = Double(inactiveBytes) / 1_073_741_824
         let wiredGB = Double(wiredBytes) / 1_073_741_824
         let compressedGB = Double(compressedBytes) / 1_073_741_824
+        let appGB = Double(appBytes) / 1_073_741_824
+        let cachedGB = Double(cachedBytes) / 1_073_741_824
+        let freeGB = Double(freeBytes) / 1_073_741_824
+        let swapUsedGB = Double(swapUsage.xsu_used) / 1_073_741_824
         let usedGB = Double(usedBytes) / 1_073_741_824
         let usagePercent = totalGB > 0 ? (usedGB / totalGB) * 100 : 0
+        let pressure: String
+        switch pressureLevel {
+        case 4:
+            pressure = "Critical"
+        case 2:
+            pressure = "Warning"
+        default:
+            pressure = "Normal"
+        }
 
         return (
             ramUsage: min(100, max(0, usagePercent)),
             totalRAM: totalGB,
+            usedRAM: usedGB,
             activeRAM: activeGB,
+            inactiveRAM: inactiveGB,
             wiredRAM: wiredGB,
-            compressedRAM: compressedGB
+            compressedRAM: compressedGB,
+            appRAM: appGB,
+            cachedRAM: cachedGB,
+            freeRAM: freeGB,
+            swapUsedRAM: swapUsedGB,
+            memoryPressure: pressure
         )
     }
 
@@ -255,16 +343,27 @@ final class SystemMonitorManager: ObservableObject {
         diskUsage: Double,
         totalDisk: Double,
         usedDisk: Double,
-        freeDisk: Double
+        freeDisk: Double,
+        diskVolumeName: String
     )? {
-        guard let attributes = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
+        let volumeURL = URL(fileURLWithPath: "/")
+
+        guard let attributes = try? FileManager.default.attributesOfFileSystem(forPath: volumeURL.path),
               let totalBytes = attributes[.systemSize] as? NSNumber,
-              let freeBytes = attributes[.systemFreeSize] as? NSNumber else {
+              let systemFreeBytes = attributes[.systemFreeSize] as? NSNumber else {
             return nil
         }
 
+        let resourceValues = try? volumeURL.resourceValues(forKeys: [
+            .volumeNameKey,
+            .volumeAvailableCapacityForImportantUsageKey
+        ])
+        let freeBytes = recoverableFreeDiskSpace(at: volumeURL)
+            ?? resourceValues?.volumeAvailableCapacityForImportantUsage
+            ?? Int64(systemFreeBytes.int64Value)
+
         let totalGB = totalBytes.doubleValue / 1_073_741_824
-        let freeGB = freeBytes.doubleValue / 1_073_741_824
+        let freeGB = Double(freeBytes) / 1_073_741_824
         let usedGB = totalGB - freeGB
         let usagePercent = totalGB > 0 ? (usedGB / totalGB) * 100 : 0
 
@@ -272,8 +371,19 @@ final class SystemMonitorManager: ObservableObject {
             diskUsage: min(100, max(0, usagePercent)),
             totalDisk: totalGB,
             usedDisk: usedGB,
-            freeDisk: freeGB
+            freeDisk: freeGB,
+            diskVolumeName: resourceValues?.volumeName ?? "/"
         )
+    }
+
+    nonisolated private static func recoverableFreeDiskSpace(at volumeURL: URL) -> Int64? {
+        var stats = statfs()
+        guard statfs(volumeURL.path, &stats) == 0 else {
+            return nil
+        }
+
+        let purgeable = Int64(CSDiskSpaceGetRecoveryEstimate(volumeURL as NSURL))
+        return (Int64(stats.f_bfree) * Int64(stats.f_bsize)) + max(0, purgeable)
     }
 
     nonisolated private static func readGPUStats() -> (load: Double?, temperature: Double?) {
@@ -331,19 +441,39 @@ final class SystemMonitorManager: ObservableObject {
     }
 
     nonisolated private static func readCPUTemperature() -> Double? {
-        let directKeys = ["TC0D", "TC0E", "TC0F", "TC0P", "TC0H"]
-        for key in directKeys {
-            if let value = SMCReader.shared.readValue(for: key), isPlausibleTemperature(value) {
+        let isAppleSilicon = looksLikeAppleSilicon()
+        let directValues = ["TC0D", "TC0E", "TC0F", "TC0P", "TC0H"]
+            .compactMap { key -> Double? in
+                guard let value = SMCReader.shared.readValue(for: key), isPlausibleTemperature(value) else {
+                    return nil
+                }
                 return value
             }
+
+        let appleValues = appleSiliconCPUTemperatureKeys()
+            .compactMap { key -> Double? in
+                guard let value = SMCReader.shared.readValue(for: key), isPlausibleTemperature(value) else {
+                    return nil
+                }
+                return value
+            }
+
+        if isAppleSilicon, !appleValues.isEmpty {
+            let average = appleValues.reduce(0, +) / Double(appleValues.count)
+            if average < 30, let maxDirect = directValues.max(), maxDirect - average > 15 {
+                systemMonitorLogger.debug(
+                    "CPU temp suspicious on Apple Silicon. appleAvg=\(average, privacy: .public) directMax=\(maxDirect, privacy: .public)"
+                )
+            }
+            return average
         }
 
-        let values = appleSiliconCPUTemperatureKeys()
-            .compactMap { SMCReader.shared.readValue(for: $0) }
-            .filter(isPlausibleTemperature)
+        if let directValue = directValues.first {
+            return directValue
+        }
 
-        guard !values.isEmpty else { return nil }
-        return values.reduce(0, +) / Double(values.count)
+        guard !appleValues.isEmpty else { return nil }
+        return appleValues.reduce(0, +) / Double(appleValues.count)
     }
 
     nonisolated private static func appleSiliconCPUTemperatureKeys() -> [String] {
@@ -377,6 +507,12 @@ final class SystemMonitorManager: ObservableObject {
             ?? ""
     }
 
+    nonisolated private static func looksLikeAppleSilicon() -> Bool {
+        let chipName = systemChipName().uppercased()
+        return chipName.contains("APPLE") || chipName.contains("M1") || chipName.contains("M2")
+            || chipName.contains("M3") || chipName.contains("M4")
+    }
+
     nonisolated private static func sysctlString(_ name: String) -> String? {
         var size = 0
         guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else { return nil }
@@ -390,12 +526,31 @@ final class SystemMonitorManager: ObservableObject {
         value >= 0 && value < 120
     }
 
+    nonisolated private static func readLoadAverage() -> Double {
+        var loadAverages = [Double](repeating: 0, count: 3)
+        guard getloadavg(&loadAverages, 3) > 0 else { return 0 }
+        return loadAverages[0]
+    }
+
+    nonisolated private static func readCPUCoreCount() -> Int {
+        var coreCount: UInt32 = 0
+        var size = MemoryLayout<UInt32>.size
+        guard sysctlbyname("hw.logicalcpu", &coreCount, &size, nil, 0) == 0 else {
+            return 0
+        }
+        return Int(coreCount)
+    }
+
     nonisolated private static func readNetworkActivity(
         previous: [String: (ibytes: UInt64, obytes: UInt64)],
         lastUpdate: Date
     ) -> (
         uploadSpeed: Double,
         downloadSpeed: Double,
+        totalUploadedBytes: UInt64,
+        totalDownloadedBytes: UInt64,
+        activeInterface: String,
+        linkIsUp: Bool,
         currentNetworkData: [String: (ibytes: UInt64, obytes: UInt64)],
         currentTime: Date
     )? {
@@ -407,28 +562,55 @@ final class SystemMonitorManager: ObservableObject {
         defer { freeifaddrs(ifaddrPointer) }
 
         var currentNetworkData: [String: (ibytes: UInt64, obytes: UInt64)] = [:]
+        let preferredInterface = primaryNetworkInterface()
+        var fallbackInterface: String?
+        var activeInterface = preferredInterface
+        var linkIsUp = false
         var ptr = firstAddr
 
         while true {
             let name = String(cString: ptr.pointee.ifa_name)
             if (name.hasPrefix("en") || name.hasPrefix("bridge") || name.hasPrefix("pdp_ip")),
                let data = ptr.pointee.ifa_data?.assumingMemoryBound(to: if_data.self) {
+                fallbackInterface = fallbackInterface ?? name
                 currentNetworkData[name] = (
                     ibytes: UInt64(data.pointee.ifi_ibytes),
                     obytes: UInt64(data.pointee.ifi_obytes)
                 )
+
+                if preferredInterface.isEmpty, activeInterface.isEmpty {
+                    activeInterface = name
+                }
+                if name == activeInterface {
+                    linkIsUp = (ptr.pointee.ifa_flags & UInt32(IFF_UP)) != 0
+                }
             }
 
             guard let next = ptr.pointee.ifa_next else { break }
             ptr = next
         }
 
+        if activeInterface.isEmpty, let fallbackInterface {
+            activeInterface = fallbackInterface
+        }
+
         let currentTime = Date()
         let timeDelta = currentTime.timeIntervalSince(lastUpdate)
+        let selectedData = activeInterface.isEmpty ? nil : currentNetworkData[activeInterface]
+        let previousSelectedData = activeInterface.isEmpty ? nil : previous[activeInterface]
+
+        let aggregateUploadedBytes = currentNetworkData.values.reduce(0) { $0 + $1.obytes }
+        let aggregateDownloadedBytes = currentNetworkData.values.reduce(0) { $0 + $1.ibytes }
+        let totalUploadedBytes = selectedData?.obytes ?? aggregateUploadedBytes
+        let totalDownloadedBytes = selectedData?.ibytes ?? aggregateDownloadedBytes
         guard timeDelta > 0 else {
             return (
                 uploadSpeed: 0,
                 downloadSpeed: 0,
+                totalUploadedBytes: totalUploadedBytes,
+                totalDownloadedBytes: totalDownloadedBytes,
+                activeInterface: activeInterface,
+                linkIsUp: linkIsUp,
                 currentNetworkData: currentNetworkData,
                 currentTime: currentTime
             )
@@ -437,21 +619,49 @@ final class SystemMonitorManager: ObservableObject {
         var totalUploadDelta: UInt64 = 0
         var totalDownloadDelta: UInt64 = 0
 
-        for (interface, currentValue) in currentNetworkData {
-            guard let previousValue = previous[interface] else { continue }
-            if currentValue.obytes >= previousValue.obytes {
-                totalUploadDelta += currentValue.obytes - previousValue.obytes
+        if let selectedData, let previousSelectedData {
+            if selectedData.obytes >= previousSelectedData.obytes {
+                totalUploadDelta = selectedData.obytes - previousSelectedData.obytes
             }
-            if currentValue.ibytes >= previousValue.ibytes {
-                totalDownloadDelta += currentValue.ibytes - previousValue.ibytes
+            if selectedData.ibytes >= previousSelectedData.ibytes {
+                totalDownloadDelta = selectedData.ibytes - previousSelectedData.ibytes
+            }
+        }
+
+        if totalUploadDelta == 0 && totalDownloadDelta == 0 {
+            for (interface, currentValue) in currentNetworkData {
+                guard let previousValue = previous[interface] else { continue }
+                if currentValue.obytes >= previousValue.obytes {
+                    totalUploadDelta += currentValue.obytes - previousValue.obytes
+                }
+                if currentValue.ibytes >= previousValue.ibytes {
+                    totalDownloadDelta += currentValue.ibytes - previousValue.ibytes
+                }
+            }
+
+            if activeInterface.isEmpty && !currentNetworkData.isEmpty {
+                systemMonitorLogger.debug("Network primary interface missing. Falling back to aggregate counters.")
             }
         }
 
         return (
             uploadSpeed: Double(totalUploadDelta) / timeDelta / 1_048_576,
             downloadSpeed: Double(totalDownloadDelta) / timeDelta / 1_048_576,
+            totalUploadedBytes: totalUploadedBytes,
+            totalDownloadedBytes: totalDownloadedBytes,
+            activeInterface: activeInterface,
+            linkIsUp: linkIsUp,
             currentNetworkData: currentNetworkData,
             currentTime: currentTime
         )
+    }
+
+    nonisolated private static func primaryNetworkInterface() -> String {
+        guard let global = SCDynamicStoreCopyValue(nil, "State:/Network/Global/IPv4" as CFString)
+            as? [String: Any],
+            let interface = global["PrimaryInterface"] as? String else {
+            return ""
+        }
+        return interface
     }
 }

@@ -131,6 +131,7 @@ final class ConfigManager: ObservableObject {
             show-icon = false
             use-metric-icons = false
             show-usage-bars = true
+            # network-display-mode = "dual-line" # "single" (default) or "dual-line" for stacked upload/download
             metrics-per-column = 2
             layout = "rows"
             dividers = "none"
@@ -145,6 +146,16 @@ final class ConfigManager: ObservableObject {
             disk-critical-level = 90 # Disk critical threshold (%)
             gpu-warning-level = 70   # GPU warning threshold (%)
             gpu-critical-level = 90  # GPU critical threshold (%)
+            # Optional popup customization:
+            # [widgets.default.system-monitor.popup]
+            # view-variant = "vertical" # vertical, settings
+            # metrics = ["cpu", "temperature", "ram", "disk", "gpu", "network"]
+            # cpu-details = ["usage", "temperature", "cores", "load-average"]
+            # temperature-details = ["cpu", "gpu"]
+            # ram-details = ["used", "app", "free", "pressure"]
+            # disk-details = ["used", "free", "total"]
+            # gpu-details = ["utilization", "temperature"]
+            # network-details = ["status", "download", "upload", "interface"]
 
             [widgets.default.battery]
             show-percentage = true
@@ -216,6 +227,10 @@ final class ConfigManager: ObservableObject {
     }
 
     func updateConfigValue(key: String, newValue: String) {
+        updateConfigLiteralValue(key: key, newValueLiteral: "\"\(escapedTOMLString(newValue))\"")
+    }
+
+    func updateConfigLiteralValue(key: String, newValueLiteral: String) {
         guard let path = configFilePath else {
             logger.error("Config file path is not set")
             return
@@ -223,7 +238,7 @@ final class ConfigManager: ObservableObject {
         do {
             let currentText = try String(contentsOfFile: path, encoding: .utf8)
             let updatedText = updatedTOMLString(
-                original: currentText, key: key, newValue: newValue)
+                original: currentText, key: key, newValueLiteral: newValueLiteral)
             try updatedText.write(
                 toFile: path, atomically: false, encoding: .utf8)
             DispatchQueue.main.async {
@@ -235,7 +250,7 @@ final class ConfigManager: ObservableObject {
     }
 
     private func updatedTOMLString(
-        original: String, key: String, newValue: String
+        original: String, key: String, newValueLiteral: String
     ) -> String {
         if key.contains(".") {
             let components = key.split(separator: ".").map(String.init)
@@ -257,7 +272,7 @@ final class ConfigManager: ObservableObject {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
                     if insideTargetTable && !updatedKey {
-                        newLines.append("\(actualKey) = \"\(newValue)\"")
+                        newLines.append("\(actualKey) = \(newValueLiteral)")
                         updatedKey = true
                     }
                     if trimmed == tableHeader {
@@ -274,7 +289,7 @@ final class ConfigManager: ObservableObject {
                         if line.range(of: pattern, options: .regularExpression)
                             != nil
                         {
-                            newLines.append("\(actualKey) = \"\(newValue)\"")
+                            newLines.append("\(actualKey) = \(newValueLiteral)")
                             updatedKey = true
                             continue
                         }
@@ -284,13 +299,13 @@ final class ConfigManager: ObservableObject {
             }
 
             if foundTable && insideTargetTable && !updatedKey {
-                newLines.append("\(actualKey) = \"\(newValue)\"")
+                newLines.append("\(actualKey) = \(newValueLiteral)")
             }
 
             if !foundTable {
                 newLines.append("")
                 newLines.append("[\(tablePath)]")
-                newLines.append("\(actualKey) = \"\(newValue)\"")
+                newLines.append("\(actualKey) = \(newValueLiteral)")
             }
             return newLines.joined(separator: "\n")
         } else {
@@ -306,7 +321,7 @@ final class ConfigManager: ObservableObject {
                     if line.range(of: pattern, options: .regularExpression)
                         != nil
                     {
-                        newLines.append("\(key) = \"\(newValue)\"")
+                        newLines.append("\(key) = \(newValueLiteral)")
                         updatedAtLeastOnce = true
                         continue
                     }
@@ -314,10 +329,16 @@ final class ConfigManager: ObservableObject {
                 newLines.append(line)
             }
             if !updatedAtLeastOnce {
-                newLines.append("\(key) = \"\(newValue)\"")
+                newLines.append("\(key) = \(newValueLiteral)")
             }
             return newLines.joined(separator: "\n")
         }
+    }
+
+    private func escapedTOMLString(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
     }
 
     func globalWidgetConfig(for widgetId: String) -> ConfigData {

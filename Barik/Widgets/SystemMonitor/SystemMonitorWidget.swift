@@ -27,6 +27,8 @@ struct SystemMonitorWidget: View {
     private var showIcon: Bool { config["show-icon"]?.boolValue ?? false }
     private var useMetricIcons: Bool { config["use-metric-icons"]?.boolValue ?? false }
     private var showUsageBars: Bool { config["show-usage-bars"]?.boolValue ?? true }
+    private var networkDisplayMode: String { config["network-display-mode"]?.stringValue ?? "single" }
+    private var usesSplitNetworkRows: Bool { networkDisplayMode == "dual-line" }
     private var metricsPerColumn: Int {
         max(1, min(4, config["metrics-per-column"]?.intValue ?? 2))
     }
@@ -84,6 +86,9 @@ struct SystemMonitorWidget: View {
     }
     private var metricRowHeight: CGFloat {
         if layoutMode == .stacked {
+            if usesSplitNetworkRows && metrics.contains(.network) {
+                return usesSingleMetricColumns ? 36 : 31
+            }
             return usesSingleMetricColumns ? 26 : 23
         }
         return usesExpandedRowsLayout ? 16 : 13
@@ -332,12 +337,34 @@ struct SystemMonitorWidget: View {
 
     @ViewBuilder
     private func networkMetricRow() -> some View {
+        let uploadText = formatSpeed(systemMonitor.uploadSpeed)
+        let downloadText = formatSpeed(systemMonitor.downloadSpeed)
         let dominantDownload = systemMonitor.downloadSpeed >= systemMonitor.uploadSpeed
         let directionIcon = dominantDownload ? "arrow.down" : "arrow.up"
         let speedColor: Color = dominantDownload ? .blue : .green
         let valueText = formatSpeed(max(systemMonitor.uploadSpeed, systemMonitor.downloadSpeed))
 
-        if layoutMode == .stacked {
+        if layoutMode == .stacked && usesSplitNetworkRows {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: usesSingleMetricColumns ? 9 : 8, weight: .bold))
+                        .foregroundStyle(.green)
+                    Text(uploadText)
+                        .font(.system(size: usesSingleMetricColumns ? 11 : 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.foregroundOutside)
+                }
+
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: usesSingleMetricColumns ? 9 : 8, weight: .bold))
+                        .foregroundStyle(.blue)
+                    Text(downloadText)
+                        .font(.system(size: usesSingleMetricColumns ? 11 : 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.foregroundOutside)
+                }
+            }
+        } else if layoutMode == .stacked {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 3) {
                     metricLabel(for: .network)

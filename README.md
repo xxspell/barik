@@ -274,6 +274,8 @@ show-label = true
 - `dividers` adds separators between rows, columns, or both in the menu bar widget
 - CPU temperature is read from SMC sensor keys with Apple Silicon fallbacks inspired by Stats
 - GPU usage and temperature are best-effort and may be unavailable on some systems or macOS configurations
+- The popup now has a detailed Stats-style view plus a built-in settings view for toggling sections and fields
+- Popup section visibility can be configured independently from the compact menu bar widget
 
 ## Weather Widget
 
@@ -305,11 +307,40 @@ show-label = true
 show-icon = false
 use-metric-icons = false
 show-usage-bars = true
+network-display-mode = "single" # single, dual-line
 metrics-per-column = 2
 layout = "rows"
 dividers = "none"
 metrics = ["cpu", "temperature", "ram", "disk", "gpu", "network"]
 ```
+
+Detailed popup configuration:
+
+```toml
+[widgets.default.system-monitor.popup]
+view-variant = "vertical"
+metrics = ["cpu", "temperature", "ram", "disk", "gpu", "network"]
+cpu-details = ["usage", "user", "system", "idle", "temperature", "cores", "load-average"]
+temperature-details = ["cpu", "gpu"]
+ram-details = ["used", "app", "free", "pressure"]
+disk-details = ["used", "free", "total"]
+gpu-details = ["utilization", "temperature"]
+network-details = ["status", "download", "upload", "interface"]
+```
+
+- `network-display-mode = "dual-line"` turns the menu bar network metric into two stacked rows: upload on the first line and download on the second
+- `popup.metrics` controls which sections appear in the detailed popup and in what order
+- The popup now uses compact dashboard cards. Smaller sections such as temperature, GPU, and network can share a row, while larger sections stay full width for readability
+- `cpu-details` lets you choose from `usage`, `user`, `system`, `idle`, `temperature`, `cores`, `load-average`
+- `temperature-details` lets you choose from `cpu`, `gpu`
+- `ram-details` lets you choose from `used`, `app`, `active`, `inactive`, `wired`, `compressed`, `cache`, `free`, `swap`, `pressure`, `total`
+- RAM usage now follows the same broad model as Stats: inactive/speculative memory is counted, cache is separated, and swap plus pressure are available in the popup
+- `disk-details` lets you choose from `volume`, `used`, `free`, `total`
+- Disk free space prefers recoverable capacity and important-usage capacity, which makes it closer to what Stats reports for the system volume
+- `gpu-details` lets you choose from `utilization`, `temperature`
+- `network-details` lets you choose from `interface`, `status`, `download`, `upload`, `total-downloaded`, `total-uploaded`
+- Network speeds and totals now track the current primary interface by default, which avoids inflated numbers from bridge or secondary interfaces
+- You can also change these options directly from the popup gear view without editing TOML by hand
 
 ## TickTick Widget
 

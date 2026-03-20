@@ -10,7 +10,7 @@ struct MenuBarPopupView<Content: View>: View {
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
     private let horizontalMargin: CGFloat = 16
 
-    @State private var contentHeight: CGFloat = 0
+    @State private var contentSize: CGSize = .zero
     @State private var viewFrame: CGRect = .zero
     @State private var animationValue: Double = 0.01
     private var animated: Bool { isShowAnimation || isHideAnimation }
@@ -44,8 +44,22 @@ struct MenuBarPopupView<Content: View>: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .topLeading) {
             content
+                .fixedSize(horizontal: true, vertical: true)
+                .background(
+                    GeometryReader { geometry in
+                        Color.clear
+                            .onAppear {
+                                DispatchQueue.main.async {
+                                    contentSize = geometry.size
+                                }
+                            }
+                            .onChange(of: geometry.size) { _, newSize in
+                                contentSize = newSize
+                            }
+                    }
+                )
                 .background(Color.black)
                 .cornerRadius(((1.0 - animationValue) * 1) + 40)
                 .shadow(radius: 30)
@@ -139,12 +153,10 @@ struct MenuBarPopupView<Content: View>: View {
                     .onAppear {
                         DispatchQueue.main.async {
                             viewFrame = geometry.frame(in: .global)
-                            contentHeight = geometry.size.height
                         }
                     }
                     .onChange(of: geometry.size) { _, __ in
                         viewFrame = geometry.frame(in: .global)
-                        contentHeight = geometry.size.height
                     }
             }
         )
@@ -153,7 +165,7 @@ struct MenuBarPopupView<Content: View>: View {
     }
 
     var computedOffset: CGFloat {
-        let contentWidth = viewFrame.width > 0 ? viewFrame.width : 200
+        let contentWidth = contentSize.width > 0 ? contentSize.width : 200
         let localMidX = widgetRect.midX - screenFrame.minX
         let minOffset = horizontalMargin
         let maxOffset = screenFrame.width - contentWidth - horizontalMargin
