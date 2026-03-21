@@ -81,6 +81,7 @@ final class ConfigManager: ObservableObject {
                 "default.codex-usage",
                 "default.system-monitor",
                 "default.network",
+                # "default.focus",
                 "default.keyboard-layout",
                 "default.battery",
                 "divider",
@@ -165,6 +166,10 @@ final class ConfigManager: ObservableObject {
             [widgets.default.keyboard-layout]
             show-text = true
             show-outline = true
+
+            [widgets.default.focus]
+            show-name = false
+            tint-with-focus-color = true
 
             [widgets.default.time]
             format = "E d, J:mm"

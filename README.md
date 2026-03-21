@@ -35,12 +35,13 @@
 
 **barik** is a lightweight macOS menu bar replacement. If you use [**yabai**](https://github.com/koekeishiya/yabai) or [**AeroSpace**](https://github.com/nikitabobko/AeroSpace) for tiling WM, you can display the current space in a sleek macOS-style panel with smooth animations. This makes it easy to see which number to press to switch spaces.
 
-It also supports compact usage widgets for **Claude Code**, **Codex**, and **CLIProxy**, plus practical widgets for **System Monitor**, **Weather**, **Homebrew**, **TickTick**, **Now Playing**, and a native macOS **screen recording stop** control:
+It also supports compact usage widgets for **Claude Code**, **Codex**, and **CLIProxy**, plus practical widgets for **System Monitor**, **Focus**, **Weather**, **Homebrew**, **TickTick**, **Now Playing**, and a native macOS **screen recording stop** control:
 
 - **Claude Usage** reads your Claude Code credentials from Keychain, shows current 5-hour usage as a ring in the menu bar, and exposes 5-hour plus weekly usage in the popup.
 - **Codex Usage** reads local `~/.codex/auth.json` and recent session snapshots, shows the current rate-limit window in the menu bar, and exposes the active window details in the popup.
 - **CLIProxy Usage** connects to the local Management API, shows quota percentage in the menu bar, and exposes aggregated token stats plus quota switching settings in the popup.
 - **System Monitor** shows configurable CPU, RAM, disk, GPU, and network metrics in the menu bar with a detailed popup.
+- **Focus** shows the active macOS Focus mode as a compact badge and lists available Focus modes in a read-only popup.
 - **Keyboard Layout** shows the current macOS input source in the menu bar and lets you switch layouts from a popup list.
 - **Weather** displays current conditions with location-aware forecasts and a popup powered by Open-Meteo.
 - **Homebrew** shows outdated package counts in the menu bar and exposes update and upgrade actions in the popup.
@@ -113,6 +114,7 @@ displayed = [ # widgets on menu bar
     "default.system-monitor",
     "default.nowplaying",
     "default.network",
+    # "default.focus",
     "default.keyboard-layout",
     "default.battery",
     "divider",
@@ -171,6 +173,10 @@ critical-level = 10
 [widgets.default.keyboard-layout]
 show-text = true     # show current layout label in the widget
 show-outline = true  # draw a capsule outline around the label
+
+[widgets.default.focus]
+show-name = false
+tint-with-focus-color = true
 
 [widgets.default.time]
 format = "E d, J:mm"
@@ -237,6 +243,28 @@ refresh-interval = 300
 The widget accepts either the server root URL like `http://localhost:8317` or the full Management API path like `http://localhost:8317/v0/management`.
 `refresh-interval` is optional and is measured in seconds. The minimum supported value is `15`.
 `warning-level` and `critical-level` are based on remaining quota percentage. Older `ring-warning-level` and `ring-critical-level` keys are still supported for compatibility.
+
+## Focus Widget
+
+`default.focus` adds a compact macOS Focus indicator to Barik.
+
+- The widget appears only while a Focus mode is active
+- It shows the active Focus mode icon using the system tint color when available
+- The popup lists all detected Focus modes and highlights the currently active one
+- The popup is currently read-only and does not switch Focus modes yet
+
+Example config:
+
+```toml
+[widgets]
+displayed = [
+    "default.focus",
+]
+
+[widgets.default.focus]
+show-name = false
+tint-with-focus-color = true
+```
 
 ## Screen Recording Stop Widget
 

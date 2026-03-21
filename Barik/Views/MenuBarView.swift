@@ -102,6 +102,10 @@ struct MenuBarView: View {
             KeyboardLayoutWidget()
                 .environmentObject(config)
 
+        case "default.focus":
+            FocusWidget()
+                .environmentObject(config)
+
         case "spacer":
             Spacer().frame(minWidth: 50, maxWidth: .infinity)
 
