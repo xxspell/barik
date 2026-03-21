@@ -46,6 +46,7 @@ It also supports compact usage widgets for **Claude Code**, **Codex**, and **CLI
 - **Weather** displays current conditions with location-aware forecasts and a popup powered by Open-Meteo.
 - **Homebrew** shows outdated package counts in the menu bar and exposes update and upgrade actions in the popup.
 - **TickTick** shows pending task counts in the menu bar and provides tasks, habits, and an Eisenhower matrix in the popup.
+- **Pomodoro** provides a local/offline focus timer with notes, overtime adjustment, history, stats, and optional TickTick private API sync.
 - **Now Playing** shows the currently playing song with album art and media state in the menu bar.
 - **Screen Recording Stop** appears only while a native macOS screen recording is active and stops it from the menu bar.
 
@@ -197,6 +198,22 @@ longitude = "-74.0060" # Custom longitude (optional, uses device location if not
 [widgets.default.homebrew]
 display-mode = "label" # label, icon, badge
 
+[widgets.default.pomodoro]
+mode = "auto" # local, ticktick, auto
+display-mode = "timer" # timer, today-pomodoros
+focus-duration = 25
+short-break-duration = 5
+long-break-duration = 15
+long-break-interval = 4
+show-seconds = false
+play-sound-on-focus-end = true
+play-sound-on-break-end = true
+focus-finished-sound = "pomo-v1.mp3"
+break-finished-sound = "pomo-v2.wav"
+repeat-break-finished-sound-until-popup-opened = false
+break-finished-sound-repeat-interval-seconds = 12
+history-window-days = 180
+
 [widgets.default.screen-recording-stop]
 show-label = true
 
@@ -217,6 +234,29 @@ blur = 3                                     # background type: from 1 to 6 for 
 ```
 
 ## Usage Widgets
+
+## Pomodoro Widget
+
+The Pomodoro widget supports two operating modes:
+
+- `local`: fully offline mode with cached history and statistics.
+- `ticktick`: uses TickTick private API for preferences, history, statistics, completed pomodoro sync, task binding, and overtime adjustment.
+- `auto`: uses TickTick when a private TickTick session is available, otherwise falls back to local mode.
+
+The menu bar widget can render in two styles:
+
+- `display-mode = "timer"` shows the current timer state.
+- `display-mode = "today-pomodoros"` shows one tomato icon per completed pomodoro today and expands in width as the count grows.
+
+The popup supports:
+
+- task selection from TickTick tasks
+- free-text task context
+- focus notes stored with the pomodoro record
+- overtime adjustment after the timer completes
+- history and summary statistics
+
+Important note: TickTick pomodoro is only available through the private TickTick API. The public OAuth/OpenAPI integration does not expose pomodoro endpoints, so TickTick sync requires a private email/password TickTick sign-in inside the widget.
 
 Three usage widgets are available out of the box:
 

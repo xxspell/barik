@@ -82,6 +82,7 @@ final class ConfigManager: ObservableObject {
                 "default.system-monitor",
                 "default.network",
                 # "default.focus",
+                # "default.pomodoro",
                 "default.keyboard-layout",
                 "default.battery",
                 "divider",
@@ -170,6 +171,22 @@ final class ConfigManager: ObservableObject {
             [widgets.default.focus]
             show-name = false
             tint-with-focus-color = true
+
+            [widgets.default.pomodoro]
+            mode = "local" # local, ticktick, auto
+            display-mode = "timer" # timer, today-pomodoros
+            focus-duration = 25
+            short-break-duration = 5
+            long-break-duration = 15
+            long-break-interval = 4
+            show-seconds = false
+            play-sound-on-focus-end = true
+            play-sound-on-break-end = true
+            focus-finished-sound = "pomo-v1.mp3"
+            break-finished-sound = "pomo-v2.wav"
+            repeat-break-finished-sound-until-popup-opened = false
+            break-finished-sound-repeat-interval-seconds = 12
+            history-window-days = 180
 
             [widgets.default.time]
             format = "E d, J:mm"

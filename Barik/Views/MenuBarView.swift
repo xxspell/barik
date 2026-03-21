@@ -119,6 +119,10 @@ struct MenuBarView: View {
             TickTickWidget()
                 .environmentObject(config)
 
+        case "default.pomodoro":
+            PomodoroWidget()
+                .environmentObject(config)
+
         case "system-banner":
             SystemBannerWidget()
 

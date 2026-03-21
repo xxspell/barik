@@ -39,6 +39,10 @@ struct TickTickTask: Identifiable, Equatable {
     var isAllDay: Bool? = nil
     var assignee: Int? = nil
     var progress: Int? = nil
+    var tags: [String] = []
+    var repeatFirstDateRaw: String? = nil
+    var deleted: Int? = nil
+    var focusSummaries: [TickTickTaskFocusSummary] = []
 
     var isSubtask: Bool { parentId != nil }
     var isCompleted: Bool { status == 2 }
@@ -59,6 +63,40 @@ struct TickTickProject: Identifiable, Equatable {
     let id: String
     var name: String
     var color: String?
+}
+
+struct TickTickTaskFocusSummary: Codable, Equatable {
+    var estimatedDuration: Int
+    var estimatedPomo: Int
+    var pomoCount: Int
+    var pomoDuration: Int
+    var focuses: [[TickTickFocusValue]]
+    var stopwatchDuration: Int
+    var userId: Int
+}
+
+enum TickTickFocusValue: Codable, Equatable {
+    case string(String)
+    case int(Int)
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let intValue = try? container.decode(Int.self) {
+            self = .int(intValue)
+            return
+        }
+        self = .string(try container.decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let value):
+            try container.encode(value)
+        case .int(let value):
+            try container.encode(value)
+        }
+    }
 }
 
 enum TickTickPriority: Int {
@@ -105,6 +143,109 @@ struct TickTickTaskCompletionToast: Identifiable, Equatable {
     let title: String
 }
 
+struct TickTickPomodoroPreferences: Codable, Equatable {
+    let id: Int?
+    var shortBreakDuration: Int
+    var longBreakDuration: Int
+    var longBreakInterval: Int
+    var pomoGoal: Int
+    var focusDuration: Int
+    var mindfulnessEnabled: Bool
+    var autoPomo: Bool
+    var autoBreak: Bool
+    var lightsOn: Bool?
+    var focused: Bool?
+    var soundsOn: Bool
+    var pomoDuration: Int
+
+    static let `default` = TickTickPomodoroPreferences(
+        id: nil,
+        shortBreakDuration: 5,
+        longBreakDuration: 15,
+        longBreakInterval: 4,
+        pomoGoal: 4,
+        focusDuration: 0,
+        mindfulnessEnabled: true,
+        autoPomo: false,
+        autoBreak: false,
+        lightsOn: false,
+        focused: false,
+        soundsOn: true,
+        pomoDuration: 25
+    )
+
+    var requestBody: [String: Any] {
+        [
+            "soundsOn": soundsOn,
+            "longBreakInterval": max(longBreakInterval, 1),
+            "focusDuration": max(focusDuration, 0),
+            "autoBreak": autoBreak,
+            "autoPomo": autoPomo,
+            "pomoGoal": max(pomoGoal, 1),
+            "pomoDuration": min(max(pomoDuration, 5), 180),
+            "shortBreakDuration": max(shortBreakDuration, 1),
+            "longBreakDuration": max(longBreakDuration, 1),
+            "mindfulnessEnabled": mindfulnessEnabled
+        ]
+    }
+}
+
+struct TickTickPomodoroStatistics: Codable, Equatable {
+    let todayPomoCount: Int
+    let totalPomoCount: Int
+    let todayPomoDuration: Int
+    let totalPomoDuration: Int
+
+    static let zero = TickTickPomodoroStatistics(
+        todayPomoCount: 0,
+        totalPomoCount: 0,
+        todayPomoDuration: 0,
+        totalPomoDuration: 0
+    )
+}
+
+struct TickTickPomodoroTaskSegment: Codable, Equatable {
+    let startTime: String?
+    let endTime: String?
+    let title: String?
+}
+
+struct TickTickPomodoroRecord: Identifiable, Codable, Equatable {
+    let id: String
+    let tasks: [TickTickPomodoroTaskSegment]?
+    let startTime: String?
+    let endTime: String?
+    let status: Int?
+    let pauseDuration: Int?
+    let etag: String?
+    let type: Int?
+    let adjustTime: Int?
+    let added: Bool?
+    let note: String?
+    let taskId: String?
+    let projectId: String?
+    let title: String?
+}
+
+struct TickTickPomodoroSessionDraft: Equatable {
+    let startTime: Date
+    let endTime: Date
+    let pauseDuration: Int
+    let note: String
+    let taskTitle: String?
+    let taskId: String?
+}
+
+struct TickTickSavedPomodoroSession: Equatable {
+    let pomodoroId: String
+    let etag: String?
+}
+
+private struct TickTickPomodoroBatchResponse: Decodable {
+    let id2etag: [String: String]?
+    let id2error: [String: String]?
+}
+
 // MARK: - Private API raw models
 
 private struct BatchCheckResponse: Decodable {
@@ -133,6 +274,7 @@ private struct RawTask: Decodable {
     let items: [RawChecklistItem]?
     let kind: String?
     let tags: [String]?
+    let repeatFirstDate: String?
 
     // Private API metadata used to preserve task payload fidelity
     let creator: Int?
@@ -146,6 +288,8 @@ private struct RawTask: Decodable {
     let isAllDay: Bool?
     let assignee: Int?
     let progress: Int?
+    let deleted: Int?
+    let focusSummaries: [TickTickTaskFocusSummary]?
 }
 
 private struct RawChecklistItem: Decodable {
@@ -1168,7 +1312,11 @@ final class TickTickManager: ObservableObject {
             dueDateRaw: t.dueDate,
             isAllDay: t.isAllDay,
             assignee: t.assignee,
-            progress: t.progress
+            progress: t.progress,
+            tags: t.tags ?? [],
+            repeatFirstDateRaw: t.repeatFirstDate,
+            deleted: t.deleted,
+            focusSummaries: t.focusSummaries ?? []
         )
     }
 
@@ -1519,6 +1667,508 @@ final class TickTickManager: ObservableObject {
             "currentStreak": currentStreak,
             "style": raw.style ?? NSNull()
         ]
+    }
+
+    // MARK: - Pomodoro (private API only)
+
+    private enum TickTickPrivateAPIHost {
+        case v2
+        case v3
+    }
+
+    var hasPrivatePomodoroAccess: Bool {
+        isAuthenticated && authMode == .privateAPI && loadKey(privTokenKey) != nil
+    }
+
+    func fetchPomodoroPreferences() async throws -> TickTickPomodoroPreferences {
+        let (data, _) = try await performPrivateAPIRequest(
+            host: .v2,
+            path: "/user/preferences/pomodoro",
+            context: "fetchPomodoroPreferences()"
+        )
+        return try JSONDecoder().decode(TickTickPomodoroPreferences.self, from: data)
+    }
+
+    func updatePomodoroPreferences(_ preferences: TickTickPomodoroPreferences) async throws {
+        _ = try await performPrivateAPIRequest(
+            host: .v2,
+            path: "/user/preferences/pomodoro",
+            method: "PUT",
+            bodyObject: preferences.requestBody,
+            context: "updatePomodoroPreferences()"
+        )
+    }
+
+    func fetchPomodoroStatistics() async throws -> TickTickPomodoroStatistics {
+        let (data, _) = try await performPrivateAPIRequest(
+            host: .v2,
+            path: "/pomodoros/statistics/generalForDesktop",
+            context: "fetchPomodoroStatistics()"
+        )
+        return try JSONDecoder().decode(TickTickPomodoroStatistics.self, from: data)
+    }
+
+    func fetchPomodoroTimeline() async throws -> [TickTickPomodoroRecord] {
+        let (data, _) = try await performPrivateAPIRequest(
+            host: .v2,
+            path: "/pomodoros/timeline",
+            context: "fetchPomodoroTimeline()"
+        )
+        return try JSONDecoder().decode([TickTickPomodoroRecord].self, from: data)
+    }
+
+    func fetchPomodoroRecords(from: Date, to: Date) async throws -> [TickTickPomodoroRecord] {
+        let path = "/pomodoros?from=\(Int(from.timeIntervalSince1970 * 1000))&to=\(Int(to.timeIntervalSince1970 * 1000))"
+        let (data, _) = try await performPrivateAPIRequest(
+            host: .v2,
+            path: path,
+            context: "fetchPomodoroRecords()"
+        )
+        return try JSONDecoder().decode([TickTickPomodoroRecord].self, from: data)
+    }
+
+    func fetchPomodoroCurrentTimer() async throws -> [TickTickPomodoroRecord] {
+        let (data, _) = try await performPrivateAPIRequest(
+            host: .v2,
+            path: "/timer",
+            context: "fetchPomodoroCurrentTimer()"
+        )
+        return try JSONDecoder().decode([TickTickPomodoroRecord].self, from: data)
+    }
+
+    @discardableResult
+    func savePomodoroSession(_ session: TickTickPomodoroSessionDraft) async throws -> TickTickSavedPomodoroSession {
+        let sessionID = objectId()
+        let normalizedNote = session.note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bindingTask = session.taskId.flatMap(taskById)
+            ?? session.taskTitle.flatMap(resolveTaskForPomodoroBinding(title:))
+        let taskTitle = (bindingTask?.title ?? session.taskTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let projectName = bindingTask.flatMap(projectNameForPomodoroTask)
+        let payload: [String: Any] = [
+            "add": [[
+                "id": sessionID,
+                "startTime": tickTickDateWithMillis(session.startTime),
+                "endTime": tickTickDateWithMillis(session.endTime),
+                "status": 1,
+                "pauseDuration": max(session.pauseDuration, 0),
+                "tasks": [buildPomodoroTaskBindingPayload(
+                    task: bindingTask,
+                    startTime: session.startTime,
+                    endTime: session.endTime,
+                    fallbackTitle: taskTitle,
+                    projectName: projectName
+                )],
+                "note": normalizedNote
+            ]],
+            "update": [],
+            "delete": []
+        ]
+
+        let (data, _) = try await performPrivateAPIRequest(
+            host: .v2,
+            path: "/batch/pomodoro",
+            method: "POST",
+            bodyObject: payload,
+            context: "savePomodoroSession()"
+        )
+        let response = try JSONDecoder().decode(TickTickPomodoroBatchResponse.self, from: data)
+        if let errors = response.id2error, !errors.isEmpty {
+            logger.error("savePomodoroSession() — id2error=\(String(describing: errors), privacy: .public)")
+        }
+
+        if let bindingTask {
+            do {
+                try await appendPomodoroFocusSummary(
+                    to: bindingTask,
+                    pomodoroId: sessionID,
+                    durationSeconds: max(Int(session.endTime.timeIntervalSince(session.startTime)) - max(session.pauseDuration, 0), 0)
+                )
+            } catch {
+                logger.error("savePomodoroSession() — append focus summary failed: \(error.localizedDescription, privacy: .public)")
+            }
+        } else if session.taskTitle?.isEmpty == false {
+            logger.warning("savePomodoroSession() — task binding title provided but no TickTick task matched")
+        }
+
+        return TickTickSavedPomodoroSession(
+            pomodoroId: sessionID,
+            etag: response.id2etag?[sessionID]
+        )
+    }
+
+    @discardableResult
+    func adjustPomodoroSession(
+        pomodoroId: String,
+        pomodoroEtag: String?,
+        startTime: Date,
+        endTime: Date,
+        pauseDuration: Int,
+        adjustedDurationSeconds: Int,
+        taskId: String?,
+        taskTitle: String?
+    ) async throws -> TickTickSavedPomodoroSession {
+        let bindingTask = taskId.flatMap(taskById)
+            ?? taskTitle.flatMap(resolveTaskForPomodoroBinding(title:))
+        let resolvedTitle = (bindingTask?.title ?? taskTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let projectName = bindingTask.flatMap(projectNameForPomodoroTask)
+
+        if let bindingTask {
+            try await replacePomodoroFocusSummary(
+                for: bindingTask,
+                pomodoroId: pomodoroId,
+                durationSeconds: max(adjustedDurationSeconds, 0)
+            )
+        }
+
+        var updatePayload: [String: Any] = [
+            "id": pomodoroId,
+            "startTime": tickTickDateWithMillis(startTime),
+            "endTime": tickTickDateWithMillis(endTime),
+            "status": 1,
+            "pauseDuration": max(pauseDuration, 0),
+            "tasks": [buildPomodoroTaskBindingPayload(
+                task: bindingTask,
+                startTime: startTime,
+                endTime: endTime,
+                fallbackTitle: resolvedTitle,
+                projectName: projectName
+            )],
+            "adjustTime": max(adjustedDurationSeconds, 0) * 1000
+        ]
+
+        if let pomodoroEtag, !pomodoroEtag.isEmpty {
+            updatePayload["etag"] = pomodoroEtag
+        }
+
+        let payload: [String: Any] = [
+            "add": [],
+            "update": [updatePayload],
+            "delete": []
+        ]
+
+        let (data, _) = try await performPrivateAPIRequest(
+            host: .v2,
+            path: "/batch/pomodoro",
+            method: "POST",
+            bodyObject: payload,
+            context: "adjustPomodoroSession()"
+        )
+        let response = try JSONDecoder().decode(TickTickPomodoroBatchResponse.self, from: data)
+        if let errors = response.id2error, !errors.isEmpty {
+            logger.error("adjustPomodoroSession() — id2error=\(String(describing: errors), privacy: .public)")
+        }
+
+        return TickTickSavedPomodoroSession(
+            pomodoroId: pomodoroId,
+            etag: response.id2etag?[pomodoroId] ?? pomodoroEtag
+        )
+    }
+
+    private func buildPomodoroTaskBindingPayload(
+        task: TickTickTask?,
+        startTime: Date,
+        endTime: Date,
+        fallbackTitle: String,
+        projectName: String?
+    ) -> [String: Any] {
+        var payload: [String: Any] = [
+            "title": fallbackTitle,
+            "startTime": tickTickDateWithMillis(startTime),
+            "endTime": tickTickDateWithMillis(endTime)
+        ]
+
+        if let task {
+            payload["taskId"] = task.id
+            payload["tags"] = task.tags
+        }
+
+        if let projectName {
+            payload["projectName"] = projectName
+        }
+
+        return payload
+    }
+
+    private func appendPomodoroFocusSummary(
+        to task: TickTickTask,
+        pomodoroId: String,
+        durationSeconds: Int
+    ) async throws {
+        let updatedFocusSummaries = buildUpdatedFocusSummaries(for: task, pomodoroId: pomodoroId, durationSeconds: durationSeconds)
+        let payload = buildTaskFocusSummaryPayload(task: task, updatedFocusSummaries: updatedFocusSummaries)
+
+        _ = try await performPrivateAPIRequest(
+            host: .v2,
+            path: "/batch/task",
+            method: "POST",
+            bodyObject: payload,
+            context: "appendPomodoroFocusSummary()"
+        )
+
+        var updatedTask = task
+        updatedTask.focusSummaries = updatedFocusSummaries
+        updateLocalTask(updatedTask)
+    }
+
+    private func replacePomodoroFocusSummary(
+        for task: TickTickTask,
+        pomodoroId: String,
+        durationSeconds: Int
+    ) async throws {
+        let updatedFocusSummaries = buildAdjustedFocusSummaries(
+            for: task,
+            pomodoroId: pomodoroId,
+            durationSeconds: durationSeconds
+        )
+        let payload = buildTaskFocusSummaryPayload(task: task, updatedFocusSummaries: updatedFocusSummaries)
+
+        let (data, _) = try await performPrivateAPIRequest(
+            host: .v2,
+            path: "/batch/task",
+            method: "POST",
+            bodyObject: payload,
+            context: "replacePomodoroFocusSummary()"
+        )
+        let response = try JSONDecoder().decode(TickTickPomodoroBatchResponse.self, from: data)
+
+        var updatedTask = task
+        updatedTask.focusSummaries = updatedFocusSummaries
+        updatedTask.etag = response.id2etag?[task.id] ?? task.etag
+        updateLocalTask(updatedTask)
+    }
+
+    private func buildUpdatedFocusSummaries(
+        for task: TickTickTask,
+        pomodoroId: String,
+        durationSeconds: Int
+    ) -> [TickTickTaskFocusSummary] {
+        let currentUserID = validPrivateUserId() ?? task.creator ?? 0
+        var summaries = task.focusSummaries
+        let focusEntry: [TickTickFocusValue] = [
+            .string(pomodoroId),
+            .int(0),
+            .int(durationSeconds)
+        ]
+
+        if let index = summaries.firstIndex(where: { $0.userId == currentUserID }) {
+            summaries[index].focuses.append(focusEntry)
+        } else if currentUserID > 0 {
+            summaries.append(
+                TickTickTaskFocusSummary(
+                    estimatedDuration: 0,
+                    estimatedPomo: 0,
+                    pomoCount: 0,
+                    pomoDuration: 0,
+                    focuses: [focusEntry],
+                    stopwatchDuration: 0,
+                    userId: currentUserID
+                )
+            )
+        }
+
+        return summaries
+    }
+
+    private func buildAdjustedFocusSummaries(
+        for task: TickTickTask,
+        pomodoroId: String,
+        durationSeconds: Int
+    ) -> [TickTickTaskFocusSummary] {
+        let currentUserID = validPrivateUserId() ?? task.creator ?? 0
+        var summaries = task.focusSummaries
+        let replacementFocus: [TickTickFocusValue] = [
+            .string(pomodoroId),
+            .int(0),
+            .int(durationSeconds)
+        ]
+
+        if let summaryIndex = summaries.firstIndex(where: { $0.userId == currentUserID }) {
+            if let focusIndex = summaries[summaryIndex].focuses.firstIndex(where: { focus in
+                guard case let .string(value) = focus.first else { return false }
+                return value == pomodoroId
+            }) {
+                summaries[summaryIndex].focuses[focusIndex] = replacementFocus
+            } else {
+                summaries[summaryIndex].focuses.append(replacementFocus)
+            }
+        } else if currentUserID > 0 {
+            summaries.append(
+                TickTickTaskFocusSummary(
+                    estimatedDuration: 0,
+                    estimatedPomo: 0,
+                    pomoCount: 0,
+                    pomoDuration: 0,
+                    focuses: [replacementFocus],
+                    stopwatchDuration: 0,
+                    userId: currentUserID
+                )
+            )
+        }
+
+        return summaries
+    }
+
+    private func buildTaskFocusSummaryPayload(
+        task: TickTickTask,
+        updatedFocusSummaries: [TickTickTaskFocusSummary]
+    ) -> [String: Any] {
+        let updateTask: [String: Any] = [
+            "items": task.items.map { ["id": $0.id, "title": $0.title, "status": $0.status] },
+            "reminders": [],
+            "exDate": [],
+            "dueDate": task.dueDateRaw ?? "",
+            "repeatFirstDate": task.repeatFirstDateRaw ?? "",
+            "priority": task.priority.rawValue,
+            "isAllDay": task.isAllDay ?? false,
+            "imgMode": 0,
+            "creator": task.creator ?? NSNull(),
+            "focusSummaries": updatedFocusSummaries.map(encodeFocusSummary),
+            "progress": task.progress ?? 0,
+            "assignee": task.assignee ?? NSNull(),
+            "sortOrder": task.sortOrder ?? NSNull(),
+            "startDate": task.startDateRaw ?? "",
+            "isFloating": false,
+            "desc": "",
+            "status": task.status,
+            "projectId": task.projectId,
+            "kind": "TEXT",
+            "etag": task.etag ?? "",
+            "createdTime": task.createdTimeRaw ?? "",
+            "modifiedTime": tickTickDateWithMillisZero(Date()),
+            "title": task.title,
+            "tags": task.tags,
+            "timeZone": task.timeZone ?? TimeZone.current.identifier,
+            "content": task.content ?? "",
+            "id": task.id
+        ]
+
+        return [
+            "add": [],
+            "update": [updateTask],
+            "delete": [],
+            "addAttachments": [],
+            "updateAttachments": [],
+            "deleteAttachments": []
+        ]
+    }
+
+    private func encodeFocusSummary(_ summary: TickTickTaskFocusSummary) -> [String: Any] {
+        [
+            "estimatedDuration": summary.estimatedDuration,
+            "estimatedPomo": summary.estimatedPomo,
+            "pomoCount": summary.pomoCount,
+            "pomoDuration": summary.pomoDuration,
+            "focuses": summary.focuses.map { focus in
+                focus.map { value -> Any in
+                    switch value {
+                    case .string(let stringValue):
+                        return stringValue
+                    case .int(let intValue):
+                        return intValue
+                    }
+                }
+            },
+            "stopwatchDuration": summary.stopwatchDuration,
+            "userId": summary.userId
+        ]
+    }
+
+    private func resolveTaskForPomodoroBinding(title: String) -> TickTickTask? {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let allTasks = tasksByProject.values.flatMap { $0 }
+        if let exact = allTasks.first(where: { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            return exact
+        }
+
+        let fuzzyMatches = allTasks.filter { $0.title.localizedCaseInsensitiveContains(trimmed) }
+        if fuzzyMatches.count == 1 {
+            return fuzzyMatches[0]
+        }
+
+        return nil
+    }
+
+    private func projectNameForPomodoroTask(_ task: TickTickTask) -> String? {
+        if task.projectId == "inbox" || task.projectId.hasPrefix("inbox") {
+            return String(localized: "inbox")
+        }
+        return projects.first(where: { $0.id == task.projectId })?.name
+    }
+
+    private func performPrivateAPIRequest(
+        host: TickTickPrivateAPIHost,
+        path: String,
+        method: String = "GET",
+        bodyObject: Any? = nil,
+        timeout: TimeInterval = 10,
+        context: String
+    ) async throws -> (Data, HTTPURLResponse) {
+        let requestBodyData: Data?
+        if let bodyObject {
+            requestBodyData = try JSONSerialization.data(withJSONObject: bodyObject)
+            logger.debug("\(context, privacy: .public) — request body: \(self.truncatedRawJSONObject(bodyObject), privacy: .public)")
+        } else {
+            requestBodyData = nil
+        }
+
+        let request = try makePrivateAPIRequest(
+            host: host,
+            path: path,
+            method: method,
+            body: requestBodyData,
+            timeout: timeout
+        )
+
+        logger.debug("\(context, privacy: .public) — \(method, privacy: .public) \(request.url?.absoluteString ?? path, privacy: .public)")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            logger.error("\(context, privacy: .public) — non-HTTP response")
+            throw TickTickError.apiError(-1)
+        }
+
+        logger.debug("\(context, privacy: .public) — HTTP \(http.statusCode)")
+        logger.debug("\(context, privacy: .public) — raw response: \(self.truncatedRawString(data), privacy: .public)")
+        try checkStatus(http.statusCode)
+        return (data, http)
+    }
+
+    private func makePrivateAPIRequest(
+        host: TickTickPrivateAPIHost,
+        path: String,
+        method: String,
+        body: Data?,
+        timeout: TimeInterval
+    ) throws -> URLRequest {
+        guard let token = loadKey(privTokenKey) else {
+            logger.error("makePrivateAPIRequest() — missing private token for \(path, privacy: .public)")
+            throw TickTickError.noToken
+        }
+
+        let baseURL: String
+        switch host {
+        case .v2:
+            baseURL = privBase
+        case .v3:
+            baseURL = privBase3
+        }
+
+        guard let url = URL(string: "\(baseURL)\(path)") else {
+            logger.error("makePrivateAPIRequest() — invalid URL for \(path, privacy: .public)")
+            throw TickTickError.apiError(-1)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.httpBody = body
+        request.timeoutInterval = timeout
+        request.setValue("OAuth \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json;charset=UTF-8", forHTTPHeaderField: "Content-Type")
+        request.setValue(xDevice, forHTTPHeaderField: "X-Device")
+        request.setValue("TickTick/M-8020", forHTTPHeaderField: "User-Agent")
+        request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-TZ")
+        return request
     }
 
     // MARK: - Timer
