@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.9.0
+
+### Added
+- Add CLIProxy usage widget with quota tracking, token stats, provider filters, and popup details
+- Add CLIProxy quota refresh controls, threshold configuration, top API keys, and improved quota rendering
+- Add native macOS screen recording stop widget with accessibility-first recording detection
+- Add keyboard layout widget with a popup for available system layouts and switching support
+- Add CPU and GPU temperature support to the System Monitor widget and popup
+- Add a richer System Monitor popup with configurable sections, dual-line network rendering, and refined metric presentation
+- Add read-only Focus widget with active mode display and popup details
+- Add Pomodoro widget with local timer mode, TickTick private API sync, bundled sounds, and popup history
+- Add rotating TickTick menu bar mode for tasks and habits with configurable filters and width
+- Add Russian localization for CLIProxy, screen recording, Focus, Pomodoro, and supporting widget updates
+
+### Fixed
+- Fix TickTick private task completion flow with improved metadata handling, debug logging, and undo support
+- Fix TickTick matrix quadrant mapping, stable sorting, and layout consistency
+
+### Changed
+- Improve README TickTick documentation and configuration examples
+- Expand the widget overview in the README with additional built-in widgets
+- Refine TickTick rotating item layout, spacing, random rotation, and popup deep-link highlighting
+
 ## 0.8.0
 
 ### Added
