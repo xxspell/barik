@@ -98,6 +98,10 @@ class SpacesViewModel: ObservableObject {
         }
     }
 
+    func refresh() {
+        loadSpaces()
+    }
+
     func switchToSpace(_ space: AnySpace, needWindowFocus: Bool = false) {
         DispatchQueue.global(qos: .userInitiated).async {
             self.provider?.focusSpace(
@@ -108,6 +112,17 @@ class SpacesViewModel: ObservableObject {
     func switchToWindow(_ window: AnyWindow) {
         DispatchQueue.global(qos: .userInitiated).async {
             self.provider?.focusWindow(windowId: String(window.id))
+        }
+    }
+
+    func canDeleteSpace(_ space: AnySpace) -> Bool {
+        provider?.canDeleteSpace(spaceId: space.id) ?? false
+    }
+
+    func deleteSpace(_ space: AnySpace) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.provider?.deleteSpace(spaceId: space.id)
+            self.loadSpaces()
         }
     }
 }

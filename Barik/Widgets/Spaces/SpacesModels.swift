@@ -26,6 +26,11 @@ protocol SwitchableSpacesProvider: SpacesProvider {
     func focusWindow(windowId: String)
 }
 
+protocol DeletableSpacesProvider: SpacesProvider {
+    func deleteSpace(spaceId: String)
+    func canDeleteSpace(spaceId: String) -> Bool
+}
+
 struct AnyWindow: Identifiable, Equatable {
     let id: Int
     let title: String
@@ -57,14 +62,18 @@ struct AnySpace: Identifiable, Equatable {
     let id: String
     let isFocused: Bool
     let windows: [AnyWindow]
+    let supportsDeletion: Bool
 
     init<S: SpaceModel>(_ space: S) {
         if let aero = space as? AeroSpace {
             self.id = aero.workspace
+            self.supportsDeletion = false
         } else if let yabai = space as? YabaiSpace {
             self.id = String(yabai.id)
+            self.supportsDeletion = true
         } else {
             self.id = "0"
+            self.supportsDeletion = false
         }
         self.isFocused = space.isFocused
         self.windows = space.windows.map { AnyWindow($0) }
@@ -80,6 +89,8 @@ class AnySpacesProvider {
     private let _getSpacesWithWindows: () -> [AnySpace]?
     private let _focusSpace: ((String, Bool) -> Void)?
     private let _focusWindow: ((String) -> Void)?
+    private let _deleteSpace: ((String) -> Void)?
+    private let _canDeleteSpace: ((String) -> Bool)?
 
     init<P: SpacesProvider>(_ provider: P) {
         _getSpacesWithWindows = {
@@ -97,6 +108,18 @@ class AnySpacesProvider {
             _focusSpace = nil
             _focusWindow = nil
         }
+
+        if let deletable = provider as? any DeletableSpacesProvider {
+            _deleteSpace = { spaceId in
+                deletable.deleteSpace(spaceId: spaceId)
+            }
+            _canDeleteSpace = { spaceId in
+                deletable.canDeleteSpace(spaceId: spaceId)
+            }
+        } else {
+            _deleteSpace = nil
+            _canDeleteSpace = nil
+        }
     }
 
     func getSpacesWithWindows() -> [AnySpace]? {
@@ -109,5 +132,13 @@ class AnySpacesProvider {
 
     func focusWindow(windowId: String) {
         _focusWindow?(windowId)
+    }
+
+    func deleteSpace(spaceId: String) {
+        _deleteSpace?(spaceId)
+    }
+
+    func canDeleteSpace(spaceId: String) -> Bool {
+        _canDeleteSpace?(spaceId) ?? false
     }
 }

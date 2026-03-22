@@ -97,6 +97,9 @@ final class ConfigManager: ObservableObject {
 
             [widgets.default.spaces]
             space.show-key = true        # show space number (or character, if you use AeroSpace)
+            space.show-inactive = true
+            space.show-empty = true
+            space.show-delete-button = true
             window.show-title = true
             window.show-hidden = false
             window.icon-desaturation = 0

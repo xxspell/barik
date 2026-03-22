@@ -128,6 +128,9 @@ displayed = [ # widgets on menu bar
 
 [widgets.default.spaces]
 space.show-key = true        # show space number (or character, if you use AeroSpace)
+space.show-inactive = true
+space.show-empty = true
+space.show-delete-button = true
 window.show-title = true
 window.show-hidden = false
 window.icon-desaturation = 0
@@ -137,6 +140,8 @@ window.title.max-length = 50
 
 # Hidden yabai windows can stay visible in the Spaces widget with a small minus badge
 # on the app icon when `window.show-hidden = true`.
+# Inactive and empty spaces are shown by default and can be hidden separately.
+# Empty yabai spaces can show a hover delete button that destroys the space.
 # Window icons can be desaturated from `0` to `100`, where `100` is fully grayscale.
 # Hover tooltips can be enabled and customized with placeholders like
 # `{app}`, `{title}`, `{pid}`, `{id}`, and `{state}`.

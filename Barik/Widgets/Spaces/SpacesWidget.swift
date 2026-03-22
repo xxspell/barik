@@ -38,14 +38,24 @@ private extension NSScreen {
 }
 
 struct SpacesWidget: View {
+    @EnvironmentObject var configProvider: ConfigProvider
     @ObservedObject var viewModel = SpacesViewModel.shared
 
     @ObservedObject var configManager = ConfigManager.shared
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
 
+    private var config: ConfigData { configProvider.config }
+    private var spaceConfig: ConfigData { config["space"]?.dictionaryValue ?? [:] }
+    private var showInactiveSpaces: Bool { spaceConfig["show-inactive"]?.boolValue ?? true }
+
+    private var visibleSpaces: [AnySpace] {
+        guard !showInactiveSpaces else { return viewModel.spaces }
+        return viewModel.spaces.filter(\.isFocused)
+    }
+
     var body: some View {
         HStack(spacing: foregroundHeight < 30 ? 0 : 8) {
-            ForEach(viewModel.spaces) { space in
+            ForEach(visibleSpaces) { space in
                 SpaceView(space: space)
             }
         }
@@ -68,13 +78,14 @@ private struct SpaceView: View {
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
 
     var showKey: Bool { spaceConfig["show-key"]?.boolValue ?? true }
+    var showDeleteButton: Bool { spaceConfig["show-delete-button"]?.boolValue ?? true }
 
     let space: AnySpace
 
     @State var isHovered = false
 
     var body: some View {
-        let isFocused = space.windows.contains { $0.isFocused } || space.isFocused
+        let isFocused = space.isFocused
         HStack(spacing: 0) {
             Spacer().frame(width: 10)
             if showKey {
@@ -104,6 +115,23 @@ private struct SpaceView: View {
         .clipShape(RoundedRectangle(cornerRadius: foregroundHeight < 30 ? 0 : 8, style: .continuous))
         .shadow(color: .shadow, radius: foregroundHeight < 30 ? 0 : 2)
         .transition(.blurReplace)
+        .overlay(alignment: .topTrailing) {
+            if shouldShowDeleteButton {
+                Button {
+                    viewModel.deleteSpace(space)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.black.opacity(0.82))
+                        .frame(width: 15, height: 15)
+                        .background(Color.white.opacity(0.96))
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.16), radius: 2, y: 1)
+                }
+                .buttonStyle(.plain)
+                .offset(x: 5, y: -5)
+            }
+        }
         .onTapGesture {
             viewModel.switchToSpace(space, needWindowFocus: true)
         }
@@ -111,6 +139,14 @@ private struct SpaceView: View {
         .onHover { value in
             isHovered = value
         }
+    }
+
+    private var shouldShowDeleteButton: Bool {
+        isHovered
+            && showDeleteButton
+            && space.windows.isEmpty
+            && space.supportsDeletion
+            && viewModel.canDeleteSpace(space)
     }
 }
 

@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
+class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider, DeletableSpacesProvider {
     typealias SpaceType = YabaiSpace
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "barik",
@@ -16,6 +16,12 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
         ConfigManager.shared.config.rootToml.widgets
             .config(for: "default.spaces")?["window"]?
             .dictionaryValue?["show-hidden"]?.boolValue ?? false
+    }
+
+    private var shouldShowEmptySpaces: Bool {
+        ConfigManager.shared.config.rootToml.widgets
+            .config(for: "default.spaces")?["space"]?
+            .dictionaryValue?["show-empty"]?.boolValue ?? true
     }
 
     private func runYabaiCommand(arguments: [String]) -> Data? {
@@ -139,7 +145,7 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
 
         let filteredWindows = mergedWindows.filter {
             !($0.isFloating || $0.isSticky)
-                && ($0.isVisible || $0.isHidden)
+                && $0.spaceId > 0
                 && (shouldShowHiddenWindows || !$0.isHidden)
         }
         logger.debug("getSpacesWithWindows() — filteredWindows=\(filteredWindows.count)")
@@ -160,6 +166,10 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
                 return $0.stackIndex < $1.stackIndex
             }
         }
+        if shouldShowEmptySpaces {
+            return resultSpaces
+        }
+
         return resultSpaces.filter { !$0.windows.isEmpty }
     }
 
@@ -185,6 +195,15 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
 
     func focusWindow(windowId: String) {
         _ = runYabaiCommand(arguments: ["-m", "window", "--focus", windowId])
+    }
+
+    func deleteSpace(spaceId: String) {
+        logger.info("deleteSpace() — destroying yabai space id=\(spaceId, privacy: .public)")
+        _ = runYabaiCommand(arguments: ["-m", "space", spaceId, "--destroy"])
+    }
+
+    func canDeleteSpace(spaceId: String) -> Bool {
+        Int(spaceId) != nil
     }
 
     private func updateWindowCaches(with liveWindows: [YabaiWindow]) {
