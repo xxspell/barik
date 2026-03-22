@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.10.0
+
+### Added
+- Add Apple Shortcuts widget with popup folder navigation, search, direct execution, and configurable filtering
+- Add Spaces hover cards for app icons with anchored positioning, screen-bound layout, and optional PID details
+- Add configurable Spaces window icon desaturation for softer inactive window rendering
+- Add richer CLIProxy usage popup details with overview and accounts tabs, provider-aware account cards, and filtered top API keys
+- Add Russian localization for the Apple Shortcuts widget interface
+
+### Fixed
+- Fix Spaces handling for hidden and minimized yabai windows to avoid duplicate updates and restore correct visibility state
+- Fix rendering of inactive and empty yabai spaces, including active-space highlighting and nonfocused window visibility
+- Fix System Monitor dual-line network labels wrapping by allowing smoother width expansion for larger values
+
 ## 0.9.0
 
 ### Added
