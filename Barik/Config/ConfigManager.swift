@@ -83,6 +83,7 @@ final class ConfigManager: ObservableObject {
                 "default.network",
                 # "default.focus",
                 # "default.pomodoro",
+                # "default.shortcuts",
                 "default.keyboard-layout",
                 "default.battery",
                 "divider",
@@ -191,6 +192,11 @@ final class ConfigManager: ObservableObject {
             repeat-break-finished-sound-until-popup-opened = false
             break-finished-sound-repeat-interval-seconds = 12
             history-window-days = 180
+
+            [widgets.default.shortcuts]
+            # include-folders = ["Work", "Personal"] # show only these folders; use "none" for uncategorized shortcuts
+            # exclude-folders = ["Archive"] # ignored when include-folders is set
+            # exclude-shortcuts = ["Debug Shortcut", "Temporary Shortcut"]
 
             [widgets.default.ticktick]
             display-mode = "badge" # badge, rotating-item

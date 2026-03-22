@@ -123,6 +123,10 @@ struct MenuBarView: View {
             PomodoroWidget()
                 .environmentObject(config)
 
+        case "default.shortcuts":
+            ShortcutsWidget()
+                .environmentObject(config)
+
         case "system-banner":
             SystemBannerWidget()
 

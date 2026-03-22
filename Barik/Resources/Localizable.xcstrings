@@ -5194,6 +5194,262 @@
         }
       }
     },
+    "shortcuts.action.try_again": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try Again"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Повторить"
+          }
+        }
+      }
+    },
+    "shortcuts.empty.filters": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check your folder filters or add shortcuts in the Shortcuts app."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверьте фильтры папок или добавьте команды в приложении Shortcuts."
+          }
+        }
+      }
+    },
+    "shortcuts.empty.search": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try a different search query."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Попробуйте другой поисковый запрос."
+          }
+        }
+      }
+    },
+    "shortcuts.empty.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No shortcuts found"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Команды не найдены"
+          }
+        }
+      }
+    },
+    "shortcuts.error.cli_unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The macOS shortcuts command-line tool is not available."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Командная утилита macOS Shortcuts недоступна."
+          }
+        }
+      }
+    },
+    "shortcuts.error.command_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The shortcuts command failed."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось выполнить команду Shortcuts."
+          }
+        }
+      }
+    },
+    "shortcuts.error.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to load shortcuts"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось загрузить команды"
+          }
+        }
+      }
+    },
+    "shortcuts.folder.all": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все"
+          }
+        }
+      }
+    },
+    "shortcuts.folder.none": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Folder"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Без папки"
+          }
+        }
+      }
+    },
+    "shortcuts.loading": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading shortcuts…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Загрузка команд…"
+          }
+        }
+      }
+    },
+    "shortcuts.search.placeholder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search shortcuts…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поиск команд…"
+          }
+        }
+      }
+    },
+    "shortcuts.state.running": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выполняется…"
+          }
+        }
+      }
+    },
+    "shortcuts.subtitle.available": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld shortcuts available"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доступно команд: %lld"
+          }
+        }
+      }
+    },
+    "shortcuts.subtitle.running": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running a shortcut from the popup"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Команда выполняется из попапа"
+          }
+        }
+      }
+    },
+    "shortcuts.subtitle.updated": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld shortcuts • updated %2$@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld команд • обновлено %2$@"
+          }
+        }
+      }
+    },
+    "shortcuts.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcuts"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Команды"
+          }
+        }
+      }
+    },
     "since %@": {
       "comment": "A label below the \"Today\" label that shows how far back the usage data goes.",
       "isCommentAutoGenerated": true,

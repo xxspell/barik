@@ -47,6 +47,7 @@ It also supports compact usage widgets for **Claude Code**, **Codex**, and **CLI
 - **Homebrew** shows outdated package counts in the menu bar and exposes update and upgrade actions in the popup.
 - **TickTick** shows pending task counts in the menu bar and provides tasks, habits, and an Eisenhower matrix in the popup.
 - **Pomodoro** provides a local/offline focus timer with notes, overtime adjustment, history, stats, and optional TickTick private API sync.
+- **Shortcuts** shows a compact Apple Shortcuts launcher in the menu bar with grouped popup execution and folder filtering.
 - **Now Playing** shows the currently playing song with album art and media state in the menu bar.
 - **Screen Recording Stop** appears only while a native macOS screen recording is active and stops it from the menu bar.
 
@@ -116,6 +117,7 @@ displayed = [ # widgets on menu bar
     "default.nowplaying",
     "default.network",
     # "default.focus",
+    # "default.shortcuts",
     "default.keyboard-layout",
     "default.battery",
     "divider",
@@ -224,6 +226,11 @@ repeat-break-finished-sound-until-popup-opened = false
 break-finished-sound-repeat-interval-seconds = 12
 history-window-days = 180
 
+[widgets.default.shortcuts]
+# include-folders = ["Work", "Personal"] # show only these folders; use "none" for uncategorized shortcuts
+# exclude-folders = ["Archive"] # ignored when include-folders is set
+# exclude-shortcuts = ["Debug Shortcut", "Temporary Shortcut"]
+
 [widgets.default.screen-recording-stop]
 show-label = true
 
@@ -267,6 +274,30 @@ The popup supports:
 - history and summary statistics
 
 Important note: TickTick pomodoro is only available through the private TickTick API. The public OAuth/OpenAPI integration does not expose pomodoro endpoints, so TickTick sync requires a private email/password TickTick sign-in inside the widget.
+
+## Shortcuts Widget
+
+`default.shortcuts` adds a compact Apple Shortcuts launcher to Barik.
+
+- Clicking the widget opens a popup with your Shortcuts grouped by folder
+- Shortcuts can be run directly from the popup
+- While a shortcut is running, the popup row shows a loading state and the menu bar icon switches to a spinner
+- `include-folders` acts as an allow-list and takes precedence over `exclude-folders`
+- `exclude-shortcuts` hides individual shortcuts by name
+- Use `"none"` inside `include-folders` or `exclude-folders` to control uncategorized shortcuts
+
+Example config:
+
+```toml
+[widgets]
+displayed = [
+    "default.shortcuts",
+]
+
+[widgets.default.shortcuts]
+include-folders = ["Menu Bar", "Work"]
+exclude-shortcuts = ["Dangerous Shortcut"]
+```
 
 Three usage widgets are available out of the box:
 
