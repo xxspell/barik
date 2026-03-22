@@ -16,6 +16,24 @@ struct CLIProxyUsagePopup: View {
     @State private var isSavingConfiguration = false
     @State private var isRefreshQuotaHovered = false
 
+    private enum PopupTab: String, CaseIterable, Identifiable {
+        case overview
+        case accounts
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .overview:
+                return NSLocalizedString("Overview", comment: "")
+            case .accounts:
+                return NSLocalizedString("Accounts", comment: "")
+            }
+        }
+    }
+
+    @State private var selectedTab: PopupTab = .overview
+
     private var selectedProvider: CLIProxyProviderFilter {
         CLIProxyProviderFilter(rawValue: selectedProviderRawValue) ?? .all
     }
@@ -33,7 +51,13 @@ struct CLIProxyUsagePopup: View {
     }
 
     private var topAPIKeys: [CLIProxyAPIKeyUsageSummary] {
-        usageManager.usageData.topAPIKeys
+        usageManager.usageData.topAPIKeys(for: selectedProvider, range: selectedRange)
+    }
+
+    private var filteredAccounts: [CLIProxyAuthCredential] {
+        usageManager.usageData.authCredentials.filter {
+            selectedProvider.matchesAuthProvider($0.provider)
+        }
     }
 
     private var canSaveConfiguration: Bool {
@@ -83,11 +107,7 @@ struct CLIProxyUsagePopup: View {
                 Divider().background(Color.white.opacity(0.2))
                 providerSection
                 Divider().background(Color.white.opacity(0.2))
-                quotaSection
-                Divider().background(Color.white.opacity(0.2))
-                tokenSection
-                Divider().background(Color.white.opacity(0.2))
-                topKeysSection
+                tabSection
                 Divider().background(Color.white.opacity(0.2))
                 footerSection
             } else if usageManager.fetchFailed {
@@ -261,6 +281,53 @@ struct CLIProxyUsagePopup: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
+    }
+
+    private var tabSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            tabBar
+            Divider().background(Color.white.opacity(0.12))
+
+            switch selectedTab {
+            case .overview:
+                VStack(alignment: .leading, spacing: 0) {
+                    quotaSection
+                    Divider().background(Color.white.opacity(0.2))
+                    tokenSection
+                    Divider().background(Color.white.opacity(0.2))
+                    topKeysSection
+                }
+            case .accounts:
+                accountsSection
+            }
+        }
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 8) {
+            ForEach(PopupTab.allCases) { tab in
+                let isSelected = selectedTab == tab
+
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        selectedTab = tab
+                    }
+                }) {
+                    Text(tab.title)
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(isSelected ? Color.white.opacity(0.16) : Color.white.opacity(0.06))
+                        .foregroundColor(isSelected ? .white : .white.opacity(0.7))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
     }
 
     private var quotaStatusText: String {
@@ -472,6 +539,119 @@ struct CLIProxyUsagePopup: View {
         .padding(.vertical, 14)
     }
 
+    private var accountsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                sectionTitle("Accounts")
+                Spacer()
+                Text("\(filteredAccounts.count)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+
+            if filteredAccounts.isEmpty {
+                Text(localized("No accounts available for this provider."))
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.35))
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(filteredAccounts) { account in
+                            accountRow(account)
+                        }
+                    }
+                }
+                .frame(maxHeight: 250)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+    }
+
+    private func accountRow(_ account: CLIProxyAuthCredential) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(account.label)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.96))
+                        .lineLimit(1)
+
+                    Text(accountSecondaryLabel(account))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.45))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(accountQuotaValue(account))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(accountQuotaColor(account))
+
+                    Text(localized("Remaining"))
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.white.opacity(0.38))
+                }
+            }
+
+            HStack(spacing: 8) {
+                accountPill(title: account.provider.capitalized, color: .white.opacity(0.75))
+                accountPill(title: accountStatusText(account), color: accountStatusColor(account))
+
+                if let resetText = accountResetText(account) {
+                    accountPill(title: resetText, color: .white.opacity(0.55))
+                }
+            }
+
+            HStack(spacing: 8) {
+                accountMetricCard(
+                    title: localized("Quota"),
+                    value: accountMetricQuotaValue(account),
+                    color: accountQuotaColor(account)
+                )
+
+                if let resetText = accountResetText(account) {
+                    accountMetricCard(
+                        title: localized("Reset"),
+                        value: resetText,
+                        color: .white.opacity(0.82)
+                    )
+                } else {
+                    accountMetricCard(
+                        title: localized("Availability"),
+                        value: accountAvailabilityValue(account),
+                        color: accountStatusColor(account)
+                    )
+                }
+            }
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(0.10))
+                        .frame(height: 6)
+
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(accountQuotaColor(account))
+                        .frame(width: max(6, geometry.size.width * account.quotaFraction), height: 6)
+                }
+            }
+            .frame(height: 6)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.055))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+        )
+    }
+
     private var loadingView: some View {
         VStack(spacing: 12) {
             ProgressView().scaleEffect(0.8)
@@ -639,6 +819,35 @@ struct CLIProxyUsagePopup: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
+    private func accountPill(title: String, color: Color) -> some View {
+        Text(title)
+            .font(.system(size: 10, weight: .medium))
+            .foregroundColor(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.06))
+            .clipShape(Capsule())
+    }
+
+    private func accountMetricCard(title: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(.white.opacity(0.38))
+
+            Text(value)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(0.045))
+        .clipShape(RoundedRectangle(cornerRadius: 9))
+    }
+
     private func horizontalChipRow<Item: Identifiable>(
         items: [Item],
         selectedID: String,
@@ -692,6 +901,124 @@ struct CLIProxyUsagePopup: View {
 
     private func localized(_ key: String) -> String {
         NSLocalizedString(key, comment: "")
+    }
+
+    private func accountQuotaValue(_ account: CLIProxyAuthCredential) -> String {
+        switch account.provider {
+        case CLIProxyProviderFilter.codex.rawValue:
+            if let snapshot = account.quotaSnapshot {
+                let remaining = max(0, 100 - snapshot.usedPercent)
+                return "\(Int(remaining.rounded()))%"
+            }
+            return localized("Unknown")
+        case CLIProxyProviderFilter.qwen.rawValue:
+            return account.status.lowercased() == "active" ? localized("Ready") : localized("Inactive")
+        default:
+            return localized("Unknown")
+        }
+    }
+
+    private func accountMetricQuotaValue(_ account: CLIProxyAuthCredential) -> String {
+        switch account.provider {
+        case CLIProxyProviderFilter.codex.rawValue:
+            if let snapshot = account.quotaSnapshot {
+                let remaining = max(0, 100 - snapshot.usedPercent)
+                return String(
+                    format: localized("%lld%%"),
+                    locale: .autoupdatingCurrent,
+                    Int64(remaining.rounded())
+                )
+            }
+            return localized("Unknown")
+        case CLIProxyProviderFilter.qwen.rawValue:
+            return account.status.lowercased() == "active" ? localized("Ready") : localized("Inactive")
+        default:
+            return localized("Unknown")
+        }
+    }
+
+    private func accountStatusText(_ account: CLIProxyAuthCredential) -> String {
+        if account.disabled {
+            return localized("Disabled")
+        }
+        if account.unavailable {
+            return localized("Unavailable")
+        }
+        return localizedAccountStatus(account.status)
+    }
+
+    private func accountStatusColor(_ account: CLIProxyAuthCredential) -> Color {
+        if account.disabled || account.unavailable {
+            return .orange
+        }
+        if account.quotaFraction > 0 {
+            return .green
+        }
+        return .white.opacity(0.7)
+    }
+
+    private func accountQuotaColor(_ account: CLIProxyAuthCredential) -> Color {
+        if account.provider == CLIProxyProviderFilter.qwen.rawValue {
+            return account.status.lowercased() == "active" ? .green : .orange
+        }
+
+        if account.quotaFraction <= criticalThreshold {
+            return .red
+        }
+        if account.quotaFraction <= warnThreshold {
+            return .orange
+        }
+        return .green
+    }
+
+    private func accountResetText(_ account: CLIProxyAuthCredential) -> String? {
+        guard let resetAt = account.quotaSnapshot?.resetAt else { return nil }
+
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: resetAt, relativeTo: Date())
+    }
+
+    private func accountSecondaryLabel(_ account: CLIProxyAuthCredential) -> String {
+        if let authIndex = account.authIndex, !authIndex.isEmpty {
+            return "\(localized("Index")) \(authIndex)"
+        }
+
+        if let accountID = account.accountID, !accountID.isEmpty {
+            return String(accountID.prefix(16))
+        }
+
+        return account.provider.capitalized
+    }
+
+    private func accountAvailabilityValue(_ account: CLIProxyAuthCredential) -> String {
+        if account.disabled {
+            return localized("Disabled")
+        }
+        if account.unavailable {
+            return localized("Unavailable")
+        }
+        return account.status.lowercased() == "active" ? localized("Ready") : localizedAccountStatus(account.status)
+    }
+
+    private func localizedAccountStatus(_ status: String) -> String {
+        switch status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "active":
+            return localized("cliproxy.account-status.active")
+        case "error":
+            return localized("cliproxy.account-status.error")
+        case "unavailable":
+            return localized("cliproxy.account-status.unavailable")
+        case "disabled":
+            return localized("cliproxy.account-status.disabled")
+        case "inactive":
+            return localized("cliproxy.account-status.inactive")
+        case "unknown", "":
+            return localized("cliproxy.account-status.unknown")
+        default:
+            return status.capitalized
+        }
     }
 
     private func intConfig(named keys: [String]) -> Int? {

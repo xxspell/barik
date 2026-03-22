@@ -79,6 +79,7 @@ enum CLIProxyTimeRange: String, CaseIterable, Codable, Identifiable {
 
 struct CLIProxyUsageDetail: Codable, Identifiable {
     let timestamp: Date
+    let apiKey: String
     let provider: String
     let authIndex: String?
     let inputTokens: Int
@@ -232,6 +233,35 @@ struct CLIProxyUsageData: Codable {
             outputTokens: filtered.reduce(0) { $0 + $1.outputTokens },
             totalTokens: filtered.reduce(0) { $0 + $1.totalTokens }
         )
+    }
+
+    func topAPIKeys(
+        for provider: CLIProxyProviderFilter,
+        range: CLIProxyTimeRange
+    ) -> [CLIProxyAPIKeyUsageSummary] {
+        let cutoff = range.cutoffDate
+        let filtered = details.filter { detail in
+            provider.matchesUsageProvider(detail.provider)
+                && (cutoff == nil || detail.timestamp >= cutoff!)
+        }
+
+        let grouped = Dictionary(grouping: filtered, by: \.apiKey)
+
+        return grouped.map { key, details in
+            CLIProxyAPIKeyUsageSummary(
+                key: key,
+                requests: details.count,
+                totalTokens: details.reduce(0) { $0 + $1.totalTokens }
+            )
+        }
+        .sorted {
+            if $0.totalTokens == $1.totalTokens {
+                return $0.requests > $1.requests
+            }
+            return $0.totalTokens > $1.totalTokens
+        }
+        .prefix(10)
+        .map { $0 }
     }
 
     func groupedQuotaProviders() -> [(filter: CLIProxyProviderFilter, summary: CLIProxyQuotaSummary)] {
@@ -648,7 +678,7 @@ final class CLIProxyUsageManager: ObservableObject {
         }
         let providerByAuthIndex = Dictionary(uniqueKeysWithValues: authIndexPairs)
 
-        for apiStats in usage.apis.values {
+        for (apiKey, apiStats) in usage.apis {
             for modelStats in apiStats.models.values {
                 for detail in modelStats.details {
                     guard let timestampString = detail.timestamp,
@@ -665,6 +695,7 @@ final class CLIProxyUsageManager: ObservableObject {
                     details.append(
                         CLIProxyUsageDetail(
                             timestamp: timestamp,
+                            apiKey: apiKey,
                             provider: provider,
                             authIndex: detail.authIndex,
                             inputTokens: inputTokens,

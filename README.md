@@ -39,7 +39,7 @@ It also supports compact usage widgets for **Claude Code**, **Codex**, and **CLI
 
 - **Claude Usage** reads your Claude Code credentials from Keychain, shows current 5-hour usage as a ring in the menu bar, and exposes 5-hour plus weekly usage in the popup.
 - **Codex Usage** reads local `~/.codex/auth.json` and recent session snapshots, shows the current rate-limit window in the menu bar, and exposes the active window details in the popup.
-- **CLIProxy Usage** connects to the local Management API, shows quota percentage in the menu bar, and exposes aggregated token stats plus quota switching settings in the popup.
+- **CLIProxy Usage** connects to the local Management API, shows quota percentage in the menu bar, and exposes overview and account tabs with token stats, provider filters, time-range aware top API keys, and quota switching settings in the popup.
 - **System Monitor** shows configurable CPU, RAM, disk, GPU, and network metrics in the menu bar with a detailed popup.
 - **Focus** shows the active macOS Focus mode as a compact badge and lists available Focus modes in a read-only popup.
 - **Keyboard Layout** shows the current macOS input source in the menu bar and lets you switch layouts from a popup list.
@@ -308,7 +308,7 @@ Three usage widgets are available out of the box:
 
 - `default.claude-usage` tracks Claude Code usage from the `Claude Code-credentials` Keychain item. The popup shows the rolling 5-hour window and weekly usage.
 - `default.codex-usage` tracks Codex usage from local auth and session data in `~/.codex`. The popup shows the active rate-limit window, reset time, and recent activity.
-- `default.cliproxy-usage` tracks your CLIProxy Management API. The popup shows provider quota percentage, Codex/Qwen quota state, token usage filters, top API keys by usage, and current `quota-exceeded` behavior.
+- `default.cliproxy-usage` tracks your CLIProxy Management API. The popup shows provider quota percentage, an overview tab with token usage filters and time-range aware top API keys, an accounts tab with Codex/Qwen account availability and remaining quota, and the current `quota-exceeded` behavior.
 
 If you already have an existing `~/.barik-config.toml`, add these widget IDs manually to `widgets.displayed` to make them appear.
 
