@@ -4,6 +4,7 @@ struct AeroWindow: WindowModel {
     let id: Int
     let title: String
     let appName: String?
+    let pid: Int?
     var isFocused: Bool = false
     let isHidden: Bool
     var appIcon: NSImage?
@@ -23,6 +24,13 @@ struct AeroWindow: WindowModel {
         appName = try container.decodeIfPresent(String.self, forKey: .appName)
         workspace = try container.decodeIfPresent(
             String.self, forKey: .workspace)
+        if let appName {
+            pid = NSWorkspace.shared.runningApplications.first(where: {
+                $0.localizedName == appName
+            }).map { Int($0.processIdentifier) }
+        } else {
+            pid = nil
+        }
         isFocused = false
         isHidden = false
         if let name = appName {

@@ -128,10 +128,14 @@ displayed = [ # widgets on menu bar
 space.show-key = true        # show space number (or character, if you use AeroSpace)
 window.show-title = true
 window.show-hidden = false
+window.show-hover-tooltip = false
+window.hover-tooltip = "{app} ({pid})"
 window.title.max-length = 50
 
 # Hidden yabai windows can stay visible in the Spaces widget with a small minus badge
 # on the app icon when `window.show-hidden = true`.
+# Hover tooltips can be enabled and customized with placeholders like
+# `{app}`, `{title}`, `{pid}`, `{id}`, and `{state}`.
 
 [widgets.default.claude-usage]
 # plan = "Max" # optional manual badge override

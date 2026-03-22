@@ -10,6 +10,7 @@ protocol WindowModel: Identifiable, Equatable, Codable {
     var id: Int { get }
     var title: String { get }
     var appName: String? { get }
+    var pid: Int? { get }
     var isFocused: Bool { get }
     var isHidden: Bool { get }
     var appIcon: NSImage? { get set }
@@ -29,6 +30,7 @@ struct AnyWindow: Identifiable, Equatable {
     let id: Int
     let title: String
     let appName: String?
+    let pid: Int?
     let isFocused: Bool
     let isHidden: Bool
     let appIcon: NSImage?
@@ -37,6 +39,7 @@ struct AnyWindow: Identifiable, Equatable {
         self.id = window.id
         self.title = window.title
         self.appName = window.appName
+        self.pid = window.pid
         self.isFocused = window.isFocused
         self.isHidden = window.isHidden
         self.appIcon = window.appIcon
@@ -44,7 +47,8 @@ struct AnyWindow: Identifiable, Equatable {
 
     static func == (lhs: AnyWindow, rhs: AnyWindow) -> Bool {
         return lhs.id == rhs.id && lhs.title == rhs.title
-            && lhs.appName == rhs.appName && lhs.isFocused == rhs.isFocused
+            && lhs.appName == rhs.appName && lhs.pid == rhs.pid
+            && lhs.isFocused == rhs.isFocused
             && lhs.isHidden == rhs.isHidden
     }
 }

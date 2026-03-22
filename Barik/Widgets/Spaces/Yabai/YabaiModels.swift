@@ -4,9 +4,11 @@ struct YabaiWindow: WindowModel {
     let id: Int
     let title: String
     let appName: String?
+    let pid: Int?
     let isFocused: Bool
     let stackIndex: Int
     var appIcon: NSImage?
+    let isVisible: Bool
     let rawIsHidden: Bool
     let isMinimized: Bool
     let isFloating: Bool
@@ -20,8 +22,10 @@ struct YabaiWindow: WindowModel {
         case spaceId = "space"
         case title
         case appName = "app"
+        case pid
         case isFocused = "has-focus"
         case stackIndex = "stack-index"
+        case isVisible = "is-visible"
         case rawIsHidden = "is-hidden"
         case isMinimized = "is-minimized"
         case isFloating = "is-floating"
@@ -32,9 +36,11 @@ struct YabaiWindow: WindowModel {
         id: Int,
         title: String,
         appName: String?,
+        pid: Int?,
         isFocused: Bool,
         stackIndex: Int,
         appIcon: NSImage?,
+        isVisible: Bool,
         rawIsHidden: Bool,
         isMinimized: Bool,
         isFloating: Bool,
@@ -44,9 +50,11 @@ struct YabaiWindow: WindowModel {
         self.id = id
         self.title = title
         self.appName = appName
+        self.pid = pid
         self.isFocused = isFocused
         self.stackIndex = stackIndex
         self.appIcon = appIcon
+        self.isVisible = isVisible
         self.rawIsHidden = rawIsHidden
         self.isMinimized = isMinimized
         self.isFloating = isFloating
@@ -62,9 +70,11 @@ struct YabaiWindow: WindowModel {
             try container.decodeIfPresent(String.self, forKey: .title)
             ?? "Unnamed"
         appName = try container.decodeIfPresent(String.self, forKey: .appName)
+        pid = try container.decodeIfPresent(Int.self, forKey: .pid)
         isFocused = try container.decode(Bool.self, forKey: .isFocused)
         stackIndex =
             try container.decodeIfPresent(Int.self, forKey: .stackIndex) ?? 0
+        isVisible = try container.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true
         rawIsHidden = try container.decode(Bool.self, forKey: .rawIsHidden)
         isMinimized = try container.decodeIfPresent(Bool.self, forKey: .isMinimized) ?? false
         isFloating = try container.decode(Bool.self, forKey: .isFloating)

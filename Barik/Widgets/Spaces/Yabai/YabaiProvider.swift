@@ -81,9 +81,11 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
                     id: knownWindow.id,
                     title: knownWindow.title,
                     appName: knownWindow.appName,
+                    pid: knownWindow.pid,
                     isFocused: false,
                     stackIndex: max(knownWindow.stackIndex, 10_000),
                     appIcon: knownWindow.appIcon,
+                    isVisible: false,
                     rawIsHidden: knownWindow.rawIsHidden,
                     isMinimized: true,
                     isFloating: knownWindow.isFloating,
@@ -137,6 +139,7 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
 
         let filteredWindows = mergedWindows.filter {
             !($0.isFloating || $0.isSticky)
+                && ($0.isVisible || $0.isHidden)
                 && (shouldShowHiddenWindows || !$0.isHidden)
         }
         logger.debug("getSpacesWithWindows() — filteredWindows=\(filteredWindows.count)")
