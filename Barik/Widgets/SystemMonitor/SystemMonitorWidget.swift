@@ -93,6 +93,20 @@ struct SystemMonitorWidget: View {
         }
         return usesExpandedRowsLayout ? 16 : 13
     }
+    private var sizeChangeAnimation: Animation {
+        .easeInOut(duration: 0.18)
+    }
+    private var animatedWidthSignature: String {
+        [
+            "\(Int(systemMonitor.cpuLoad))%",
+            shortTemperatureString(systemMonitor.cpuTemperature ?? 0),
+            "\(Int(systemMonitor.ramUsage))%",
+            "\(Int(systemMonitor.diskUsage))%",
+            systemMonitor.gpuLoad.map { "\(Int($0))%" } ?? "--",
+            formatSpeed(systemMonitor.uploadSpeed),
+            formatSpeed(systemMonitor.downloadSpeed)
+        ].joined(separator: "|")
+    }
     private var metrics: [SystemMonitorMetric] {
         let rawMetrics = config["metrics"]?.stringArrayValue ?? ["cpu", "ram"]
         let resolved = rawMetrics.compactMap(SystemMonitorMetric.init(rawValue:))
@@ -164,6 +178,7 @@ struct SystemMonitorWidget: View {
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))
+        .animation(sizeChangeAnimation, value: animatedWidthSignature)
         .onTapGesture {
             MenuBarPopup.show(rect: rect, id: "system-monitor") {
                 SystemMonitorPopup()
@@ -346,24 +361,10 @@ struct SystemMonitorWidget: View {
 
         if layoutMode == .stacked && usesSplitNetworkRows {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: usesSingleMetricColumns ? 9 : 8, weight: .bold))
-                        .foregroundStyle(.green)
-                    Text(uploadText)
-                        .font(.system(size: usesSingleMetricColumns ? 11 : 10, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.foregroundOutside)
-                }
-
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.down")
-                        .font(.system(size: usesSingleMetricColumns ? 9 : 8, weight: .bold))
-                        .foregroundStyle(.blue)
-                    Text(downloadText)
-                        .font(.system(size: usesSingleMetricColumns ? 11 : 10, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.foregroundOutside)
-                }
+                networkSpeedLine(icon: "arrow.up", text: uploadText, color: .green)
+                networkSpeedLine(icon: "arrow.down", text: downloadText, color: .blue)
             }
+            .fixedSize(horizontal: true, vertical: false)
         } else if layoutMode == .stacked {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 3) {
@@ -394,6 +395,21 @@ struct SystemMonitorWidget: View {
                     .frame(width: usesExpandedRowsLayout ? 56 : 50, alignment: .trailing)
             }
         }
+    }
+
+    private func networkSpeedLine(icon: String, text: String, color: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: usesSingleMetricColumns ? 9 : 8, weight: .bold))
+                .foregroundStyle(color)
+
+            Text(text)
+                .font(.system(size: usesSingleMetricColumns ? 11 : 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.foregroundOutside)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func formatSpeed(_ speed: Double) -> String {
