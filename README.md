@@ -415,6 +415,7 @@ network-details = ["status", "download", "upload", "interface"]
 `default.ticktick` integrates with TickTick to display tasks, habits, and priorities in the menu bar with a detailed popup for task management.
 
 - Shows the number of pending tasks in the menu bar (with badge counter)
+- Can rotate a single pending task or habit in the menu bar at a configurable interval
 - Supports both OAuth2 and username/password authentication methods
 - Integrates with calendar popup to show tasks alongside calendar events
 - Provides full task management: create, update, complete, delete tasks
@@ -428,8 +429,22 @@ network-details = ["status", "download", "upload", "interface"]
 
 ```toml
 [widgets.default.ticktick]
-private-api = true # Optional, default: determined automatically based on what is stored in Keychain
+display-mode = "badge" # badge, rotating-item
+rotating-item-change-interval = 900 # seconds, minimum 5, default 15 minutes
+rotating-item-max-width = 148 # px, minimum 60
+rotating-item-sources = ["tasks", "habits"] # tasks, habits, all
+tint-rotating-item-text = false
+
+[widgets.default.ticktick.rotating-tasks]
+overdue = true
+today = true
+important = true
+tomorrow = true
+normal = true
+priorities = ["medium", "high"] # low, medium, high
 ```
+
+When `display-mode = "rotating-item"`, the widget will show one unfinished task or unchecked habit at a time and rotate through the filtered set at random. Clicking the rotating item opens the TickTick popup, switches to the matching tab, scrolls to the related task or habit, and temporarily highlights it. Task rotation can be narrowed to overdue, today, important, tomorrow, or normal items, and the `priorities` list controls which priority levels count as `important`.
 
 ## Future Plans
 

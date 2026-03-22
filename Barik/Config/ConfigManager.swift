@@ -188,6 +188,20 @@ final class ConfigManager: ObservableObject {
             break-finished-sound-repeat-interval-seconds = 12
             history-window-days = 180
 
+            [widgets.default.ticktick]
+            display-mode = "badge" # badge, rotating-item
+            rotating-item-change-interval = 900 # seconds, minimum 5, default 15 minutes
+            rotating-item-max-width = 148 # px, minimum 60
+            rotating-item-sources = ["tasks", "habits"] # tasks, habits, all
+            tint-rotating-item-text = false
+            [widgets.default.ticktick.rotating-tasks]
+            overdue = true
+            today = true
+            important = true
+            tomorrow = true
+            normal = true
+            priorities = ["medium", "high"] # low, medium, high
+
             [widgets.default.time]
             format = "E d, J:mm"
             calendar.format = "J:mm"

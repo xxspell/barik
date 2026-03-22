@@ -115,6 +115,63 @@ enum TickTickPriority: Int {
     }
 }
 
+enum TickTickWidgetRotationSource: String, CaseIterable {
+    case tasks
+    case habits
+}
+
+enum TickTickWidgetTaskFilter: String, CaseIterable {
+    case all
+    case overdue
+    case today
+    case important
+    case tomorrow
+    case normal
+}
+
+struct TickTickWidgetTaskRotationOptions: Equatable {
+    var includeAll = false
+    var includeOverdue = true
+    var includeToday = true
+    var includeImportant = true
+    var includeTomorrow = true
+    var includeNormal = true
+    var importantPriorities: Set<TickTickPriority> = [.medium, .high]
+
+    static let `default` = TickTickWidgetTaskRotationOptions()
+}
+
+struct TickTickRotatingBarItem: Identifiable, Equatable {
+    enum Kind: Equatable {
+        case task(priority: TickTickPriority, overdue: Bool)
+        case habit(colorHex: String?)
+    }
+
+    let id: String
+    let transitionID: Int
+    let title: String
+    let kind: Kind
+
+    var sourceIconName: String {
+        switch kind {
+        case .task:
+            return "checklist"
+        case .habit:
+            return "flame.fill"
+        }
+    }
+}
+
+struct TickTickPopupFocusTarget: Equatable {
+    enum Kind: Equatable {
+        case task(id: String)
+        case habit(id: String)
+    }
+
+    let kind: Kind
+    let token: Int
+}
+
 struct TickTickHabit: Identifiable {
     let id: String
     var name: String
@@ -434,6 +491,8 @@ final class TickTickManager: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var totalPendingCount: Int = 0
     @Published private(set) var taskCompletionToast: TickTickTaskCompletionToast?
+    @Published private(set) var rotatingBarItem: TickTickRotatingBarItem?
+    @Published private(set) var popupFocusTarget: TickTickPopupFocusTarget?
 
     // Config
     var clientId:     String = "rW76D80NVRiKqPun0a"
@@ -454,6 +513,7 @@ final class TickTickManager: ObservableObject {
     private let xDevice     = #"{"device":"MacBook","os":"macOS 15.0","channel":"website","id":"barik0000000000000000000000000000","platform":"macOS","version":"8020","name":"mercury"}"#
 
     private var refreshTimer: Timer?
+    private var rotationTimer: Timer?
     private var oauthServer: TickTickOAuthServer?
     private static let refreshInterval: TimeInterval = 120
 
@@ -469,6 +529,15 @@ final class TickTickManager: ObservableObject {
     private var habitCheckinsByHabit: [String: [TickTickHabitCheckin]] = [:]
     private var pendingTaskCompletionWork: [String: Task<Void, Never>] = [:]
     private var pendingTaskCompletions: [String: (task: TickTickTask, originalIndex: Int?)] = [:]
+    private var rotatingBarEnabled = false
+    private var rotatingBarTintText = false
+    private var rotatingBarInterval: TimeInterval = 900
+    private var rotatingBarSources: [TickTickWidgetRotationSource] = TickTickWidgetRotationSource.allCases
+    private var rotatingTaskOptions = TickTickWidgetTaskRotationOptions.default
+    private var rotatingBarCandidates: [TickTickRotatingBarItem] = []
+    private var rotatingBarIndex = 0
+    private var rotatingTransitionSeed = 0
+    private var popupFocusSeed = 0
 
     // Cache
     private var cacheURL: URL? {
@@ -491,6 +560,7 @@ final class TickTickManager: ObservableObject {
     // MARK: - startUpdating
 
     func startUpdating(config: ConfigData) {
+        updateWidgetConfiguration(config: config)
         if let id  = config["client-id"]?.stringValue     { clientId     = id }
         if let sec = config["client-secret"]?.stringValue { clientSecret = sec }
         if let uri = config["redirect-uri"]?.stringValue  { redirectURI  = uri }
@@ -510,6 +580,36 @@ final class TickTickManager: ObservableObject {
     }
 
     func stopUpdating() { stopTimer() }
+
+    func updateWidgetConfiguration(config: ConfigData) {
+        if let id = config["client-id"]?.stringValue { clientId = id }
+        if let sec = config["client-secret"]?.stringValue { clientSecret = sec }
+        if let uri = config["redirect-uri"]?.stringValue { redirectURI = uri }
+
+        let displayMode = config["display-mode"]?.stringValue?.lowercased() ?? "badge"
+        rotatingBarEnabled = config["show-rotating-item"]?.boolValue ?? (displayMode == "rotating-item")
+        rotatingBarTintText = config["tint-rotating-item-text"]?.boolValue ?? false
+        rotatingBarInterval = max(TimeInterval(config["rotating-item-change-interval"]?.intValue ?? 900), 5)
+        rotatingBarSources = parsedRotationSources(from: config["rotating-item-sources"]) ?? TickTickWidgetRotationSource.allCases
+        rotatingTaskOptions = parsedTaskRotationOptions(from: config["rotating-tasks"]?.dictionaryValue)
+
+        rebuildRotatingBarCandidates(resetIndex: false)
+        restartRotationTimerIfNeeded()
+    }
+
+    func preparePopupFocus(for item: TickTickRotatingBarItem) {
+        popupFocusSeed += 1
+        switch item.kind {
+        case .task:
+            popupFocusTarget = TickTickPopupFocusTarget(kind: .task(id: item.id.replacingOccurrences(of: "task:", with: "")), token: popupFocusSeed)
+        case .habit:
+            popupFocusTarget = TickTickPopupFocusTarget(kind: .habit(id: item.id.replacingOccurrences(of: "habit:", with: "")), token: popupFocusSeed)
+        }
+    }
+
+    func clearPopupFocusTarget() {
+        popupFocusTarget = nil
+    }
 
     // MARK: - Private API Login
 
@@ -642,6 +742,9 @@ final class TickTickManager: ObservableObject {
         isAuthenticated = false; authMode = .openAPI; hasStarted = false
         projects = []; tasksByProject = [:]; habits = []; totalPendingCount = 0
         habitCheckinsByHabit = [:]; habitRawById = [:]; todayCheckinIdByHabit = [:]
+        rotatingBarCandidates = []
+        rotatingBarItem = nil
+        rotatingBarIndex = 0
         stopTimer(); clearCache()
     }
 
@@ -1095,7 +1198,12 @@ final class TickTickManager: ObservableObject {
             let apiHabits = try JSONDecoder().decode([APIHabit].self, from: habData)
             let active = apiHabits.filter { ($0.status ?? 0) == 0 }
             logger.info("refreshHabits() — \(active.count) active habits")
-            guard !active.isEmpty else { habits = []; return }
+            guard !active.isEmpty else {
+                habits = []
+                saveCache()
+                rebuildRotatingBarCandidates(resetIndex: false)
+                return
+            }
             habitRawById = Dictionary(uniqueKeysWithValues: active.map { ($0.id, $0) })
 
             // Fetch checkins
@@ -1166,6 +1274,7 @@ final class TickTickManager: ObservableObject {
                                      totalCheckIns: h.totalCheckIns ?? dates.count,
                                      completedDates: dates, checkedInToday: dates.contains(today))
             }
+            rebuildRotatingBarCandidates(resetIndex: false)
             saveCache()
         } catch {
             logger.error("refreshHabits() — \(error.localizedDescription)")
@@ -1195,6 +1304,7 @@ final class TickTickManager: ObservableObject {
             newTotal = habits[i].totalCheckIns
             newStreak = habits[i].streak
         }
+        rebuildRotatingBarCandidates(resetIndex: false)
 
         guard let url = URL(string: "\(privBase)/habitCheckins/batch") else { return }
         var req = URLRequest(url: url)
@@ -1372,6 +1482,251 @@ final class TickTickManager: ObservableObject {
 
     private func recalc() {
         totalPendingCount = tasksByProject.values.flatMap { $0 }.filter { !$0.isCompleted }.count
+        rebuildRotatingBarCandidates(resetIndex: false)
+    }
+
+    private func parsedRotationSources(from value: TOMLValue?) -> [TickTickWidgetRotationSource]? {
+        guard let rawValues = value?.stringArrayValue else { return nil }
+        let parsed = rawValues.compactMap { raw -> TickTickWidgetRotationSource? in
+            switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "all":
+                return nil
+            case "tasks":
+                return .tasks
+            case "habits":
+                return .habits
+            default:
+                return nil
+            }
+        }
+        if rawValues.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "all" }) {
+            return TickTickWidgetRotationSource.allCases
+        }
+        guard !parsed.isEmpty else { return nil }
+        var unique: [TickTickWidgetRotationSource] = []
+        for source in parsed where !unique.contains(source) {
+            unique.append(source)
+        }
+        return unique
+    }
+
+    private func parsedTaskRotationOptions(from config: ConfigData?) -> TickTickWidgetTaskRotationOptions {
+        guard let config else { return .default }
+
+        var options = TickTickWidgetTaskRotationOptions.default
+        if let filterValues = config["include"]?.stringArrayValue {
+            let normalized = Set(filterValues.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+            if normalized.contains("all") {
+                options.includeAll = true
+            } else {
+                options.includeOverdue = normalized.contains(TickTickWidgetTaskFilter.overdue.rawValue)
+                options.includeToday = normalized.contains(TickTickWidgetTaskFilter.today.rawValue)
+                options.includeImportant = normalized.contains(TickTickWidgetTaskFilter.important.rawValue)
+                options.includeTomorrow = normalized.contains(TickTickWidgetTaskFilter.tomorrow.rawValue)
+                options.includeNormal = normalized.contains(TickTickWidgetTaskFilter.normal.rawValue)
+            }
+        } else {
+            options.includeAll = config["all"]?.boolValue ?? false
+            options.includeOverdue = config["overdue"]?.boolValue ?? options.includeOverdue
+            options.includeToday = config["today"]?.boolValue ?? options.includeToday
+            options.includeImportant = config["important"]?.boolValue ?? options.includeImportant
+            options.includeTomorrow = config["tomorrow"]?.boolValue ?? options.includeTomorrow
+            options.includeNormal = config["normal"]?.boolValue ?? options.includeNormal
+        }
+
+        if let priorityValues = config["priorities"]?.stringArrayValue {
+            let parsedPriorities = Set(priorityValues.compactMap { raw -> TickTickPriority? in
+                switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+                case "low":
+                    return .low
+                case "medium":
+                    return .medium
+                case "high":
+                    return .high
+                default:
+                    return nil
+                }
+            })
+            if !parsedPriorities.isEmpty {
+                options.importantPriorities = parsedPriorities
+            }
+        }
+
+        return options
+    }
+
+    private func rebuildRotatingBarCandidates(resetIndex: Bool) {
+        let previousItemID = rotatingBarItem?.id
+        rotatingBarCandidates = buildRotatingBarCandidates()
+
+        guard rotatingBarEnabled, !rotatingBarCandidates.isEmpty else {
+            rotatingBarIndex = 0
+            rotatingBarItem = nil
+            return
+        }
+
+        if resetIndex {
+            rotatingBarIndex = chooseInitialRotatingBarIndex()
+        } else if let previousItemID,
+                  let matchedIndex = rotatingBarCandidates.firstIndex(where: { $0.id == previousItemID }) {
+            rotatingBarIndex = matchedIndex
+        } else {
+            rotatingBarIndex = chooseInitialRotatingBarIndex()
+        }
+
+        setRotatingBarItem(at: rotatingBarIndex)
+        restartRotationTimerIfNeeded()
+    }
+
+    private func buildRotatingBarCandidates() -> [TickTickRotatingBarItem] {
+        var items: [TickTickRotatingBarItem] = []
+
+        if rotatingBarSources.contains(.tasks) {
+            items.append(contentsOf: buildRotatingTaskItems())
+        }
+        if rotatingBarSources.contains(.habits) {
+            items.append(contentsOf: buildRotatingHabitItems())
+        }
+
+        return items
+    }
+
+    private func buildRotatingTaskItems() -> [TickTickRotatingBarItem] {
+        let pendingTasks = tasksByProject.values
+            .flatMap { $0 }
+            .filter { !$0.isCompleted && ($0.deleted ?? 0) == 0 }
+            .sorted(by: compareRotatingTasks)
+
+        var seen = Set<String>()
+        return pendingTasks.compactMap { task in
+            guard shouldIncludeInRotation(task: task), seen.insert(task.id).inserted else { return nil }
+            return TickTickRotatingBarItem(
+                id: "task:\(task.id)",
+                transitionID: 0,
+                title: task.title,
+                kind: .task(priority: task.priority, overdue: isOverdue(task))
+            )
+        }
+    }
+
+    private func buildRotatingHabitItems() -> [TickTickRotatingBarItem] {
+        habits
+            .filter { !$0.checkedInToday }
+            .sorted { lhs, rhs in
+                if lhs.streak != rhs.streak {
+                    return lhs.streak > rhs.streak
+                }
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+            .map {
+                TickTickRotatingBarItem(
+                    id: "habit:\($0.id)",
+                    transitionID: 0,
+                    title: $0.name,
+                    kind: .habit(colorHex: $0.color)
+                )
+            }
+    }
+
+    private func shouldIncludeInRotation(task: TickTickTask) -> Bool {
+        if rotatingTaskOptions.includeAll {
+            return true
+        }
+
+        let important = rotatingTaskOptions.importantPriorities.contains(task.priority)
+        let overdue = isOverdue(task)
+        let today = task.dueDate.map { Calendar.current.isDateInToday($0) } ?? false
+        let tomorrow = task.dueDate.map { Calendar.current.isDateInTomorrow($0) } ?? false
+        let normal = !overdue && !today && !tomorrow && !important
+
+        return (rotatingTaskOptions.includeOverdue && overdue)
+            || (rotatingTaskOptions.includeToday && today)
+            || (rotatingTaskOptions.includeImportant && important)
+            || (rotatingTaskOptions.includeTomorrow && tomorrow)
+            || (rotatingTaskOptions.includeNormal && normal)
+    }
+
+    private func compareRotatingTasks(_ lhs: TickTickTask, _ rhs: TickTickTask) -> Bool {
+        let leftRank = rotatingRank(for: lhs)
+        let rightRank = rotatingRank(for: rhs)
+        if leftRank != rightRank {
+            return leftRank < rightRank
+        }
+        if lhs.priority.rawValue != rhs.priority.rawValue {
+            return lhs.priority.rawValue > rhs.priority.rawValue
+        }
+        switch (lhs.dueDate, rhs.dueDate) {
+        case let (left?, right?) where left != right:
+            return left < right
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        default:
+            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        }
+    }
+
+    private func rotatingRank(for task: TickTickTask) -> Int {
+        if isOverdue(task) { return 0 }
+        if task.dueDate.map({ Calendar.current.isDateInToday($0) }) == true { return 1 }
+        if rotatingTaskOptions.importantPriorities.contains(task.priority) { return 2 }
+        if task.dueDate.map({ Calendar.current.isDateInTomorrow($0) }) == true { return 3 }
+        return 4
+    }
+
+    private func isOverdue(_ task: TickTickTask) -> Bool {
+        guard let dueDate = task.dueDate else { return false }
+        return dueDate < Calendar.current.startOfDay(for: Date())
+    }
+
+    private func restartRotationTimerIfNeeded() {
+        rotationTimer?.invalidate()
+        rotationTimer = nil
+
+        guard rotatingBarEnabled, rotatingBarCandidates.count > 1 else { return }
+
+        rotationTimer = Timer.scheduledTimer(withTimeInterval: rotatingBarInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.advanceRotatingBarItem()
+            }
+        }
+    }
+
+    private func advanceRotatingBarItem() {
+        guard !rotatingBarCandidates.isEmpty else {
+            rotatingBarItem = nil
+            return
+        }
+        rotatingBarIndex = nextRandomRotatingBarIndex(excluding: rotatingBarIndex)
+        setRotatingBarItem(at: rotatingBarIndex)
+    }
+
+    private func chooseInitialRotatingBarIndex() -> Int {
+        guard !rotatingBarCandidates.isEmpty else { return 0 }
+        return Int.random(in: 0..<rotatingBarCandidates.count)
+    }
+
+    private func nextRandomRotatingBarIndex(excluding currentIndex: Int) -> Int {
+        guard rotatingBarCandidates.count > 1 else { return 0 }
+
+        let availableIndices = rotatingBarCandidates.indices.filter { $0 != currentIndex }
+        return availableIndices.randomElement() ?? currentIndex
+    }
+
+    private func setRotatingBarItem(at index: Int) {
+        guard rotatingBarCandidates.indices.contains(index) else {
+            rotatingBarItem = nil
+            return
+        }
+        rotatingTransitionSeed += 1
+        let candidate = rotatingBarCandidates[index]
+        rotatingBarItem = TickTickRotatingBarItem(
+            id: candidate.id,
+            transitionID: rotatingTransitionSeed,
+            title: candidate.title,
+            kind: candidate.kind
+        )
     }
 
     private func checkStatus(_ code: Int) throws {
@@ -2182,9 +2537,15 @@ final class TickTickManager: ObservableObject {
             }
         }
         logger.debug("startTimer() — interval=\(Self.refreshInterval)s")
+        restartRotationTimerIfNeeded()
     }
 
-    private func stopTimer() { refreshTimer?.invalidate(); refreshTimer = nil }
+    private func stopTimer() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        rotationTimer?.invalidate()
+        rotationTimer = nil
+    }
 
     // MARK: - Cache
 
@@ -2333,6 +2694,7 @@ final class TickTickManager: ObservableObject {
                 checkedInToday: h.checkedInToday
             )
         }
+        rebuildRotatingBarCandidates(resetIndex: true)
         logger.debug("loadCache() — \(self.totalPendingCount) pending tasks")
     }
 

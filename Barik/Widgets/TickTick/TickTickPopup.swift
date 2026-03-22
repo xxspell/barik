@@ -37,45 +37,55 @@ struct TickTickPopup: View {
     @State private var expandedTaskId: String? = nil
     @State private var showingAddTask = false
     @State private var newTaskTitle = ""
+    @State private var highlightedTaskID: String?
+    @State private var highlightedHabitID: String?
 
     var body: some View {
-        VStack(spacing: 0) {
-            if !manager.isAuthenticated {
-                authView
-            } else {
-                headerView
-                Divider().background(Color.white.opacity(0.1))
-
-                if manager.isLoading && manager.projects.isEmpty {
-                    loadingView
+        ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                if !manager.isAuthenticated {
+                    authView
                 } else {
-                    // Mode tabs
-                    modeTabsView
+                    headerView
                     Divider().background(Color.white.opacity(0.1))
 
-                    switch viewMode {
-                    case .tasks:
-                        projectTabsView
-                        Divider().background(Color.white.opacity(0.08))
-                        tasksContentView
-                        if showingAddTask {
+                    if manager.isLoading && manager.projects.isEmpty {
+                        loadingView
+                    } else {
+                        // Mode tabs
+                        modeTabsView
+                        Divider().background(Color.white.opacity(0.1))
+
+                        switch viewMode {
+                        case .tasks:
+                            projectTabsView
                             Divider().background(Color.white.opacity(0.08))
-                            addTaskView
+                            tasksContentView(scrollProxy: proxy)
+                            if showingAddTask {
+                                Divider().background(Color.white.opacity(0.08))
+                                addTaskView
+                            }
+                        case .matrix:
+                            matrixView
+                        case .habits:
+                            habitsView(scrollProxy: proxy)
                         }
-                    case .matrix:
-                        matrixView
-                    case .habits:
-                        habitsView
-                    }
 
-                    if let toast = manager.taskCompletionToast {
-                        Divider().background(Color.white.opacity(0.08))
-                        taskCompletionToastView(toast)
-                    }
+                        if let toast = manager.taskCompletionToast {
+                            Divider().background(Color.white.opacity(0.08))
+                            taskCompletionToastView(toast)
+                        }
 
-                    Divider().background(Color.white.opacity(0.1))
-                    footerView
+                        Divider().background(Color.white.opacity(0.1))
+                        footerView
+                    }
                 }
+            }
+            .onAppear {
+                handlePopupFocusIfNeeded(using: proxy)
+            }
+            .onReceive(manager.$popupFocusTarget) { _ in
+                handlePopupFocusIfNeeded(using: proxy)
             }
         }
         .frame(width: 480)
@@ -394,7 +404,7 @@ struct TickTickPopup: View {
         }
     }
 
-    private var tasksContentView: some View {
+    private func tasksContentView(scrollProxy: ScrollViewProxy) -> some View {
         Group {
             if visibleTasks.isEmpty {
                 VStack(spacing: 8) {
@@ -414,6 +424,7 @@ struct TickTickPopup: View {
                             TaskRow(
                                 task: task,
                                 isExpanded: expandedTaskId == task.id,
+                                isHighlighted: highlightedTaskID == task.id,
                                 projectName: selectedProjectId == nil ? projectName(for: task) : nil,
                                 onTap: {
                                     withAnimation(.spring(response: 0.22, dampingFraction: 0.8)) {
@@ -423,6 +434,7 @@ struct TickTickPopup: View {
                                 onComplete: { manager.scheduleTaskCompletion(task) },
                                 onDelete:   { Task { await manager.deleteTask(task) } }
                             )
+                            .id(taskScrollID(task.id))
                         }
                     }
                     .padding(.vertical, 4)
@@ -603,7 +615,7 @@ struct TickTickPopup: View {
 
     // MARK: - Habits
 
-    private var habitsView: some View {
+    private func habitsView(scrollProxy: ScrollViewProxy) -> some View {
         Group {
             if manager.habits.isEmpty && !manager.isLoading {
                 VStack(spacing: 10) {
@@ -623,9 +635,10 @@ struct TickTickPopup: View {
                         habitsWeekSummaryView
                             .padding(.vertical, 6)
                         ForEach(manager.habits) { habit in
-                            HabitRow(habit: habit, onCheckin: {
+                            HabitRow(habit: habit, isHighlighted: highlightedHabitID == habit.id, onCheckin: {
                                 Task { await manager.toggleHabitCheckin(habit) }
                             })
+                            .id(habitScrollID(habit.id))
                         }
                     }
                     .padding(.horizontal, 12).padding(.vertical, 6)
@@ -748,6 +761,78 @@ struct TickTickPopup: View {
 
     private func localized(_ key: String) -> String {
         NSLocalizedString(key, comment: "")
+    }
+
+    private func taskScrollID(_ id: String) -> String {
+        "ticktick-task-\(id)"
+    }
+
+    private func habitScrollID(_ id: String) -> String {
+        "ticktick-habit-\(id)"
+    }
+
+    private func handlePopupFocusIfNeeded(using proxy: ScrollViewProxy) {
+        guard let target = manager.popupFocusTarget else { return }
+
+        switch target.kind {
+        case .task(let taskID):
+            selectedProjectId = nil
+            searchText = ""
+            withAnimation(.easeInOut(duration: 0.18)) {
+                viewMode = .tasks
+                expandedTaskId = taskID
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    proxy.scrollTo(taskScrollID(taskID), anchor: .center)
+                }
+            }
+            highlightTask(taskID, token: target.token)
+        case .habit(let habitID):
+            withAnimation(.easeInOut(duration: 0.18)) {
+                viewMode = .habits
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    proxy.scrollTo(habitScrollID(habitID), anchor: .center)
+                }
+            }
+            highlightHabit(habitID, token: target.token)
+        }
+
+        manager.clearPopupFocusTarget()
+    }
+
+    private func highlightTask(_ id: String, token: Int) {
+        withAnimation(.easeInOut(duration: 0.28)) {
+            highlightedTaskID = id
+            highlightedHabitID = nil
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if highlightedTaskID == id {
+                withAnimation(.easeInOut(duration: 0.45)) {
+                    highlightedTaskID = nil
+                }
+            }
+            _ = token
+        }
+    }
+
+    private func highlightHabit(_ id: String, token: Int) {
+        withAnimation(.easeInOut(duration: 0.28)) {
+            highlightedHabitID = id
+            highlightedTaskID = nil
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if highlightedHabitID == id {
+                withAnimation(.easeInOut(duration: 0.45)) {
+                    highlightedHabitID = nil
+                }
+            }
+            _ = token
+        }
     }
 
     private func openTickTick() {
@@ -925,6 +1010,7 @@ private struct MatrixTaskRow: View {
 
 private struct HabitRow: View {
     let habit: TickTickHabit
+    let isHighlighted: Bool
     let onCheckin: () -> Void
 
     @State private var isHovered = false
@@ -984,8 +1070,13 @@ private struct HabitRow: View {
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 9)
-        .background(isHovered ? Color.white.opacity(0.04) : Color.clear)
+        .background(isHighlighted ? habitColor.opacity(0.14) : (isHovered ? Color.white.opacity(0.04) : Color.clear))
         .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isHighlighted ? habitColor.opacity(0.45) : Color.clear, lineWidth: 1)
+        )
+        .animation(.easeInOut(duration: 0.28), value: isHighlighted)
         .onHover { h in withAnimation(.easeInOut(duration: 0.1)) { isHovered = h } }
     }
 
@@ -1056,6 +1147,7 @@ private struct HabitWeekRing: View {
 private struct TaskRow: View {
     let task: TickTickTask
     let isExpanded: Bool
+    let isHighlighted: Bool
     let projectName: String?
     let onTap: () -> Void
     let onComplete: () -> Void
@@ -1222,9 +1314,24 @@ private struct TaskRow: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isHovered ? Color.white.opacity(0.04) : Color.clear)
+                .fill(isHighlighted ? highlightColor.opacity(0.14) : (isHovered ? Color.white.opacity(0.04) : Color.clear))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(isHighlighted ? highlightColor.opacity(0.45) : Color.clear, lineWidth: 1)
+                )
                 .padding(.horizontal, 8)
         )
+        .animation(.easeInOut(duration: 0.28), value: isHighlighted)
+    }
+
+    private var highlightColor: Color {
+        if isOverdue {
+            return Color.red
+        }
+        if task.priority != .none {
+            return Color(hex: task.priority.color) ?? .white
+        }
+        return .white
     }
 
     @ViewBuilder
