@@ -2,6 +2,12 @@ import Darwin
 import Foundation
 import OSLog
 
+struct YabaiSignalEvent {
+    let name: String
+    let windowId: Int?
+    let spaceId: Int?
+}
+
 final class YabaiSignalMonitor {
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "barik",
@@ -42,12 +48,12 @@ final class YabaiSignalMonitor {
     private var listenFileDescriptor: Int32 = -1
     private var readSource: DispatchSourceRead?
     private var debounceWorkItem: DispatchWorkItem?
-    private let onRefreshRequested: () -> Void
+    private let onEvent: (YabaiSignalEvent?) -> Void
     private var isRunning = false
 
-    init(executablePath: String, onRefreshRequested: @escaping () -> Void) {
+    init(executablePath: String, onEvent: @escaping (YabaiSignalEvent?) -> Void) {
         self.executablePath = executablePath
-        self.onRefreshRequested = onRefreshRequested
+        self.onEvent = onEvent
     }
 
     deinit {
@@ -165,20 +171,30 @@ final class YabaiSignalMonitor {
             }
 
             var buffer = [UInt8](repeating: 0, count: 128)
-            _ = read(clientFD, &buffer, buffer.count)
+            let bytesRead = read(clientFD, &buffer, buffer.count)
             close(clientFD)
 
-            scheduleRefresh()
+            let event = bytesRead > 0
+                ? parseEvent(from: Data(buffer.prefix(Int(bytesRead))))
+                : nil
+
+            if let event {
+                logger.debug(
+                    "Received yabai event: \(event.name, privacy: .public) windowId=\(String(event.windowId ?? -1), privacy: .public) spaceId=\(String(event.spaceId ?? -1), privacy: .public)"
+                )
+            }
+
+            scheduleRefresh(event: event)
         }
     }
 
-    private func scheduleRefresh() {
+    private func scheduleRefresh(event: YabaiSignalEvent?) {
         debounceWorkItem?.cancel()
 
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.callbackQueue.async {
-                self.onRefreshRequested()
+                self.onEvent(event)
             }
         }
 
@@ -191,7 +207,8 @@ final class YabaiSignalMonitor {
             let label = signalLabel(for: event)
             _ = runYabaiCommand(arguments: ["-m", "signal", "--remove", label])
 
-            let action = "/usr/bin/printf '%s\\n' '\(event)' | /usr/bin/nc -U \(socketPath)"
+            let action =
+                "/usr/bin/printf '%s\\t%s\\t%s\\n' '\(event)' \"$YABAI_WINDOW_ID\" \"$YABAI_SPACE_ID\" | /usr/bin/nc -U \(socketPath)"
             _ = runYabaiCommand(arguments: [
                 "-m", "signal", "--add",
                 "event=\(event)",
@@ -209,6 +226,25 @@ final class YabaiSignalMonitor {
 
     private func signalLabel(for event: String) -> String {
         "\(labelPrefix)-\(event)"
+    }
+
+    private func parseEvent(from data: Data) -> YabaiSignalEvent? {
+        guard
+            let raw = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+            !raw.isEmpty
+        else {
+            return nil
+        }
+
+        let parts = raw.split(separator: "\t", omittingEmptySubsequences: false)
+        guard let name = parts.first.map(String.init), !name.isEmpty else {
+            return nil
+        }
+
+        let windowId = parts.count > 1 ? Int(parts[1]) : nil
+        let spaceId = parts.count > 2 ? Int(parts[2]) : nil
+        return YabaiSignalEvent(name: name, windowId: windowId, spaceId: spaceId)
     }
 
     @discardableResult

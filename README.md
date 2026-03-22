@@ -127,7 +127,11 @@ displayed = [ # widgets on menu bar
 [widgets.default.spaces]
 space.show-key = true        # show space number (or character, if you use AeroSpace)
 window.show-title = true
+window.show-hidden = false
 window.title.max-length = 50
+
+# Hidden yabai windows can stay visible in the Spaces widget with a small minus badge
+# on the app icon when `window.show-hidden = true`.
 
 [widgets.default.claude-usage]
 # plan = "Max" # optional manual badge override

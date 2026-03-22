@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SpacesWidget: View {
-    @StateObject var viewModel = SpacesViewModel()
+    @ObservedObject var viewModel = SpacesViewModel.shared
 
     @ObservedObject var configManager = ConfigManager.shared
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
@@ -89,6 +89,7 @@ private struct WindowView: View {
     }
 
     var showTitle: Bool { windowConfig["show-title"]?.boolValue ?? true }
+    var showHiddenWindows: Bool { windowConfig["show-hidden"]?.boolValue ?? false }
     var maxLength: Int { titleConfig["max-length"]?.intValue ?? 50 }
     var alwaysDisplayAppTitleFor: [String] { titleConfig["always-display-app-name-for"]?.arrayValue?.filter({ $0.stringValue != nil }).map { $0.stringValue! } ?? [] }
 
@@ -120,7 +121,13 @@ private struct WindowView: View {
                         .frame(width: size, height: size)
                 }
             }
-            .opacity(spaceIsFocused && !window.isFocused ? 0.5 : 1)
+            .overlay(alignment: .topTrailing) {
+                if showHiddenWindows && window.isHidden {
+                    HiddenWindowBadge()
+                        .offset(x: 2, y: -2)
+                }
+            }
+            .opacity(iconOpacity(spaceIsFocused: spaceIsFocused))
             .transition(.blurReplace)
 
             if window.isFocused, !title.isEmpty, showTitle {
@@ -152,5 +159,30 @@ private struct WindowView: View {
         .onHover { value in
             isHovered = value
         }
+    }
+}
+
+private extension WindowView {
+    func iconOpacity(spaceIsFocused: Bool) -> Double {
+        var opacity = spaceIsFocused && !window.isFocused ? 0.5 : 1
+        if window.isHidden {
+            opacity *= 0.72
+        }
+        return opacity
+    }
+}
+
+private struct HiddenWindowBadge: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.black.opacity(0.85))
+                .frame(width: 10, height: 10)
+
+            Image(systemName: "minus")
+                .font(.system(size: 6, weight: .bold))
+                .foregroundStyle(.white.opacity(0.95))
+        }
+        .shadow(color: .black.opacity(0.18), radius: 1)
     }
 }

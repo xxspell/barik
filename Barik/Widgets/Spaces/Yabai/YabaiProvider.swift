@@ -8,6 +8,15 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
         category: "YabaiSpacesProvider"
     )
     let executablePath = ConfigManager.shared.config.yabai.path
+    private let stateLock = NSLock()
+    private var lastKnownWindowsById: [Int: YabaiWindow] = [:]
+    private var minimizedWindowsById: [Int: YabaiWindow] = [:]
+
+    private var shouldShowHiddenWindows: Bool {
+        ConfigManager.shared.config.rootToml.widgets
+            .config(for: "default.spaces")?["window"]?
+            .dictionaryValue?["show-hidden"]?.boolValue ?? false
+    }
 
     private func runYabaiCommand(arguments: [String]) -> Data? {
         let process = Process()
@@ -51,6 +60,7 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
         let decoder = JSONDecoder()
         do {
             let windows = try decoder.decode([YabaiWindow].self, from: data)
+            logger.debug("fetchWindows() — decoded \(windows.count) windows")
             return windows
         } catch {
             logger.error("Decode yabai windows error: \(error.localizedDescription)")
@@ -58,13 +68,78 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
         }
     }
 
+    func handleSignal(_ event: YabaiSignalEvent?) {
+        guard let event else { return }
+
+        switch event.name {
+        case "window_minimized":
+            guard let windowId = event.windowId else { return }
+            stateLock.lock()
+            let knownWindow = lastKnownWindowsById[windowId]
+            if let knownWindow {
+                minimizedWindowsById[windowId] = YabaiWindow(
+                    id: knownWindow.id,
+                    title: knownWindow.title,
+                    appName: knownWindow.appName,
+                    isFocused: false,
+                    stackIndex: max(knownWindow.stackIndex, 10_000),
+                    appIcon: knownWindow.appIcon,
+                    rawIsHidden: knownWindow.rawIsHidden,
+                    isMinimized: true,
+                    isFloating: knownWindow.isFloating,
+                    isSticky: knownWindow.isSticky,
+                    spaceId: event.spaceId ?? knownWindow.spaceId
+                )
+                logger.debug(
+                    "handleSignal() — cached minimized window id=\(windowId) space=\(String(event.spaceId ?? knownWindow.spaceId), privacy: .public)"
+                )
+            } else {
+                logger.debug(
+                    "handleSignal() — missing last known window for minimized id=\(windowId)"
+                )
+            }
+            stateLock.unlock()
+
+        case "window_deminimized", "window_destroyed":
+            guard let windowId = event.windowId else { return }
+            stateLock.lock()
+            minimizedWindowsById.removeValue(forKey: windowId)
+            stateLock.unlock()
+            logger.debug("handleSignal() — removed cached minimized window id=\(windowId)")
+
+        default:
+            break
+        }
+    }
+
     func getSpacesWithWindows() -> [YabaiSpace]? {
         guard let spaces = fetchSpaces(), let windows = fetchWindows() else {
             return nil
         }
-        let filteredWindows = windows.filter {
-            !($0.isHidden || $0.isFloating || $0.isSticky)
+
+        updateWindowCaches(with: windows)
+        let mergedWindows = mergeWindows(liveWindows: windows)
+
+        logger.debug("getSpacesWithWindows() — showHidden=\(self.shouldShowHiddenWindows, privacy: .public) spaces=\(spaces.count) liveWindows=\(windows.count) mergedWindows=\(mergedWindows.count)")
+
+        let hiddenLikeWindows = mergedWindows.filter(\.isHidden)
+        if !hiddenLikeWindows.isEmpty {
+            for window in hiddenLikeWindows {
+                logger.debug(
+                    """
+                    hidden-like window — id=\(window.id) app=\(window.appName ?? "nil", privacy: .public) title=\(window.title, privacy: .public) space=\(window.spaceId) focused=\(window.isFocused, privacy: .public) stackIndex=\(window.stackIndex) hidden=\(window.rawIsHidden, privacy: .public) minimized=\(window.isMinimized, privacy: .public) effectiveHidden=\(window.isHidden, privacy: .public) floating=\(window.isFloating, privacy: .public) sticky=\(window.isSticky, privacy: .public)
+                    """
+                )
+            }
+        } else {
+            logger.debug("getSpacesWithWindows() — no hidden or minimized windows")
         }
+
+        let filteredWindows = mergedWindows.filter {
+            !($0.isFloating || $0.isSticky)
+                && (shouldShowHiddenWindows || !$0.isHidden)
+        }
+        logger.debug("getSpacesWithWindows() — filteredWindows=\(filteredWindows.count)")
         var spaceDict = Dictionary(
             uniqueKeysWithValues: spaces.map { ($0.id, $0) })
         for window in filteredWindows {
@@ -75,7 +150,12 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
         }
         var resultSpaces = Array(spaceDict.values)
         for i in 0..<resultSpaces.count {
-            resultSpaces[i].windows.sort { $0.stackIndex < $1.stackIndex }
+            resultSpaces[i].windows.sort {
+                if $0.isHidden != $1.isHidden {
+                    return !$0.isHidden && $1.isHidden
+                }
+                return $0.stackIndex < $1.stackIndex
+            }
         }
         return resultSpaces.filter { !$0.windows.isEmpty }
     }
@@ -102,5 +182,32 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
 
     func focusWindow(windowId: String) {
         _ = runYabaiCommand(arguments: ["-m", "window", "--focus", windowId])
+    }
+
+    private func updateWindowCaches(with liveWindows: [YabaiWindow]) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+
+        for window in liveWindows {
+            lastKnownWindowsById[window.id] = window
+
+            if !window.isHidden {
+                minimizedWindowsById.removeValue(forKey: window.id)
+            }
+        }
+    }
+
+    private func mergeWindows(liveWindows: [YabaiWindow]) -> [YabaiWindow] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+
+        var mergedWindows = liveWindows
+        let liveWindowIds = Set(liveWindows.map(\.id))
+
+        for (windowId, window) in minimizedWindowsById where !liveWindowIds.contains(windowId) {
+            mergedWindows.append(window)
+        }
+
+        return mergedWindows
     }
 }

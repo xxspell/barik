@@ -11,6 +11,7 @@ protocol WindowModel: Identifiable, Equatable, Codable {
     var title: String { get }
     var appName: String? { get }
     var isFocused: Bool { get }
+    var isHidden: Bool { get }
     var appIcon: NSImage? { get set }
 }
 
@@ -29,6 +30,7 @@ struct AnyWindow: Identifiable, Equatable {
     let title: String
     let appName: String?
     let isFocused: Bool
+    let isHidden: Bool
     let appIcon: NSImage?
 
     init<W: WindowModel>(_ window: W) {
@@ -36,12 +38,14 @@ struct AnyWindow: Identifiable, Equatable {
         self.title = window.title
         self.appName = window.appName
         self.isFocused = window.isFocused
+        self.isHidden = window.isHidden
         self.appIcon = window.appIcon
     }
 
     static func == (lhs: AnyWindow, rhs: AnyWindow) -> Bool {
         return lhs.id == rhs.id && lhs.title == rhs.title
             && lhs.appName == rhs.appName && lhs.isFocused == rhs.isFocused
+            && lhs.isHidden == rhs.isHidden
     }
 }
 

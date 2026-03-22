@@ -7,10 +7,13 @@ struct YabaiWindow: WindowModel {
     let isFocused: Bool
     let stackIndex: Int
     var appIcon: NSImage?
-    let isHidden: Bool
+    let rawIsHidden: Bool
+    let isMinimized: Bool
     let isFloating: Bool
     let isSticky: Bool
     let spaceId: Int
+
+    var isHidden: Bool { rawIsHidden || isMinimized }
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -19,9 +22,36 @@ struct YabaiWindow: WindowModel {
         case appName = "app"
         case isFocused = "has-focus"
         case stackIndex = "stack-index"
-        case isHidden = "is-hidden"
+        case rawIsHidden = "is-hidden"
+        case isMinimized = "is-minimized"
         case isFloating = "is-floating"
         case isSticky = "is-sticky"
+    }
+
+    init(
+        id: Int,
+        title: String,
+        appName: String?,
+        isFocused: Bool,
+        stackIndex: Int,
+        appIcon: NSImage?,
+        rawIsHidden: Bool,
+        isMinimized: Bool,
+        isFloating: Bool,
+        isSticky: Bool,
+        spaceId: Int
+    ) {
+        self.id = id
+        self.title = title
+        self.appName = appName
+        self.isFocused = isFocused
+        self.stackIndex = stackIndex
+        self.appIcon = appIcon
+        self.rawIsHidden = rawIsHidden
+        self.isMinimized = isMinimized
+        self.isFloating = isFloating
+        self.isSticky = isSticky
+        self.spaceId = spaceId
     }
 
     init(from decoder: Decoder) throws {
@@ -35,7 +65,8 @@ struct YabaiWindow: WindowModel {
         isFocused = try container.decode(Bool.self, forKey: .isFocused)
         stackIndex =
             try container.decodeIfPresent(Int.self, forKey: .stackIndex) ?? 0
-        isHidden = try container.decode(Bool.self, forKey: .isHidden)
+        rawIsHidden = try container.decode(Bool.self, forKey: .rawIsHidden)
+        isMinimized = try container.decodeIfPresent(Bool.self, forKey: .isMinimized) ?? false
         isFloating = try container.decode(Bool.self, forKey: .isFloating)
         isSticky = try container.decode(Bool.self, forKey: .isSticky)
         if let name = appName {

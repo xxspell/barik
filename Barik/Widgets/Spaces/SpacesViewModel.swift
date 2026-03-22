@@ -3,9 +3,12 @@ import Combine
 import Foundation
 
 class SpacesViewModel: ObservableObject {
+    static let shared = SpacesViewModel()
+
     @Published var spaces: [AnySpace] = []
     private var timer: Timer?
     private var provider: AnySpacesProvider?
+    private var yabaiProvider: YabaiSpacesProvider?
     private var yabaiSignalMonitor: YabaiSignalMonitor?
     private let loadQueue = DispatchQueue(
         label: "barik.spaces.load",
@@ -20,10 +23,12 @@ class SpacesViewModel: ObservableObject {
         }
         if runningApps.contains("yabai") {
             let yabaiProvider = YabaiSpacesProvider()
+            self.yabaiProvider = yabaiProvider
             provider = AnySpacesProvider(yabaiProvider)
             yabaiSignalMonitor = YabaiSignalMonitor(
                 executablePath: yabaiProvider.executablePath
-            ) { [weak self] in
+            ) { [weak self] event in
+                self?.yabaiProvider?.handleSignal(event)
                 self?.loadSpaces()
             }
         } else if runningApps.contains("aerospace") {

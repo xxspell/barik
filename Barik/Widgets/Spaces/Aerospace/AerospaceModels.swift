@@ -5,6 +5,7 @@ struct AeroWindow: WindowModel {
     let title: String
     let appName: String?
     var isFocused: Bool = false
+    let isHidden: Bool
     var appIcon: NSImage?
     let workspace: String?
 
@@ -23,6 +24,7 @@ struct AeroWindow: WindowModel {
         workspace = try container.decodeIfPresent(
             String.self, forKey: .workspace)
         isFocused = false
+        isHidden = false
         if let name = appName {
             appIcon = IconCache.shared.icon(for: name)
         }
