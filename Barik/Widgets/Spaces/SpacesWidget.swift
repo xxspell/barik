@@ -131,6 +131,10 @@ private struct WindowView: View {
     var hoverTooltipTemplate: String {
         windowConfig["hover-tooltip"]?.stringValue ?? "{app} ({pid})"
     }
+    var iconDesaturationPercent: Double {
+        let rawValue = windowConfig["icon-desaturation"]?.intValue ?? 0
+        return Double(min(max(rawValue, 0), 100))
+    }
     var maxLength: Int { titleConfig["max-length"]?.intValue ?? 50 }
     var alwaysDisplayAppTitleFor: [String] { titleConfig["always-display-app-name-for"]?.arrayValue?.filter({ $0.stringValue != nil }).map { $0.stringValue! } ?? [] }
 
@@ -170,6 +174,7 @@ private struct WindowView: View {
                         .offset(x: 2, y: -2)
                 }
             }
+            .saturation(iconSaturation)
             .opacity(iconOpacity(spaceIsFocused: spaceIsFocused))
             .transition(.blurReplace)
 
@@ -220,6 +225,11 @@ private extension WindowView {
             opacity *= 0.72
         }
         return opacity
+    }
+
+    var iconSaturation: Double {
+        let normalizedDesaturation = iconDesaturationPercent / 100.0
+        return max(0, 1.0 - pow(normalizedDesaturation, 2))
     }
 
     var hoverTooltipText: String {

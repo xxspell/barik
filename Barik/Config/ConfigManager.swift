@@ -98,6 +98,7 @@ final class ConfigManager: ObservableObject {
             space.show-key = true        # show space number (or character, if you use AeroSpace)
             window.show-title = true
             window.show-hidden = false
+            window.icon-desaturation = 0
             window.show-hover-tooltip = false
             window.hover-tooltip = "{app} ({pid})"
             window.title.max-length = 50
