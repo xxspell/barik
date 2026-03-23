@@ -56,18 +56,7 @@ struct TimeWidget: View {
         .onReceive(timer) { date in
             currentTime = date
         }
-        .background(
-            GeometryReader { geometry in
-                Color.clear
-                    .onAppear {
-                        rect = geometry.frame(in: .global)
-                    }
-                    .onChange(of: geometry.frame(in: .global)) {
-                        oldState, newState in
-                        rect = newState
-                    }
-            }
-        )
+        .captureScreenRect(into: $rect)
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))

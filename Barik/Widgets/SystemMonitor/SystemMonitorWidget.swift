@@ -163,17 +163,7 @@ struct SystemMonitorWidget: View {
         }
         .padding(.horizontal, usesExpandedRowsLayout ? 10 : 8)
         .padding(.vertical, usesExpandedRowsLayout ? 6 : (usesSingleMetricColumns ? 5 : 4))
-        .background(
-            GeometryReader { geometry in
-                Color.clear
-                    .onAppear {
-                        rect = geometry.frame(in: .global)
-                    }
-                    .onChange(of: geometry.frame(in: .global)) { _, newValue in
-                        rect = newValue
-                    }
-            }
-        )
+        .captureScreenRect(into: $rect)
         .contentShape(Rectangle())
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)

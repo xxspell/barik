@@ -52,6 +52,7 @@ class ConfigProvider: ObservableObject {
 
 struct WidgetsSection: Decodable {
     let displayed: [TomlWidgetItem]
+    let displays: [String: MonitorWidgetsSection]
     let others: [String: ConfigData]
 
     private struct DynamicKey: CodingKey {
@@ -64,9 +65,11 @@ struct WidgetsSection: Decodable {
 
     init(
         displayed: [TomlWidgetItem],
+        displays: [String: MonitorWidgetsSection] = [:],
         others: [String: ConfigData]
     ) {
         self.displayed = displayed
+        self.displays = displays
         self.others = others
     }
 
@@ -78,10 +81,31 @@ struct WidgetsSection: Decodable {
             [TomlWidgetItem].self, forKey: displayedKey)
         self.displayed = displayedArray
 
+        let displaysKey = DynamicKey(stringValue: "displays")!
+        if container.contains(displaysKey) {
+            let displaysContainer = try container.nestedContainer(
+                keyedBy: DynamicKey.self,
+                forKey: displaysKey
+            )
+
+            var displayOverrides = [String: MonitorWidgetsSection]()
+            for displayKey in displaysContainer.allKeys {
+                let monitorSection = try displaysContainer.decode(
+                    MonitorWidgetsSection.self,
+                    forKey: displayKey
+                )
+                displayOverrides[displayKey.stringValue] = monitorSection
+            }
+            self.displays = displayOverrides
+        } else {
+            self.displays = [:]
+        }
+
         var tempDict = [String: ConfigData]()
 
         for key in container.allKeys {
-            guard key.stringValue != "displayed" else { continue }
+            guard key.stringValue != "displayed",
+                  key.stringValue != "displays" else { continue }
 
             let nested = try container.nestedContainer(
                 keyedBy: DynamicKey.self, forKey: key)
@@ -111,6 +135,10 @@ struct WidgetsSection: Decodable {
 
         return (current as? TOMLValue)?.dictionaryValue as? ConfigData
     }
+}
+
+struct MonitorWidgetsSection: Decodable {
+    let displayed: [TomlWidgetItem]
 }
 
 struct TomlWidgetItem: Decodable {
@@ -274,12 +302,14 @@ struct ExperimentalConfig: Decodable {
 struct ForegroundConfig: Decodable {
     let height: BackgroundForegroundHeight
     let horizontalPadding: CGFloat
+    let notchHorizontalPadding: CGFloat
     let widgetsBackground: WidgetBackgroundConfig
     let spacing: CGFloat
     
     init() {
         self.height = .barikDefault
         self.horizontalPadding = Constants.menuBarHorizontalPadding
+        self.notchHorizontalPadding = 12
         self.widgetsBackground = WidgetBackgroundConfig()
         self.spacing = 15
     }
@@ -288,6 +318,7 @@ struct ForegroundConfig: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         height = try container.decodeIfPresent(BackgroundForegroundHeight.self, forKey: .height) ?? .barikDefault
         horizontalPadding = try container.decodeIfPresent(CGFloat.self, forKey: .horizontalPadding) ?? Constants.menuBarHorizontalPadding
+        notchHorizontalPadding = try container.decodeIfPresent(CGFloat.self, forKey: .notchHorizontalPadding) ?? min(horizontalPadding, 12)
         widgetsBackground = try container.decodeIfPresent(WidgetBackgroundConfig.self, forKey: .widgetsBackground) ?? WidgetBackgroundConfig()
         spacing = try container.decodeIfPresent(CGFloat.self, forKey: .spacing) ?? 15
     }
@@ -295,6 +326,7 @@ struct ForegroundConfig: Decodable {
     enum CodingKeys: String, CodingKey {
         case height
         case horizontalPadding = "horizontal-padding"
+        case notchHorizontalPadding = "notch-horizontal-padding"
         case widgetsBackground = "widgets-background"
         case spacing
     }

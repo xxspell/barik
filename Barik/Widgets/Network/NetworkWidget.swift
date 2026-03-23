@@ -14,15 +14,7 @@ struct NetworkWidget: View {
                 ethernetIcon
             }
         }
-        .background(
-            GeometryReader { geometry in
-                Color.clear
-                    .onAppear { rect = geometry.frame(in: .global) }
-                    .onChange(of: geometry.frame(in: .global)) { _, newValue in
-                        rect = newValue
-                    }
-            }
-        )
+        .captureScreenRect(into: $rect)
         .contentShape(Rectangle())
         .font(.system(size: 15))
         .experimentalConfiguration(cornerRadius: 15)

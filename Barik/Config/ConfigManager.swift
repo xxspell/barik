@@ -54,6 +54,12 @@ final class ConfigManager: ObservableObject {
             let content = try String(contentsOfFile: path, encoding: .utf8)
             let decoder = TOMLDecoder()
             let rootToml = try decoder.decode(RootToml.self, from: content)
+            let overrideMonitorIDs = rootToml.widgets.displays.keys
+                .sorted()
+                .joined(separator: ", ")
+            logger.debug(
+                "Loaded config with monitor widget overrides: \(overrideMonitorIDs, privacy: .public)"
+            )
             DispatchQueue.main.async {
                 self.config = Config(rootToml: rootToml)
             }
@@ -94,6 +100,19 @@ final class ConfigManager: ObservableObject {
                 # Uncomment the line below to add the screen recording stop widget
                 # "default.screen-recording-stop"
             ]
+
+            # Optional per-monitor overrides. Use the monitor id from the debug logs.
+            # If a monitor override exists, it fully replaces the global list above.
+            # [widgets.displays."69732928"]
+            # displayed = [
+            #     "default.system-monitor",
+            #     "default.time"
+            # ]
+
+            [experimental.foreground]
+            # Optional tighter edge padding for displays with a notch.
+            # Falls back to min(horizontal-padding, 12) when omitted.
+            # notch-horizontal-padding = 12
 
             [widgets.default.spaces]
             space.show-key = true        # show space number (or character, if you use AeroSpace)
@@ -392,6 +411,14 @@ final class ConfigManager: ObservableObject {
 
     func globalWidgetConfig(for widgetId: String) -> ConfigData {
         config.rootToml.widgets.config(for: widgetId) ?? [:]
+    }
+
+    func displayedWidgets(for monitorID: String) -> [TomlWidgetItem] {
+        if let displayConfig = config.rootToml.widgets.displays[monitorID] {
+            return displayConfig.displayed
+        }
+
+        return config.rootToml.widgets.displayed
     }
 
     func resolvedWidgetConfig(for item: TomlWidgetItem) -> ConfigData {

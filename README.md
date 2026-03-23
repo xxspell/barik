@@ -126,6 +126,20 @@ displayed = [ # widgets on menu bar
     "default.time",
 ]
 
+# Optional per-monitor overrides. Use the monitor id printed in Barik debug logs.
+# If a monitor override exists, it fully replaces the global list above.
+#
+# [widgets.displays."69732928"]
+# displayed = [
+#     "default.system-monitor",
+#     "default.time",
+# ]
+#
+# [widgets.displays."69733201"]
+# displayed = [
+#     "default.nowplaying",
+# ]
+
 [widgets.default.spaces]
 space.show-key = true        # show space number (or character, if you use AeroSpace)
 space.show-inactive = true
@@ -248,6 +262,7 @@ blur = 3                  # background type: from 1 to 6 for blur intensity, 7 f
 [experimental.foreground] # settings for menu bar
 height = "default"        # available values: default (55.0), menu-bar (height like system menu bar), <float> (e.g., 40, 33.5)
 horizontal-padding = 25   # padding on the left and right corners
+notch-horizontal-padding = 12 # padding inside each safe zone on displays with a notch
 spacing = 15              # spacing between widgets
 
 [experimental.foreground.widgets-background] # settings for widgets background

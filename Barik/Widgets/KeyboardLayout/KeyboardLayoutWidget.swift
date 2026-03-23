@@ -38,18 +38,7 @@ struct KeyboardLayoutWidget: View {
                 }
             }
         )
-        .background(
-            GeometryReader { geometry in
-                Color.clear
-                    .onAppear {
-                        rect = geometry.frame(in: .global)
-                    }
-                    .onChange(of: geometry.frame(in: .global)) {
-                        _, newRect in
-                        rect = newRect
-                    }
-            }
-        )
+        .captureScreenRect(into: $rect)
         .contentShape(Rectangle())
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)

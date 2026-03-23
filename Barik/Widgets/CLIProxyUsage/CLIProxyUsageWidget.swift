@@ -146,13 +146,7 @@ struct CLIProxyUsageWidget: View {
     }
 
     private var widgetFrameReader: some View {
-        GeometryReader { geometry in
-            Color.clear
-                .onAppear { widgetFrame = geometry.frame(in: .global) }
-                .onChange(of: geometry.frame(in: .global)) { _, frame in
-                    widgetFrame = frame
-                }
-        }
+        ScreenSpaceRectReader(screenRect: $widgetFrame)
     }
 
     private func widgetContentView() -> AnyView {

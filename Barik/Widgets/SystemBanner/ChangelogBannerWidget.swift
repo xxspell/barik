@@ -19,16 +19,7 @@ struct ChangelogBannerWidget: View {
                     }
             }
         }
-        .background(
-            GeometryReader { geometry in
-                Color.clear
-                    .onAppear { rect = geometry.frame(in: .global) }
-                    .onChange(of: geometry.frame(in: .global)) {
-                        _, newValue in
-                        rect = newValue
-                    }
-            }
-        )
+        .captureScreenRect(into: $rect)
         .buttonStyle(BannerButtonStyle(color: .green.opacity(0.8)))
         .transition(.blurReplace)
 

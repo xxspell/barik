@@ -53,15 +53,7 @@ struct PomodoroWidget: View {
         .frame(maxHeight: .infinity)
         .animation(.spring(response: 0.28, dampingFraction: 0.82), value: manager.widgetLabel == nil)
         .background(.black.opacity(0.001))
-        .background(
-            GeometryReader { geometry in
-                Color.clear
-                    .onAppear { widgetFrame = geometry.frame(in: .global) }
-                    .onChange(of: geometry.frame(in: .global)) { _, newFrame in
-                        widgetFrame = newFrame
-                    }
-            }
-        )
+        .captureScreenRect(into: $widgetFrame)
         .onTapGesture {
             MenuBarPopup.show(rect: widgetFrame, id: "pomodoro") {
                 PomodoroPopup()

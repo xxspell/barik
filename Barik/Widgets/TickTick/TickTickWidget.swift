@@ -54,15 +54,7 @@ struct TickTickWidget: View {
         )
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))
-        .background(
-            GeometryReader { geometry in
-                Color.clear
-                    .onAppear { widgetFrame = geometry.frame(in: .global) }
-                    .onChange(of: geometry.frame(in: .global)) { _, newFrame in
-                        widgetFrame = newFrame
-                    }
-            }
-        )
+        .captureScreenRect(into: $widgetFrame)
         .animation(.smooth(duration: 0.22), value: shouldShowRotatingItem)
         .animation(.smooth(duration: 0.22), value: manager.rotatingBarItem?.transitionID ?? 0)
         .onTapGesture {

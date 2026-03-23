@@ -21,15 +21,7 @@ struct HomebrewWidget: View {
                 labelContent
             }
         }
-        .background(
-            GeometryReader { geometry in
-                Color.clear
-                    .onAppear { rect = geometry.frame(in: .global) }
-                    .onChange(of: geometry.frame(in: .global)) { _, newValue in
-                        rect = newValue
-                    }
-            }
-        )
+        .captureScreenRect(into: $rect)
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))

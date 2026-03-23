@@ -4,7 +4,7 @@ struct MenuBarPopupView<Content: View>: View {
     let content: Content
     let isPreview: Bool
     let widgetRect: CGRect
-    let screenFrame: CGRect
+    let monitor: MonitorDescriptor
 
     @ObservedObject var configManager = ConfigManager.shared
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
@@ -26,12 +26,19 @@ struct MenuBarPopupView<Content: View>: View {
 
     init(
         widgetRect: CGRect = .zero,
-        screenFrame: CGRect = .zero,
+        monitor: MonitorDescriptor = MonitorDescriptor(
+            id: "preview",
+            name: "Preview",
+            frame: .zero,
+            safeAreaInsets: .init(),
+            auxiliaryTopLeftArea: .zero,
+            auxiliaryTopRightArea: .zero
+        ),
         isPreview: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.widgetRect = widgetRect
-        self.screenFrame = screenFrame
+        self.monitor = monitor
         self.content = content()
         self.isPreview = isPreview
         if isPreview {
@@ -166,19 +173,67 @@ struct MenuBarPopupView<Content: View>: View {
 
     var computedOffset: CGFloat {
         let contentWidth = contentSize.width > 0 ? contentSize.width : 200
-        let localMidX = widgetRect.midX - screenFrame.minX
-        let minOffset = horizontalMargin
-        let maxOffset = screenFrame.width - contentWidth - horizontalMargin
+        let localMinX = widgetRect.minX - monitor.frame.minX
+        let localMaxX = widgetRect.maxX - monitor.frame.minX
+        let localMidX = widgetRect.midX - monitor.frame.minX
+
+        let fullRange = CGRect(origin: .zero, size: monitor.frame.size)
+        let targetRange = resolvedTargetRange(for: localMidX, contentWidth: contentWidth) ?? fullRange
+
+        let minOffset = targetRange.minX + horizontalMargin
+        let maxOffset = targetRange.maxX - contentWidth - horizontalMargin
         let centeredOffset = localMidX - contentWidth / 2
+
+        let preferredOffset: CGFloat
+        if centeredOffset < minOffset {
+            preferredOffset = localMinX
+        } else if centeredOffset > maxOffset {
+            preferredOffset = localMaxX - contentWidth
+        } else {
+            preferredOffset = centeredOffset
+        }
+
         let xOffset = maxOffset >= minOffset
-            ? min(max(centeredOffset, minOffset), maxOffset)
-            : minOffset
+            ? min(max(preferredOffset, minOffset), maxOffset)
+            : max(targetRange.minX, min(targetRange.maxX - contentWidth, preferredOffset))
 
         return xOffset
     }
 
     var computedYOffset: CGFloat {
         return 0
+    }
+
+    private func resolvedTargetRange(for localMidX: CGFloat, contentWidth: CGFloat) -> CGRect? {
+        let leftRange = localRect(for: monitor.auxiliaryTopLeftArea)
+        let rightRange = localRect(for: monitor.auxiliaryTopRightArea)
+
+        if contains(x: localMidX, in: leftRange),
+           leftRange.width >= contentWidth + horizontalMargin * 2 {
+            return leftRange
+        }
+
+        if contains(x: localMidX, in: rightRange),
+           rightRange.width >= contentWidth + horizontalMargin * 2 {
+            return rightRange
+        }
+
+        return nil
+    }
+
+    private func localRect(for rect: CGRect) -> CGRect {
+        guard !rect.isEmpty else { return .zero }
+
+        return CGRect(
+            x: rect.minX - monitor.frame.minX,
+            y: rect.minY - monitor.frame.minY,
+            width: rect.width,
+            height: rect.height
+        )
+    }
+
+    private func contains(x: CGFloat, in rect: CGRect) -> Bool {
+        !rect.isEmpty && x >= rect.minX && x <= rect.maxX
     }
 }
 

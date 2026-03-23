@@ -39,22 +39,11 @@ struct BatteryWidget: View {
                 .foregroundStyle(batteryTextColor)
             }
             .frame(width: 30, height: 10)
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .onAppear {
-                            rect = geometry.frame(in: .global)
-                        }
-                        .onChange(of: geometry.frame(in: .global)) {
-                            oldState, newState in
-                            rect = newState
-                        }
-                }
-            )
         }
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))
+        .captureScreenRect(into: $rect)
         .onTapGesture {
             MenuBarPopup.show(rect: rect, id: "battery") { BatteryPopup() }
         }

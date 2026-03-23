@@ -28,15 +28,7 @@ struct ShortcutsWidget: View {
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))
-        .background(
-            GeometryReader { geometry in
-                Color.clear
-                    .onAppear { widgetFrame = geometry.frame(in: .global) }
-                    .onChange(of: geometry.frame(in: .global)) { _, newFrame in
-                        widgetFrame = newFrame
-                    }
-            }
-        )
+        .captureScreenRect(into: $widgetFrame)
         .onTapGesture {
             MenuBarPopup.show(rect: widgetFrame, id: "shortcuts") {
                 ShortcutsPopup()

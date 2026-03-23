@@ -1,9 +1,14 @@
 import SwiftUI
 import AppKit
+import OSLog
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var backgroundPanels: [NSPanel] = []
     private var menuBarPanels: [NSPanel] = []
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "barik",
+        category: "AppDelegate"
+    )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let error = ConfigManager.shared.initError {
@@ -34,6 +39,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupPanels()
     }
 
+    private func edgeInsetsDescription(_ insets: NSEdgeInsets) -> String {
+        "{top=\(insets.top), left=\(insets.left), bottom=\(insets.bottom), right=\(insets.right)}"
+    }
+
     /// Configures and displays the background and menu bar panels.
     private func setupPanels() {
         // Clean up existing panels
@@ -42,20 +51,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Create panels for each screen
         let screens = NSScreen.screens
         for screen in screens {
-            let screenFrame = screen.frame
+            let monitor = screen.monitorDescriptor
+            logger.debug(
+                """
+                Creating panels for monitor id=\(monitor.id, privacy: .public) \
+                name=\(monitor.name, privacy: .public) \
+                frame=\(NSStringFromRect(monitor.frame), privacy: .public) \
+                safeInsets=\(self.edgeInsetsDescription(monitor.safeAreaInsets), privacy: .public) \
+                leftArea=\(NSStringFromRect(monitor.auxiliaryTopLeftArea), privacy: .public) \
+                rightArea=\(NSStringFromRect(monitor.auxiliaryTopRightArea), privacy: .public)
+                """
+            )
 
             // Create background panel for this screen
             let backgroundPanel = createPanel(
-                frame: screenFrame,
+                frame: monitor.frame,
                 level: Int(CGWindowLevelForKey(.desktopWindow)),
                 hostingRootView: AnyView(BackgroundView()))
             backgroundPanels.append(backgroundPanel)
 
             // Create menu bar panel for this screen
             let menuBarPanel = createPanel(
-                frame: screenFrame,
+                frame: monitor.frame,
                 level: Int(CGWindowLevelForKey(.backstopMenu)),
-                hostingRootView: AnyView(MenuBarView()))
+                hostingRootView: AnyView(MenuBarView(monitor: monitor)))
             menuBarPanels.append(menuBarPanel)
         }
     }

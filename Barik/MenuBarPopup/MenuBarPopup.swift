@@ -95,7 +95,8 @@ class MenuBarPopup {
         guard let panel,
               let screen = NSScreen.popupTarget(for: rect) else { return }
 
-        let panelFrame = screen.frame
+        let monitor = screen.monitorDescriptor
+        let panelFrame = monitor.frame
         if panel.frame != panelFrame {
             panel.setFrame(panelFrame, display: true)
         }
@@ -125,7 +126,7 @@ class MenuBarPopup {
             DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
                 panel.contentView = NSHostingView(
                     rootView:
-                        MenuBarPopupView(widgetRect: rect, screenFrame: panelFrame) {
+                        MenuBarPopupView(widgetRect: rect, monitor: monitor) {
                             content()
                         }
                         .frame(
@@ -144,7 +145,7 @@ class MenuBarPopup {
         } else {
             panel.contentView = NSHostingView(
                 rootView:
-                    MenuBarPopupView(widgetRect: rect, screenFrame: panelFrame) {
+                    MenuBarPopupView(widgetRect: rect, monitor: monitor) {
                         content()
                     }
                     .frame(
