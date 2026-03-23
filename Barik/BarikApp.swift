@@ -6,7 +6,7 @@ struct BarikApp: App {
 
     var body: some Scene {
         Settings {
-            EmptyView()
+            SettingsRootView()
         }
     }
 }

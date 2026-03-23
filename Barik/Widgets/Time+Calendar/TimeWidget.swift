@@ -29,28 +29,7 @@ struct TimeWidget: View {
         .autoconnect()
 
     var body: some View {
-        Group {
-            if stacked {
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(formattedTime(pattern: stackedTimeFormat, from: currentTime))
-                        .font(.system(size: 14, weight: .semibold))
-                    Text(formattedTime(pattern: stackedDateFormat, from: currentTime))
-                        .font(.system(size: 11, weight: .medium))
-                        .opacity(0.7)
-                }
-            } else {
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text(formattedTime(pattern: format, from: currentTime))
-                        .fontWeight(.semibold)
-                    if let event = calendarManager.nextEvent, calendarShowEvents {
-                        Text(eventText(for: event))
-                            .opacity(0.8)
-                            .font(.subheadline)
-                    }
-                }
-                .font(.headline)
-            }
-        }
+        widgetContent
         .foregroundStyle(.foregroundOutside)
         .shadow(color: .foregroundShadowOutside, radius: 3)
         .onReceive(timer) { date in
@@ -61,12 +40,37 @@ struct TimeWidget: View {
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))
         .monospacedDigit()
+        .contentShape(Rectangle())
         .onTapGesture {
             MenuBarPopup.show(rect: rect, id: "calendar") {
                 CalendarPopup(
                     calendarManager: calendarManager,
                     configProvider: configProvider)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var widgetContent: some View {
+        if stacked {
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(formattedTime(pattern: stackedTimeFormat, from: currentTime))
+                    .font(.system(size: 14, weight: .semibold))
+                Text(formattedTime(pattern: stackedDateFormat, from: currentTime))
+                    .font(.system(size: 11, weight: .medium))
+                    .opacity(0.7)
+            }
+        } else {
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(formattedTime(pattern: format, from: currentTime))
+                    .fontWeight(.semibold)
+                if let event = calendarManager.nextEvent, calendarShowEvents {
+                    Text(eventText(for: event))
+                        .opacity(0.8)
+                        .font(.subheadline)
+                }
+            }
+            .font(.headline)
         }
     }
 

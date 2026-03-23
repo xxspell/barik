@@ -1,13 +1,26 @@
 import SwiftUI
 import CoreLocation
 import AppKit
+import OSLog
 
 /// Weather widget that displays current weather using Open-Meteo API
 struct WeatherWidget: View {
     @EnvironmentObject var configProvider: ConfigProvider
     @ObservedObject private var weatherManager = WeatherManager.shared
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "barik",
+        category: "WeatherWidget"
+    )
 
     @State private var widgetFrame: CGRect = .zero
+
+    private func resolvedConfig(from config: Config) -> (unit: String, latitude: String?, longitude: String?) {
+        let configData = config.rootToml.widgets.config(for: "default.weather") ?? [:]
+        let unit = configData["unit"]?.stringValue ?? "celsius"
+        let latitude = configData["latitude"]?.stringValue
+        let longitude = configData["longitude"]?.stringValue
+        return (unit, latitude, longitude)
+    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -39,49 +52,29 @@ struct WeatherWidget: View {
             }
         }
         .onAppear {
-            // Extract weather config from the global config
-            let configData = ConfigManager.shared.globalWidgetConfig(for: "default.weather")
-            var unit: String = "celsius"
-            var latitude: String?
-            var longitude: String?
+            let resolved = resolvedConfig(from: ConfigManager.shared.config)
 
-            if let unitValue = configData["unit"]?.stringValue {
-                unit = unitValue
-            }
-
-            if let latValue = configData["latitude"]?.stringValue {
-                latitude = latValue
-            }
-
-            if let lonValue = configData["longitude"]?.stringValue {
-                longitude = lonValue
-            }
-
-            weatherManager.updateConfiguration(unit: unit, latitude: latitude, longitude: longitude)
+            logger.info(
+                "onAppear() config unit=\(resolved.unit, privacy: .public) latitude=\(resolved.latitude ?? "<nil>", privacy: .public) longitude=\(resolved.longitude ?? "<nil>", privacy: .public)"
+            )
+            weatherManager.updateConfiguration(
+                unit: resolved.unit,
+                latitude: resolved.latitude,
+                longitude: resolved.longitude
+            )
             weatherManager.startUpdating()
         }
-        .onReceive(ConfigManager.shared.$config) { _ in
-            // Update configuration when config changes
-            let configData = ConfigManager.shared.globalWidgetConfig(for: "default.weather")
-            var unit: String = "celsius"
-            var latitude: String?
-            var longitude: String?
+        .onReceive(ConfigManager.shared.$config) { config in
+            let resolved = resolvedConfig(from: config)
 
-            if let unitValue = configData["unit"]?.stringValue {
-                unit = unitValue
-            }
-
-            if let latValue = configData["latitude"]?.stringValue {
-                latitude = latValue
-            }
-
-            if let lonValue = configData["longitude"]?.stringValue {
-                longitude = lonValue
-            }
-
-            weatherManager.updateConfiguration(unit: unit, latitude: latitude, longitude: longitude)
-            // Refresh weather with new configuration
-            weatherManager.fetchWeather()
+            logger.info(
+                "onReceive(config) unit=\(resolved.unit, privacy: .public) latitude=\(resolved.latitude ?? "<nil>", privacy: .public) longitude=\(resolved.longitude ?? "<nil>", privacy: .public)"
+            )
+            weatherManager.updateConfiguration(
+                unit: resolved.unit,
+                latitude: resolved.latitude,
+                longitude: resolved.longitude
+            )
         }
     }
 }
@@ -150,6 +143,10 @@ struct OpenMeteoDaily: Codable {
 @MainActor
 final class WeatherManager: NSObject, ObservableObject {
     static let shared = WeatherManager()
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "barik",
+        category: "WeatherManager"
+    )
 
     @Published private(set) var currentWeather: CurrentWeather?
     @Published private(set) var hourlyForecast: [HourlyForecast] = []
@@ -168,6 +165,7 @@ final class WeatherManager: NSObject, ObservableObject {
     private let geocoder = CLGeocoder()
     private var lastLocation: CLLocation?
     private var updateTimer: Timer?
+    private var latestRequestID: Int = 0
 
     override private init() {
         super.init()
@@ -186,24 +184,42 @@ final class WeatherManager: NSObject, ObservableObject {
 
         // Refresh weather if any configuration changed
         if oldUnit != unit || oldLat != latitude || oldLon != longitude {
+            logger.info(
+                "updateConfiguration() oldUnit=\(oldUnit, privacy: .public) newUnit=\(unit, privacy: .public) oldLatitude=\(oldLat ?? "<nil>", privacy: .public) newLatitude=\(latitude ?? "<nil>", privacy: .public) oldLongitude=\(oldLon ?? "<nil>", privacy: .public) newLongitude=\(longitude ?? "<nil>", privacy: .public)"
+            )
             // If we have custom coordinates, fetch weather for those coordinates
             if let lat = customLatitude, let lon = customLongitude {
+                logger.debug("updateConfiguration() using custom coordinates path")
+                locationManager.stopUpdatingLocation()
                 if let latValue = Double(lat), let lonValue = Double(lon) {
                     fetchWeatherForCoordinates(latitude: latValue, longitude: lonValue, customLocationName: nil)
                 }
+            } else if lastLocation != nil {
+                logger.debug("updateConfiguration() using cached current-location path")
+                fetchWeather()
             } else {
                 // Use location services
+                logger.debug("updateConfiguration() requesting current location path")
                 locationManager.startUpdatingLocation()
             }
+        } else {
+            logger.debug(
+                "updateConfiguration() ignored unchanged config unit=\(unit, privacy: .public) latitude=\(latitude ?? "<nil>", privacy: .public) longitude=\(longitude ?? "<nil>", privacy: .public)"
+            )
         }
     }
 
     func startUpdating() {
         // Invalidate any existing timer
         updateTimer?.invalidate()
+        logger.debug(
+            "startUpdating() unit=\(self.temperatureUnit, privacy: .public) latitude=\(self.customLatitude ?? "<nil>", privacy: .public) longitude=\(self.customLongitude ?? "<nil>", privacy: .public)"
+        )
 
         // Check if we have custom coordinates first
         if let lat = customLatitude, let lon = customLongitude {
+            logger.debug("startUpdating() scheduling custom-coordinate updates")
+            locationManager.stopUpdatingLocation()
             if let latValue = Double(lat), let lonValue = Double(lon) {
                 fetchWeatherForCoordinates(latitude: latValue, longitude: lonValue, customLocationName: nil)
 
@@ -219,6 +235,7 @@ final class WeatherManager: NSObject, ObservableObject {
             }
         } else {
             // Use location services
+            logger.debug("startUpdating() scheduling current-location updates")
             if locationManager.authorizationStatus == .notDetermined {
                 locationManager.requestWhenInUseAuthorization()
             }
@@ -243,6 +260,9 @@ final class WeatherManager: NSObject, ObservableObject {
         guard let location = lastLocation else { return }
 
         isLoading = true
+        let requestID = beginRequest()
+        let requestedUnit = temperatureUnit
+        logger.debug("fetchWeather() requestID=\(requestID, privacy: .public) unit=\(requestedUnit, privacy: .public)")
 
         // Reverse geocode for location name
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, _ in
@@ -257,22 +277,24 @@ final class WeatherManager: NSObject, ObservableObject {
             do {
                 let lat = location.coordinate.latitude
                 let lon = location.coordinate.longitude
-                let unitParam = temperatureUnit == "celsius" ? "celsius" : "fahrenheit"
+                let unitParam = requestedUnit == "celsius" ? "celsius" : "fahrenheit"
                 let urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current_weather=true&hourly=temperature_2m,weathercode,precipitation_probability&daily=temperature_2m_max,temperature_2m_min&temperature_unit=\(unitParam)&timezone=auto&forecast_days=1"
 
                 guard let url = URL(string: urlString) else {
-                    isLoading = false
+                    finishRequestIfLatest(requestID)
                     return
                 }
 
                 let (data, _) = try await URLSession.shared.data(from: url)
                 let response = try JSONDecoder().decode(OpenMeteoResponse.self, from: data)
+                guard shouldApplyResponse(requestID) else { return }
+                logger.debug("apply current-location weather response requestID=\(requestID, privacy: .public) unit=\(requestedUnit, privacy: .public)")
 
                 // Current weather
                 let temp = Int(response.currentWeather.temperature.rounded())
                 let symbol = symbolName(for: response.currentWeather.weathercode)
                 let condition = conditionKey(for: response.currentWeather.weathercode)
-                let unitSymbol = temperatureUnit == "celsius" ? "°C" : "°F"
+                let unitSymbol = requestedUnit == "celsius" ? "°C" : "°F"
 
                 self.currentWeather = CurrentWeather(
                     temperature: "\(temp)\(unitSymbol)",
@@ -338,12 +360,17 @@ final class WeatherManager: NSObject, ObservableObject {
             } catch {
                 print("Weather fetch error: \(error)")
             }
-            isLoading = false
+            finishRequestIfLatest(requestID)
         }
     }
 
     private func fetchWeatherForCoordinates(latitude: Double, longitude: Double, customLocationName: String?) {
         isLoading = true
+        let requestID = beginRequest()
+        let requestedUnit = temperatureUnit
+        logger.debug(
+            "fetchWeatherForCoordinates() requestID=\(requestID, privacy: .public) unit=\(requestedUnit, privacy: .public) lat=\(latitude, privacy: .public) lon=\(longitude, privacy: .public)"
+        )
 
         // Set a custom location name if provided, otherwise we'll get it from the API response
         if let customName = customLocationName {
@@ -352,22 +379,24 @@ final class WeatherManager: NSObject, ObservableObject {
 
         Task {
             do {
-                let unitParam = temperatureUnit == "celsius" ? "celsius" : "fahrenheit"
+                let unitParam = requestedUnit == "celsius" ? "celsius" : "fahrenheit"
                 let urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(latitude)&longitude=\(longitude)&current_weather=true&hourly=temperature_2m,weathercode,precipitation_probability&daily=temperature_2m_max,temperature_2m_min&temperature_unit=\(unitParam)&timezone=auto&forecast_days=1"
 
                 guard let url = URL(string: urlString) else {
-                    isLoading = false
+                    finishRequestIfLatest(requestID)
                     return
                 }
 
                 let (data, _) = try await URLSession.shared.data(from: url)
                 let response = try JSONDecoder().decode(OpenMeteoResponse.self, from: data)
+                guard shouldApplyResponse(requestID) else { return }
+                logger.debug("apply custom-location weather response requestID=\(requestID, privacy: .public) unit=\(requestedUnit, privacy: .public)")
 
                 // Current weather
                 let temp = Int(response.currentWeather.temperature.rounded())
                 let symbol = symbolName(for: response.currentWeather.weathercode)
                 let condition = conditionKey(for: response.currentWeather.weathercode)
-                let unitSymbol = temperatureUnit == "celsius" ? "°C" : "°F"
+                let unitSymbol = requestedUnit == "celsius" ? "°C" : "°F"
 
                 self.currentWeather = CurrentWeather(
                     temperature: "\(temp)\(unitSymbol)",
@@ -442,8 +471,22 @@ final class WeatherManager: NSObject, ObservableObject {
             } catch {
                 print("Weather fetch error: \(error)")
             }
-            isLoading = false
+            finishRequestIfLatest(requestID)
         }
+    }
+
+    private func beginRequest() -> Int {
+        latestRequestID += 1
+        return latestRequestID
+    }
+
+    private func shouldApplyResponse(_ requestID: Int) -> Bool {
+        requestID == latestRequestID
+    }
+
+    private func finishRequestIfLatest(_ requestID: Int) {
+        guard requestID == latestRequestID else { return }
+        isLoading = false
     }
 
     private func fetchLocationNameForCoordinates(latitude: Double, longitude: Double) async {
@@ -541,10 +584,21 @@ extension WeatherManager: CLLocationManagerDelegate {
         guard let location = locations.last else { return }
 
         Task { @MainActor in
+            guard customLatitude == nil || customLongitude == nil else {
+                logger.debug(
+                    "didUpdateLocations() ignoring current-location update because custom coordinates are active latitude=\(self.customLatitude ?? "<nil>", privacy: .public) longitude=\(self.customLongitude ?? "<nil>", privacy: .public)"
+                )
+                return
+            }
             // Only update if location changed significantly (1km)
             if lastLocation == nil || lastLocation!.distance(from: location) > 1000 {
+                logger.debug(
+                    "didUpdateLocations() accepted current-location update lat=\(location.coordinate.latitude, privacy: .public) lon=\(location.coordinate.longitude, privacy: .public)"
+                )
                 lastLocation = location
                 fetchWeather()
+            } else {
+                logger.debug("didUpdateLocations() ignored insignificant location change")
             }
         }
     }
@@ -554,9 +608,16 @@ extension WeatherManager: CLLocationManagerDelegate {
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if manager.authorizationStatus == .authorized ||
-            manager.authorizationStatus == .authorizedAlways {
-            manager.startUpdatingLocation()
+        Task { @MainActor in
+            guard customLatitude == nil || customLongitude == nil else {
+                logger.debug("locationManagerDidChangeAuthorization() ignoring authorization callback because custom coordinates are active")
+                return
+            }
+            if manager.authorizationStatus == .authorized ||
+                manager.authorizationStatus == .authorizedAlways {
+                logger.debug("locationManagerDidChangeAuthorization() starting current-location updates")
+                manager.startUpdatingLocation()
+            }
         }
     }
 }

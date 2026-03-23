@@ -12,6 +12,7 @@ struct CalendarPopup: View {
     var body: some View {
         MenuBarPopupVariantView(
             selectedVariant: selectedVariant,
+            settingsLinkSection: .time,
             onVariantSelected: { variant in
                 selectedVariant = variant
                 ConfigManager.shared.updateConfigValue(

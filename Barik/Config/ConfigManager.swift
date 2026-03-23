@@ -16,6 +16,9 @@ final class ConfigManager: ObservableObject {
     private var fileWatchSource: DispatchSourceFileSystemObject?
     private var fileDescriptor: CInt = -1
     private var configFilePath: String?
+    private var isPerformingInternalWrite = false
+    private let parseRevisionQueue = DispatchQueue(label: "Pansy.Barik.ConfigManager.ParseRevision")
+    private var latestScheduledParseRevision: Int = 0
 
     private init() {
         loadOrCreateConfigIfNeeded()
@@ -36,7 +39,9 @@ final class ConfigManager: ObservableObject {
                 try createDefaultConfig(at: path1)
                 chosenPath = path1
             } catch {
-                initError = "Error creating default config: \(error.localizedDescription)"
+                publishInitError(
+                    "Error creating default config: \(error.localizedDescription)"
+                )
                 logger.error("Error creating default config: \(error.localizedDescription)")
                 return
             }
@@ -44,27 +49,39 @@ final class ConfigManager: ObservableObject {
 
         if let path = chosenPath {
             configFilePath = path
+            logger.info("Using config path: \(path, privacy: .public)")
             parseConfigFile(at: path)
             startWatchingFile(at: path)
         }
     }
 
     private func parseConfigFile(at path: String) {
+        let revision = nextParseRevision()
         do {
             let content = try String(contentsOfFile: path, encoding: .utf8)
+            logger.debug(
+                "Parsing config file revision=\(revision, privacy: .public) at \(path, privacy: .public), size=\(content.count, privacy: .public)"
+            )
             let decoder = TOMLDecoder()
             let rootToml = try decoder.decode(RootToml.self, from: content)
             let overrideMonitorIDs = rootToml.widgets.displays.keys
                 .sorted()
                 .joined(separator: ", ")
             logger.debug(
-                "Loaded config with monitor widget overrides: \(overrideMonitorIDs, privacy: .public)"
+                "Loaded config revision=\(revision, privacy: .public) with monitor widget overrides: \(overrideMonitorIDs, privacy: .public)"
             )
-            DispatchQueue.main.async {
+            guard shouldPublishParseRevision(revision) else {
+                logger.debug(
+                    "Discarding stale config parse revision=\(revision, privacy: .public) latestScheduled=\(self.currentScheduledParseRevision(), privacy: .public)"
+                )
+                return
+            }
+            publishOnMain {
+                self.initError = nil
                 self.config = Config(rootToml: rootToml)
             }
         } catch {
-            initError = "Error parsing TOML file: \(error.localizedDescription)"
+            publishInitError("Error parsing TOML file: \(error.localizedDescription)")
             logger.error("Error when parsing TOML file: \(error.localizedDescription)")
         }
     }
@@ -275,8 +292,10 @@ final class ConfigManager: ObservableObject {
     }
 
     private func startWatchingFile(at path: String) {
+        stopWatchingFile()
         fileDescriptor = open(path, O_EVTONLY)
         if fileDescriptor == -1 { return }
+        logger.debug("Starting config watcher for \(path, privacy: .public)")
         fileWatchSource = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fileDescriptor, eventMask: .write,
             queue: DispatchQueue.global())
@@ -284,6 +303,11 @@ final class ConfigManager: ObservableObject {
             guard let self = self, let path = self.configFilePath else {
                 return
             }
+            guard !self.isPerformingInternalWrite else {
+                self.logger.debug("Ignoring watcher event during internal config write")
+                return
+            }
+            self.logger.debug("Watcher noticed config file change")
             self.parseConfigFile(at: path)
         }
         fileWatchSource?.setCancelHandler { [weak self] in
@@ -294,41 +318,92 @@ final class ConfigManager: ObservableObject {
         fileWatchSource?.resume()
     }
 
+    private func stopWatchingFile() {
+        if fileWatchSource != nil {
+            logger.debug("Stopping config watcher")
+        }
+        fileWatchSource?.cancel()
+        fileWatchSource = nil
+        fileDescriptor = -1
+    }
+
     func updateConfigValue(key: String, newValue: String) {
         updateConfigLiteralValue(key: key, newValueLiteral: "\"\(escapedTOMLString(newValue))\"")
     }
 
+    func updateConfigBoolValue(key: String, newValue: Bool) {
+        updateConfigLiteralValue(
+            key: key,
+            newValueLiteral: newValue ? "true" : "false"
+        )
+    }
+
+    func updateConfigIntValue(key: String, newValue: Int) {
+        updateConfigLiteralValue(key: key, newValueLiteral: String(newValue))
+    }
+
+    func updateConfigStringArrayValue(key: String, newValue: [String]) {
+        let escapedValues = newValue.map { "\"\(escapedTOMLString($0))\"" }
+        let literal = "[\(escapedValues.joined(separator: ", "))]"
+        updateConfigLiteralValue(key: key, newValueLiteral: literal)
+    }
+
     func updateConfigLiteralValue(key: String, newValueLiteral: String) {
+        updateConfigLiteralValue(
+            tablePath: nil,
+            key: key,
+            newValueLiteral: newValueLiteral
+        )
+    }
+
+    func updateConfigLiteralValue(
+        tablePath: String?,
+        key: String,
+        newValueLiteral: String
+    ) {
         guard let path = configFilePath else {
             logger.error("Config file path is not set")
             return
         }
         do {
             let currentText = try String(contentsOfFile: path, encoding: .utf8)
+            logger.info(
+                "Updating config tablePath=\(tablePath ?? "<root>", privacy: .public) key=\(key, privacy: .public)"
+            )
             let updatedText = updatedTOMLString(
-                original: currentText, key: key, newValueLiteral: newValueLiteral)
+                original: currentText,
+                tablePath: tablePath,
+                key: key,
+                newValueLiteral: newValueLiteral
+            )
+
+            isPerformingInternalWrite = true
+            stopWatchingFile()
             try updatedText.write(
-                toFile: path, atomically: false, encoding: .utf8)
-            DispatchQueue.main.async {
-                self.parseConfigFile(at: path)
-            }
+                toFile: path,
+                atomically: true,
+                encoding: .utf8
+            )
+            parseConfigFile(at: path)
+            startWatchingFile(at: path)
+            isPerformingInternalWrite = false
+            logger.info("Config update finished for key=\(key, privacy: .public)")
         } catch {
+            isPerformingInternalWrite = false
+            if let path = configFilePath {
+                startWatchingFile(at: path)
+            }
             logger.error("Error updating config: \(error.localizedDescription)")
         }
     }
 
     private func updatedTOMLString(
-        original: String, key: String, newValueLiteral: String
+        original: String,
+        tablePath: String?,
+        key: String,
+        newValueLiteral: String
     ) -> String {
-        if key.contains(".") {
-            let components = key.split(separator: ".").map(String.init)
-            guard components.count >= 2 else {
-                return original
-            }
-
-            let tablePath = components.dropLast().joined(separator: ".")
-            let actualKey = components.last!
-
+        if let tablePath {
             let tableHeader = "[\(tablePath)]"
             let lines = original.components(separatedBy: "\n")
             var newLines: [String] = []
@@ -340,7 +415,7 @@ final class ConfigManager: ObservableObject {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
                     if insideTargetTable && !updatedKey {
-                        newLines.append("\(actualKey) = \(newValueLiteral)")
+                        newLines.append("\(key) = \(newValueLiteral)")
                         updatedKey = true
                     }
                     if trimmed == tableHeader {
@@ -353,11 +428,11 @@ final class ConfigManager: ObservableObject {
                 } else {
                     if insideTargetTable && !updatedKey {
                         let pattern =
-                            "^\(NSRegularExpression.escapedPattern(for: actualKey))\\s*="
+                            "^\(NSRegularExpression.escapedPattern(for: key))\\s*="
                         if line.range(of: pattern, options: .regularExpression)
                             != nil
                         {
-                            newLines.append("\(actualKey) = \(newValueLiteral)")
+                            newLines.append("\(key) = \(newValueLiteral)")
                             updatedKey = true
                             continue
                         }
@@ -367,13 +442,13 @@ final class ConfigManager: ObservableObject {
             }
 
             if foundTable && insideTargetTable && !updatedKey {
-                newLines.append("\(actualKey) = \(newValueLiteral)")
+                newLines.append("\(key) = \(newValueLiteral)")
             }
 
             if !foundTable {
                 newLines.append("")
                 newLines.append("[\(tablePath)]")
-                newLines.append("\(actualKey) = \(newValueLiteral)")
+                newLines.append("\(key) = \(newValueLiteral)")
             }
             return newLines.joined(separator: "\n")
         } else {
@@ -400,6 +475,42 @@ final class ConfigManager: ObservableObject {
                 newLines.append("\(key) = \(newValueLiteral)")
             }
             return newLines.joined(separator: "\n")
+        }
+    }
+
+    private func publishInitError(_ message: String) {
+        publishOnMain {
+            self.initError = message
+        }
+        logger.error("Published initError: \(message, privacy: .public)")
+    }
+
+    private func publishOnMain(_ update: @escaping () -> Void) {
+        if Thread.isMainThread {
+            update()
+        } else {
+            DispatchQueue.main.sync {
+                update()
+            }
+        }
+    }
+
+    private func nextParseRevision() -> Int {
+        parseRevisionQueue.sync {
+            latestScheduledParseRevision += 1
+            return latestScheduledParseRevision
+        }
+    }
+
+    private func shouldPublishParseRevision(_ revision: Int) -> Bool {
+        parseRevisionQueue.sync {
+            revision == latestScheduledParseRevision
+        }
+    }
+
+    private func currentScheduledParseRevision() -> Int {
+        parseRevisionQueue.sync {
+            latestScheduledParseRevision
         }
     }
 

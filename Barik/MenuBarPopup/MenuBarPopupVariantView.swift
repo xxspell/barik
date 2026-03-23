@@ -9,6 +9,7 @@ struct MenuBarPopupVariantView: View {
     private let vertical: AnyView?
     private let horizontal: AnyView?
     private let settings: AnyView?
+    private let settingsLinkSection: SettingsSection?
 
     var selectedVariant: MenuBarPopupVariant
     @State private var hovered = false
@@ -18,6 +19,7 @@ struct MenuBarPopupVariantView: View {
 
     init(
         selectedVariant: MenuBarPopupVariant,
+        settingsLinkSection: SettingsSection? = nil,
         onVariantSelected: ((MenuBarPopupVariant) -> Void)? = nil,
         @ViewBuilder box: () -> some View = { EmptyView() },
         @ViewBuilder vertical: () -> some View = { EmptyView() },
@@ -25,6 +27,7 @@ struct MenuBarPopupVariantView: View {
         @ViewBuilder settings: () -> some View = { EmptyView() }
     ) {
         self.selectedVariant = selectedVariant
+        self.settingsLinkSection = settingsLinkSection
         self.onVariantSelected = onVariantSelected
 
         let boxView = box()
@@ -66,6 +69,9 @@ struct MenuBarPopupVariantView: View {
                 if settings != nil {
                     variantButton(
                         variant: .settings, systemImageName: "gearshape.fill")
+                }
+                if let settingsLinkSection {
+                    popupSettingsLink(section: settingsLinkSection)
                 }
             }
             .padding(.horizontal, 20)
@@ -129,6 +135,15 @@ struct MenuBarPopupVariantView: View {
                 }
             }
         )
+    }
+
+    private func popupSettingsLink(section: SettingsSection) -> some View {
+        RoutedSettingsLink(section: section) {
+            Image(systemName: "slider.horizontal.3")
+                .foregroundColor(.white.opacity(0.5))
+                .frame(width: 13, height: 10)
+        }
+        .buttonStyle(HoverButtonStyle())
     }
 }
 
