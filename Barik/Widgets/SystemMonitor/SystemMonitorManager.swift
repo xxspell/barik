@@ -10,6 +10,20 @@ private let systemMonitorLogger = Logger(
     category: "SystemMonitor"
 )
 
+private struct TemperatureCandidate {
+    let key: String
+    let value: Double
+    let dataType: String
+    let bytesHex: String
+}
+
+private struct TemperatureSelection {
+    let value: Double
+    let source: String
+    let suspicious: Bool
+    let candidates: [TemperatureCandidate]
+}
+
 enum SystemMonitorMetric: String, CaseIterable {
     case cpu
     case temperature
@@ -86,6 +100,7 @@ final class SystemMonitorManager: ObservableObject {
     private var previousCPUTicks: (user: UInt32, system: UInt32, idle: UInt32, nice: UInt32)?
     private var previousNetworkData: [String: (ibytes: UInt64, obytes: UInt64)] = [:]
     private var lastNetworkUpdate = Date()
+    private var lastValidCPUTemperature: Double?
 
     private init() {
         startMonitoring()
@@ -113,7 +128,7 @@ final class SystemMonitorManager: ObservableObject {
             let ramSnapshot = Self.readRAMUsage()
             let diskSnapshot = Self.readDiskUsage()
             let gpuSnapshot = Self.readGPUStats()
-            let cpuTemperature = Self.readCPUTemperature()
+            let rawCPUTemperature = Self.readCPUTemperature()
             let loadAverage = Self.readLoadAverage()
             let cpuCoreCount = Self.readCPUCoreCount()
             let networkSnapshot = Self.readNetworkActivity(
@@ -157,7 +172,14 @@ final class SystemMonitorManager: ObservableObject {
 
                 self.gpuLoad = gpuSnapshot.load
                 self.gpuTemperature = gpuSnapshot.temperature
-                self.cpuTemperature = cpuTemperature
+                let resolvedCPUTemperature = Self.stabilizedCPUTemperature(
+                    rawCPUTemperature,
+                    previousValid: self.lastValidCPUTemperature
+                )
+                self.cpuTemperature = resolvedCPUTemperature
+                if let resolvedCPUTemperature {
+                    self.lastValidCPUTemperature = resolvedCPUTemperature
+                }
 
                 if let networkSnapshot {
                     self.previousNetworkData = networkSnapshot.currentNetworkData
@@ -442,38 +464,41 @@ final class SystemMonitorManager: ObservableObject {
 
     nonisolated private static func readCPUTemperature() -> Double? {
         let isAppleSilicon = looksLikeAppleSilicon()
-        let directValues = ["TC0D", "TC0E", "TC0F", "TC0P", "TC0H"]
-            .compactMap { key -> Double? in
-                guard let value = SMCReader.shared.readValue(for: key), isPlausibleTemperature(value) else {
-                    return nil
-                }
-                return value
-            }
+        let directCandidates = readTemperatureCandidates(keys: ["TC0D", "TC0E", "TC0F", "TC0P", "TC0H"])
+        let appleCandidates = readTemperatureCandidates(keys: appleSiliconCPUTemperatureKeys())
 
-        let appleValues = appleSiliconCPUTemperatureKeys()
-            .compactMap { key -> Double? in
-                guard let value = SMCReader.shared.readValue(for: key), isPlausibleTemperature(value) else {
-                    return nil
-                }
-                return value
-            }
-
-        if isAppleSilicon, !appleValues.isEmpty {
-            let average = appleValues.reduce(0, +) / Double(appleValues.count)
-            if average < 30, let maxDirect = directValues.max(), maxDirect - average > 15 {
-                systemMonitorLogger.debug(
-                    "CPU temp suspicious on Apple Silicon. appleAvg=\(average, privacy: .public) directMax=\(maxDirect, privacy: .public)"
-                )
-            }
-            return average
+        let selection: TemperatureSelection?
+        if isAppleSilicon {
+            selection = selectAppleSiliconCPUTemperature(
+                appleCandidates: appleCandidates,
+                directCandidates: directCandidates
+            )
+        } else if let directValue = directCandidates.first?.value {
+            selection = TemperatureSelection(
+                value: directValue,
+                source: "direct-first",
+                suspicious: false,
+                candidates: directCandidates
+            )
+        } else if let fallbackValue = robustTemperatureAverage(appleCandidates) {
+            selection = TemperatureSelection(
+                value: fallbackValue,
+                source: "apple-fallback",
+                suspicious: false,
+                candidates: appleCandidates
+            )
+        } else {
+            selection = nil
         }
 
-        if let directValue = directValues.first {
-            return directValue
-        }
+        logCPUTemperatureSelection(
+            isAppleSilicon: isAppleSilicon,
+            selection: selection,
+            appleCandidates: appleCandidates,
+            directCandidates: directCandidates
+        )
 
-        guard !appleValues.isEmpty else { return nil }
-        return appleValues.reduce(0, +) / Double(appleValues.count)
+        return selection?.value
     }
 
     nonisolated private static func appleSiliconCPUTemperatureKeys() -> [String] {
@@ -524,6 +549,146 @@ final class SystemMonitorManager: ObservableObject {
 
     nonisolated private static func isPlausibleTemperature(_ value: Double) -> Bool {
         value >= 0 && value < 120
+    }
+
+    nonisolated private static func readTemperatureCandidates(keys: [String]) -> [TemperatureCandidate] {
+        keys.compactMap { key in
+            guard let sample = SMCReader.shared.readSample(for: key),
+                  let value = sample.decodedValue,
+                  isPlausibleTemperature(value) else {
+                return nil
+            }
+
+            return TemperatureCandidate(
+                key: key,
+                value: value,
+                dataType: sample.dataType,
+                bytesHex: sample.bytesHex
+            )
+        }
+    }
+
+    nonisolated private static func selectAppleSiliconCPUTemperature(
+        appleCandidates: [TemperatureCandidate],
+        directCandidates: [TemperatureCandidate]
+    ) -> TemperatureSelection? {
+        let filteredAppleCandidates = filteredAppleSiliconCPUCandidates(appleCandidates)
+
+        if let appleValue = robustTemperatureAverage(filteredAppleCandidates) {
+            let directMax = directCandidates.map(\.value).max()
+            let suspicious = appleValue < 30 && (directMax.map { $0 - appleValue > 15 } ?? false)
+
+            if suspicious, let directMax {
+                return TemperatureSelection(
+                    value: directMax,
+                    source: "direct-max-fallback",
+                    suspicious: true,
+                    candidates: directCandidates
+                )
+            }
+
+            return TemperatureSelection(
+                value: appleValue,
+                source: "apple-robust-average",
+                suspicious: false,
+                candidates: filteredAppleCandidates
+            )
+        }
+
+        if let directMax = directCandidates.map(\.value).max() {
+            return TemperatureSelection(
+                value: directMax,
+                source: "direct-max",
+                suspicious: false,
+                candidates: directCandidates
+            )
+        }
+
+        return nil
+    }
+
+    nonisolated private static func robustTemperatureAverage(_ candidates: [TemperatureCandidate]) -> Double? {
+        guard !candidates.isEmpty else { return nil }
+
+        let sorted = candidates.map(\.value).sorted()
+        let median = sorted[sorted.count / 2]
+        let filtered = candidates.map(\.value).filter { abs($0 - median) <= 15 }
+        let values = filtered.isEmpty ? sorted : filtered
+
+        return values.reduce(0, +) / Double(values.count)
+    }
+
+    nonisolated private static func filteredAppleSiliconCPUCandidates(
+        _ candidates: [TemperatureCandidate]
+    ) -> [TemperatureCandidate] {
+        guard !candidates.isEmpty else { return [] }
+
+        let hasWarmCandidate = candidates.contains(where: { $0.value >= 20 })
+        guard hasWarmCandidate else { return candidates }
+
+        let filtered = candidates.filter { $0.value >= 10 }
+        if filtered.count != candidates.count {
+            systemMonitorLogger.debug(
+                "CPU temp dropping low Apple Silicon candidates: [\(formatTemperatureCandidates(candidates), privacy: .public)] -> [\(formatTemperatureCandidates(filtered), privacy: .public)]"
+            )
+        }
+
+        return filtered.isEmpty ? candidates : filtered
+    }
+
+    nonisolated private static func stabilizedCPUTemperature(
+        _ value: Double?,
+        previousValid: Double?
+    ) -> Double? {
+        guard let value else { return previousValid }
+
+        if value < 10, let previousValid {
+            systemMonitorLogger.debug(
+                "CPU temp rejected implausible reading=\(value, privacy: .public); keeping previous=\(previousValid, privacy: .public)"
+            )
+            return previousValid
+        }
+
+        return value
+    }
+
+    nonisolated private static func logCPUTemperatureSelection(
+        isAppleSilicon: Bool,
+        selection: TemperatureSelection?,
+        appleCandidates: [TemperatureCandidate],
+        directCandidates: [TemperatureCandidate]
+    ) {
+        if let selection, selection.suspicious {
+            systemMonitorLogger.debug(
+                """
+                CPU temp suspicious. selected=\(selection.value, privacy: .public) source=\(selection.source, privacy: .public) \
+                chip=\(systemChipName(), privacy: .public) \
+                apple=[\(formatTemperatureCandidates(appleCandidates), privacy: .public)] \
+                direct=[\(formatTemperatureCandidates(directCandidates), privacy: .public)]
+                """
+            )
+            return
+        }
+
+        let chosenValue = selection?.value ?? -1
+        if chosenValue < 25 || selection == nil {
+            systemMonitorLogger.debug(
+                """
+                CPU temp debug. selected=\(chosenValue, privacy: .public) source=\(selection?.source ?? "none", privacy: .public) \
+                appleSilicon=\(isAppleSilicon, privacy: .public) chip=\(systemChipName(), privacy: .public) \
+                apple=[\(formatTemperatureCandidates(appleCandidates), privacy: .public)] \
+                direct=[\(formatTemperatureCandidates(directCandidates), privacy: .public)]
+                """
+            )
+        }
+    }
+
+    nonisolated private static func formatTemperatureCandidates(_ candidates: [TemperatureCandidate]) -> String {
+        candidates
+            .map { candidate in
+                "\(candidate.key)=\(String(format: "%.1f", candidate.value))(\(candidate.dataType) \(candidate.bytesHex))"
+            }
+            .joined(separator: ", ")
     }
 
     nonisolated private static func readLoadAverage() -> Double {

@@ -105,6 +105,21 @@ private extension Float {
 final class SMCReader {
     static let shared = SMCReader()
 
+    struct Sample {
+        let key: String
+        let dataType: String
+        let dataSize: UInt32
+        let bytes: [UInt8]
+        let decodedValue: Double?
+
+        var bytesHex: String {
+            bytes
+                .prefix(Int(dataSize))
+                .map { String(format: "%02X", $0) }
+                .joined(separator: " ")
+        }
+    }
+
     private let lock = NSLock()
     private var connection: io_connect_t = 0
 
@@ -125,6 +140,24 @@ final class SMCReader {
         var value = SMCValue(key: key)
         guard read(&value) == kIOReturnSuccess else { return nil }
         return decode(value)
+    }
+
+    func readSample(for key: String) -> Sample? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard ensureConnection() else { return nil }
+
+        var value = SMCValue(key: key)
+        guard read(&value) == kIOReturnSuccess else { return nil }
+
+        return Sample(
+            key: key,
+            dataType: value.dataType,
+            dataSize: value.dataSize,
+            bytes: value.bytes,
+            decodedValue: decode(value)
+        )
     }
 
     private func ensureConnection() -> Bool {
