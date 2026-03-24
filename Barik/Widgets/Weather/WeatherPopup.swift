@@ -37,6 +37,13 @@ struct WeatherPopup: View {
                     Spacer()
 
                     VStack(alignment: .trailing, spacing: 2) {
+                        RoutedSettingsLink(section: .weather) {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.6))
+                                .frame(width: 28, height: 28)
+                        }
+                        .buttonStyle(WeatherPopupIconButtonStyle())
 
                         Image(systemName: weather.symbolName)
                             .symbolRenderingMode(.multicolor)
@@ -200,6 +207,16 @@ struct WeatherPopup: View {
         }
         .frame(width: 280)
         .background(Color.black)
+    }
+}
+
+private struct WeatherPopupIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.18 : 0.08))
+            )
     }
 }
 

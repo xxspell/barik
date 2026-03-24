@@ -17,9 +17,15 @@ struct WeatherWidget: View {
     private func resolvedConfig(from config: Config) -> (unit: String, latitude: String?, longitude: String?) {
         let configData = config.rootToml.widgets.config(for: "default.weather") ?? [:]
         let unit = configData["unit"]?.stringValue ?? "celsius"
-        let latitude = configData["latitude"]?.stringValue
-        let longitude = configData["longitude"]?.stringValue
+        let latitude = normalizedCoordinate(configData["latitude"]?.stringValue)
+        let longitude = normalizedCoordinate(configData["longitude"]?.stringValue)
         return (unit, latitude, longitude)
+    }
+
+    private func normalizedCoordinate(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     var body: some View {

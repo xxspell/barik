@@ -1,5 +1,6 @@
 import SwiftUI
 import OSLog
+import UniformTypeIdentifiers
 
 struct SettingsRootView: View {
     @ObservedObject private var router = SettingsRouter.shared
@@ -67,29 +68,613 @@ private struct SettingsPlaceholderView: View {
 }
 
 private struct DisplaysSettingsView: View {
+    @ObservedObject private var configManager = ConfigManager.shared
+    @State private var drafts: [String: [String]] = [:]
+    @State private var catalogContext: DisplayCatalogContext?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             SettingsHeaderView(
                 title: "Displays",
-                description: "Per-display widget layout is already supported by the config model. This section is the right place for the upcoming drag-and-drop layout editor."
+                description: "Each display can override the global widget layout. Open the catalog to add widgets, then reorder or remove them directly from the active layout."
             )
 
             ForEach(NSScreen.screens.map(\.monitorDescriptor)) { monitor in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(monitor.name)
-                        .font(.headline)
-                    Text("Monitor ID: \(monitor.id)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(monitor.name)
+                                .font(.headline)
+                            Text("Monitor ID: \(monitor.id)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            Text(displayStatus(for: monitor))
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(
+                                    configManager.hasDisplayOverride(for: monitor.id)
+                                        ? .primary
+                                        : .secondary
+                                )
+                        }
+
+                        Spacer(minLength: 12)
+
+                        HStack(spacing: 8) {
+                            Button("Open Catalog") {
+                                catalogContext = .init(
+                                    monitorID: monitor.id,
+                                    monitorName: monitor.name
+                                )
+                            }
+
+                            if configManager.hasDisplayOverride(for: monitor.id) {
+                                Button("Use Global Layout") {
+                                    resetOverride(for: monitor)
+                                }
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Active Layout")
+                            .font(.headline)
+
+                        Text("This list is the exact widget order for this display. Drag by the handle to reorder, or remove rows with the delete button.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        let layout = currentLayout(for: monitor)
+                        if layout.isEmpty {
+                            Text("No widgets in this display override yet. Open the catalog to add the first one.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.primary.opacity(0.04))
+                                )
+                        } else {
+                            DisplayLayoutListEditor(
+                                monitorID: monitor.id,
+                                items: layout.enumerated().map { index, widgetID in
+                                    .init(
+                                        index: index,
+                                        widgetID: widgetID,
+                                        title: definition(for: widgetID).title
+                                    )
+                                },
+                                onMove: { from, to in
+                                    moveWidget(for: monitor, from: from, to: to)
+                                },
+                                onRemove: { index in
+                                    removeWidget(at: index, for: monitor)
+                                }
+                            )
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
+                .padding(18)
                 .background(SettingsCardBackground())
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(24)
+        .onAppear(perform: syncDraftsFromConfig)
+        .onReceive(configManager.$config) { _ in
+            syncDraftsFromConfig()
+        }
+        .sheet(item: $catalogContext) { context in
+            DisplayCatalogSheet(
+                monitorName: context.monitorName,
+                definitions: displayWidgetDefinitions,
+                canAdd: { widgetID in
+                    canAdd(widgetID, toMonitorID: context.monitorID)
+                },
+                addWidget: { widgetID in
+                    appendWidget(widgetID, toMonitorID: context.monitorID)
+                }
+            )
+        }
+    }
+
+    private func effectiveWidgetIDs(for monitor: MonitorDescriptor) -> [String] {
+        configManager
+            .displayedWidgets(for: monitor.id)
+            .map(\.id)
+    }
+
+    private func currentLayout(for monitor: MonitorDescriptor) -> [String] {
+        if let draft = drafts[monitor.id] {
+            return draft
+        }
+
+        let fallback = effectiveWidgetIDs(for: monitor)
+        drafts[monitor.id] = fallback
+        return fallback
+    }
+
+    private func appendWidget(_ widgetID: String, to monitor: MonitorDescriptor) {
+        var layout = currentLayout(for: monitor)
+        guard definition(for: widgetID).allowsMultiple || !layout.contains(widgetID) else {
+            return
+        }
+        layout.append(widgetID)
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+            persistLayout(layout, for: monitor)
+        }
+    }
+
+    private func appendWidget(_ widgetID: String, toMonitorID monitorID: String) {
+        guard let monitor = monitorDescriptor(for: monitorID) else { return }
+        appendWidget(widgetID, to: monitor)
+    }
+
+    private func removeWidget(at index: Int, for monitor: MonitorDescriptor) {
+        var layout = currentLayout(for: monitor)
+        guard layout.indices.contains(index) else { return }
+        layout.remove(at: index)
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.88)) {
+            persistLayout(layout, for: monitor)
+        }
+    }
+
+    private func moveWidget(for monitor: MonitorDescriptor, from source: Int, to destination: Int) {
+        var layout = currentLayout(for: monitor)
+        guard layout.indices.contains(source) else { return }
+
+        let item = layout.remove(at: source)
+        let boundedDestination = max(0, min(destination, layout.count))
+        layout.insert(item, at: boundedDestination)
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+            persistLayout(layout, for: monitor)
+        }
+    }
+
+    private func persistLayout(_ widgetIDs: [String], for monitor: MonitorDescriptor) {
+        let normalized = widgetIDs.filter { !$0.isEmpty }
+        let globalLayout = configManager.config.rootToml.widgets.displayed.map(\.id)
+
+        drafts[monitor.id] = normalized
+
+        guard !normalized.isEmpty else {
+            resetOverride(for: monitor)
+            return
+        }
+
+        if normalized == globalLayout {
+            configManager.removeTable("widgets.displays.\"\(monitor.id)\"")
+            return
+        }
+
+        configManager.updateConfigStringArrayValue(
+            tablePath: "widgets.displays.\"\(monitor.id)\"",
+            key: "displayed",
+            newValue: normalized
+        )
+    }
+
+    private func resetOverride(for monitor: MonitorDescriptor) {
+        configManager.removeTable("widgets.displays.\"\(monitor.id)\"")
+        drafts[monitor.id] = configManager
+            .config
+            .rootToml
+            .widgets
+            .displayed
+            .map(\.id)
+    }
+
+    private func displayStatus(for monitor: MonitorDescriptor) -> String {
+        if configManager.hasDisplayOverride(for: monitor.id) {
+            return "Custom display override is active for this monitor."
+        }
+
+        return "Using the global widget layout."
+    }
+
+    private func syncDraftsFromConfig() {
+        let monitors = NSScreen.screens.map(\.monitorDescriptor)
+        for monitor in monitors {
+            drafts[monitor.id] = effectiveWidgetIDs(for: monitor)
+        }
+    }
+
+    private func canAdd(_ widgetID: String, to monitor: MonitorDescriptor) -> Bool {
+        let itemDefinition = definition(for: widgetID)
+        return itemDefinition.allowsMultiple || !currentLayout(for: monitor).contains(widgetID)
+    }
+
+    private func canAdd(_ widgetID: String, toMonitorID monitorID: String) -> Bool {
+        guard let monitor = monitorDescriptor(for: monitorID) else { return false }
+        return canAdd(widgetID, to: monitor)
+    }
+
+    private func definition(for widgetID: String) -> DisplayWidgetDefinition {
+        displayWidgetDefinitions.first(where: { $0.id == widgetID })
+            ?? DisplayWidgetDefinition(
+                id: widgetID,
+                title: widgetID,
+                description: "Custom widget ID from the current config.",
+                allowsMultiple: false
+            )
+    }
+
+    private func monitorDescriptor(for monitorID: String) -> MonitorDescriptor? {
+        NSScreen.screens
+            .map(\.monitorDescriptor)
+            .first(where: { $0.id == monitorID })
+    }
+}
+
+private struct DisplayCatalogContext: Identifiable {
+    let monitorID: String
+    let monitorName: String
+    var id: String { monitorID }
+}
+
+private struct DisplayLayoutDragItem: Equatable {
+    let monitorID: String
+    let widgetID: String
+    let index: Int
+}
+
+private struct DisplayLayoutDropTarget: Equatable {
+    let monitorID: String
+    let destinationIndex: Int
+}
+
+private struct DisplayListContainerDropDelegate: DropDelegate {
+    let monitorID: String
+    let destinationIndex: Int
+    @Binding var draggedLayoutItem: DisplayLayoutDragItem?
+    @Binding var dropTarget: DisplayLayoutDropTarget?
+    let moveWidget: (Int, Int) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [UTType.plainText])
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let currentDrag = draggedLayoutItem, currentDrag.monitorID == monitorID else {
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.14)) {
+            dropTarget = .init(
+                monitorID: monitorID,
+                destinationIndex: currentDrag.index == destinationIndex
+                    ? currentDrag.index
+                    : destinationIndex
+            )
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        withAnimation(.easeInOut(duration: 0.14)) {
+            dropTarget = .init(monitorID: monitorID, destinationIndex: destinationIndex)
+        }
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        withAnimation(.easeInOut(duration: 0.14)) {
+            if dropTarget?.monitorID == monitorID
+                && dropTarget?.destinationIndex == destinationIndex {
+                dropTarget = nil
+            }
+        }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer {
+            withAnimation(.easeInOut(duration: 0.14)) {
+                draggedLayoutItem = nil
+                dropTarget = nil
+            }
+        }
+        guard let draggedLayoutItem, draggedLayoutItem.monitorID == monitorID else {
+            return false
+        }
+
+        let adjustedDestination = adjustedDestinationIndex(
+            sourceIndex: draggedLayoutItem.index,
+            destinationIndex: destinationIndex
+        )
+        guard adjustedDestination != draggedLayoutItem.index else {
+            return true
+        }
+
+        moveWidget(draggedLayoutItem.index, adjustedDestination)
+        return true
+    }
+
+    private func adjustedDestinationIndex(sourceIndex: Int, destinationIndex: Int) -> Int {
+        if destinationIndex > sourceIndex {
+            return max(0, destinationIndex - 1)
+        }
+        return destinationIndex
+    }
+}
+
+private struct DisplayWidgetDefinition: Identifiable {
+    let id: String
+    let title: String
+    let description: String
+    let allowsMultiple: Bool
+}
+
+private let displayWidgetDefinitions: [DisplayWidgetDefinition] = [
+    .init(id: "default.spaces", title: "Spaces", description: "Virtual desktops and focused window state.", allowsMultiple: false),
+    .init(id: "default.claude-usage", title: "Claude Usage", description: "Claude quota and account usage status.", allowsMultiple: false),
+    .init(id: "default.codex-usage", title: "Codex Usage", description: "Codex quota usage and remaining allowance.", allowsMultiple: false),
+    .init(id: "default.system-monitor", title: "System Monitor", description: "CPU, RAM, GPU, temperature, disk, and network metrics.", allowsMultiple: false),
+    .init(id: "default.network", title: "Network", description: "Current connectivity and transfer speeds.", allowsMultiple: false),
+    .init(id: "default.focus", title: "Focus", description: "Current macOS Focus mode and status tinting.", allowsMultiple: false),
+    .init(id: "default.pomodoro", title: "Pomodoro", description: "Active pomodoro timer and daily progress.", allowsMultiple: false),
+    .init(id: "default.shortcuts", title: "Shortcuts", description: "Apple Shortcuts launcher in the menu bar.", allowsMultiple: false),
+    .init(id: "default.keyboard-layout", title: "Keyboard Layout", description: "Current input source and layout capsule.", allowsMultiple: false),
+    .init(id: "default.battery", title: "Battery", description: "Battery level, charging state, and thresholds.", allowsMultiple: false),
+    .init(id: "default.time", title: "Time", description: "Clock and upcoming calendar event.", allowsMultiple: false),
+    .init(id: "default.weather", title: "Weather", description: "Current weather, forecast, and precipitation.", allowsMultiple: false),
+    .init(id: "default.screen-recording-stop", title: "Screen Recording Stop", description: "Quick stop control for active recordings.", allowsMultiple: false),
+    .init(id: "default.qwen-proxy-usage", title: "Qwen Proxy Usage", description: "Health and quota overview for the Qwen proxy.", allowsMultiple: false),
+    .init(id: "default.cliproxy-usage", title: "CLIProxy Usage", description: "CLIProxy account health and quota usage.", allowsMultiple: false),
+    .init(id: "default.nowplaying", title: "Now Playing", description: "Current track info and album artwork.", allowsMultiple: false),
+    .init(id: "default.homebrew", title: "Homebrew", description: "Available formula and cask updates.", allowsMultiple: false),
+    .init(id: "default.ticktick", title: "TickTick", description: "Tasks or habits from your TickTick account.", allowsMultiple: false),
+    .init(id: "spacer", title: "Spacer", description: "Flexible empty space used to split left and right groups.", allowsMultiple: true),
+    .init(id: "divider", title: "Divider", description: "Thin visual separator between widget groups.", allowsMultiple: true)
+]
+
+private struct DisplayLayoutRow<Accessory: View>: View {
+    let definition: DisplayWidgetDefinition
+    @ViewBuilder let accessory: () -> Accessory
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(definition.title)
+                    .font(.headline)
+
+                Text(definition.description)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Text(definition.id)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 8)
+
+            accessory()
+                .padding(.top, 2)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct DisplayLayoutListItem: Identifiable, Equatable {
+    let index: Int
+    let widgetID: String
+    let title: String
+    var id: String { "\(index)-\(widgetID)" }
+}
+
+private struct DisplayLayoutListEditor: View {
+    let monitorID: String
+    let items: [DisplayLayoutListItem]
+    let onMove: (Int, Int) -> Void
+    let onRemove: (Int) -> Void
+    @State private var draggedLayoutItem: DisplayLayoutDragItem?
+    @State private var dropTarget: DisplayLayoutDropTarget?
+
+    var body: some View {
+        VStack(spacing: 8) {
+            DisplayLayoutInsertionZone(
+                isTargeted: dropTarget == .init(
+                    monitorID: monitorID,
+                    destinationIndex: 0
+                )
+            )
+            .onDrop(
+                of: [UTType.plainText],
+                delegate: DisplayListContainerDropDelegate(
+                    monitorID: monitorID,
+                    destinationIndex: 0,
+                    draggedLayoutItem: $draggedLayoutItem,
+                    dropTarget: $dropTarget,
+                    moveWidget: onMove
+                )
+            )
+
+            ForEach(items) { item in
+                DisplayLayoutListRow(
+                    title: item.title,
+                    widgetID: item.widgetID,
+                    isDragging: draggedLayoutItem?.monitorID == monitorID
+                        && draggedLayoutItem?.index == item.index,
+                    onRemove: {
+                        onRemove(item.index)
+                    },
+                    dragProvider: {
+                        draggedLayoutItem = .init(
+                            monitorID: monitorID,
+                            widgetID: item.widgetID,
+                            index: item.index
+                        )
+                        return NSItemProvider(object: "\(item.index)" as NSString)
+                    }
+                )
+
+                DisplayLayoutInsertionZone(
+                    isTargeted: dropTarget == .init(
+                        monitorID: monitorID,
+                        destinationIndex: item.index + 1
+                    )
+                )
+                .onDrop(
+                    of: [UTType.plainText],
+                    delegate: DisplayListContainerDropDelegate(
+                        monitorID: monitorID,
+                        destinationIndex: item.index + 1,
+                        draggedLayoutItem: $draggedLayoutItem,
+                        dropTarget: $dropTarget,
+                        moveWidget: onMove
+                    )
+                )
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.primary.opacity(0.035))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+        .animation(.spring(response: 0.22, dampingFraction: 0.9), value: items)
+    }
+}
+
+private struct DisplayLayoutListRow: View {
+    let title: String
+    let widgetID: String
+    let isDragging: Bool
+    let onRemove: () -> Void
+    let dragProvider: () -> NSItemProvider
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+                .padding(.vertical, 8)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+
+                Text(widgetID)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: onRemove) {
+                Image(systemName: "minus.circle")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(isDragging ? 0.07 : 0.03))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    Color.primary.opacity(0.06),
+                    lineWidth: 1
+                )
+        )
+        .scaleEffect(isDragging ? 0.985 : 1)
+        .opacity(isDragging ? 0.72 : 1)
+        .onDrag(dragProvider)
+    }
+}
+
+private struct DisplayLayoutInsertionZone: View {
+    let isTargeted: Bool
+
+    var body: some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: isTargeted ? 18 : 8)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(isTargeted ? Color.accentColor.opacity(0.18) : Color.clear)
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(
+                        isTargeted ? Color.accentColor.opacity(0.55) : Color.clear,
+                        lineWidth: 1.5
+                    )
+            )
+            .animation(.spring(response: 0.18, dampingFraction: 0.9), value: isTargeted)
+    }
+}
+
+private struct DisplayCatalogSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let monitorName: String
+    let definitions: [DisplayWidgetDefinition]
+    let canAdd: (String) -> Bool
+    let addWidget: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Widget Catalog")
+                        .font(.title2.bold())
+
+                    Text("Add widgets to \(monitorName). Descriptions stay here in the catalog, while the active layout stays compact.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 12)
+
+                Button("Done") {
+                    dismiss()
+                }
+            }
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    ForEach(definitions) { definition in
+                        DisplayLayoutRow(definition: definition) {
+                            Button {
+                                addWidget(definition.id)
+                            } label: {
+                                Text(canAdd(definition.id) ? "Add" : "Added")
+                                    .font(.subheadline.weight(.semibold))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        Capsule(style: .continuous)
+                                            .fill(Color.primary.opacity(canAdd(definition.id) ? 0.10 : 0.05))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!canAdd(definition.id))
+                        }
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.primary.opacity(0.035))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                        )
+                    }
+                }
+            }
+        }
+        .padding(24)
+        .frame(minWidth: 620, minHeight: 480)
     }
 }
 
@@ -695,7 +1280,14 @@ private struct WeatherSettingsView: View {
         task = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
-            settingsStore.setString(value, for: field)
+            if normalizedCoordinateValue(value) == nil {
+                ConfigManager.shared.removeConfigValue(
+                    tablePath: field.tablePath,
+                    key: field.key
+                )
+            } else {
+                settingsStore.setString(value, for: field)
+            }
             applyWeatherConfiguration(
                 unit: intendedUnit,
                 latitude: intendedLatitude,

@@ -348,6 +348,20 @@ final class ConfigManager: ObservableObject {
         updateConfigLiteralValue(key: key, newValueLiteral: literal)
     }
 
+    func updateConfigStringArrayValue(
+        tablePath: String?,
+        key: String,
+        newValue: [String]
+    ) {
+        let escapedValues = newValue.map { "\"\(escapedTOMLString($0))\"" }
+        let literal = "[\(escapedValues.joined(separator: ", "))]"
+        updateConfigLiteralValue(
+            tablePath: tablePath,
+            key: key,
+            newValueLiteral: literal
+        )
+    }
+
     func updateConfigLiteralValue(key: String, newValueLiteral: String) {
         updateConfigLiteralValue(
             tablePath: nil,
@@ -397,6 +411,76 @@ final class ConfigManager: ObservableObject {
         }
     }
 
+    func removeTable(_ tablePath: String) {
+        guard let path = configFilePath else {
+            logger.error("Config file path is not set")
+            return
+        }
+
+        do {
+            let currentText = try String(contentsOfFile: path, encoding: .utf8)
+            logger.info("Removing config tablePath=\(tablePath, privacy: .public)")
+            let updatedText = removingTable(from: currentText, tablePath: tablePath)
+
+            isPerformingInternalWrite = true
+            stopWatchingFile()
+            try updatedText.write(
+                toFile: path,
+                atomically: true,
+                encoding: .utf8
+            )
+            parseConfigFile(at: path)
+            startWatchingFile(at: path)
+            isPerformingInternalWrite = false
+            logger.info("Config table removal finished tablePath=\(tablePath, privacy: .public)")
+        } catch {
+            isPerformingInternalWrite = false
+            if let path = configFilePath {
+                startWatchingFile(at: path)
+            }
+            logger.error("Error removing config table: \(error.localizedDescription)")
+        }
+    }
+
+    func removeConfigValue(tablePath: String?, key: String) {
+        guard let path = configFilePath else {
+            logger.error("Config file path is not set")
+            return
+        }
+
+        do {
+            let currentText = try String(contentsOfFile: path, encoding: .utf8)
+            logger.info(
+                "Removing config value tablePath=\(tablePath ?? "<root>", privacy: .public) key=\(key, privacy: .public)"
+            )
+            let updatedText = removingConfigValue(
+                from: currentText,
+                tablePath: tablePath,
+                key: key
+            )
+
+            isPerformingInternalWrite = true
+            stopWatchingFile()
+            try updatedText.write(
+                toFile: path,
+                atomically: true,
+                encoding: .utf8
+            )
+            parseConfigFile(at: path)
+            startWatchingFile(at: path)
+            isPerformingInternalWrite = false
+            logger.info(
+                "Config value removal finished tablePath=\(tablePath ?? "<root>", privacy: .public) key=\(key, privacy: .public)"
+            )
+        } catch {
+            isPerformingInternalWrite = false
+            if let path = configFilePath {
+                startWatchingFile(at: path)
+            }
+            logger.error("Error removing config value: \(error.localizedDescription)")
+        }
+    }
+
     private func updatedTOMLString(
         original: String,
         tablePath: String?,
@@ -410,9 +494,17 @@ final class ConfigManager: ObservableObject {
             var insideTargetTable = false
             var updatedKey = false
             var foundTable = false
+            var skippingExistingMultilineValue = false
 
             for line in lines {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if skippingExistingMultilineValue {
+                    if trimmed.contains("]") {
+                        skippingExistingMultilineValue = false
+                    }
+                    continue
+                }
+
                 if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
                     if insideTargetTable && !updatedKey {
                         newLines.append("\(key) = \(newValueLiteral)")
@@ -434,6 +526,8 @@ final class ConfigManager: ObservableObject {
                         {
                             newLines.append("\(key) = \(newValueLiteral)")
                             updatedKey = true
+                            skippingExistingMultilineValue =
+                                trimmed.contains("[") && !trimmed.contains("]")
                             continue
                         }
                     }
@@ -455,9 +549,17 @@ final class ConfigManager: ObservableObject {
             let lines = original.components(separatedBy: "\n")
             var newLines: [String] = []
             var updatedAtLeastOnce = false
+            var skippingExistingMultilineValue = false
 
             for line in lines {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if skippingExistingMultilineValue {
+                    if trimmed.contains("]") {
+                        skippingExistingMultilineValue = false
+                    }
+                    continue
+                }
+
                 if !trimmed.hasPrefix("#") {
                     let pattern =
                         "^\(NSRegularExpression.escapedPattern(for: key))\\s*="
@@ -466,6 +568,8 @@ final class ConfigManager: ObservableObject {
                     {
                         newLines.append("\(key) = \(newValueLiteral)")
                         updatedAtLeastOnce = true
+                        skippingExistingMultilineValue =
+                            trimmed.contains("[") && !trimmed.contains("]")
                         continue
                     }
                 }
@@ -476,6 +580,70 @@ final class ConfigManager: ObservableObject {
             }
             return newLines.joined(separator: "\n")
         }
+    }
+
+    private func removingTable(from original: String, tablePath: String) -> String {
+        let tableHeader = "[\(tablePath)]"
+        let lines = original.components(separatedBy: "\n")
+        var newLines: [String] = []
+        var skippingTargetTable = false
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
+                if trimmed == tableHeader {
+                    skippingTargetTable = true
+                    continue
+                }
+                skippingTargetTable = false
+            }
+
+            if skippingTargetTable {
+                continue
+            }
+
+            newLines.append(line)
+        }
+
+        while newLines.count >= 2
+                && newLines.last?.isEmpty == true
+                && newLines[newLines.count - 2].isEmpty {
+            newLines.removeLast()
+        }
+
+        return newLines.joined(separator: "\n")
+    }
+
+    private func removingConfigValue(
+        from original: String,
+        tablePath: String?,
+        key: String
+    ) -> String {
+        let lines = original.components(separatedBy: "\n")
+        var newLines: [String] = []
+        var insideTargetTable = tablePath == nil
+        let tableHeader = tablePath.map { "[\($0)]" }
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if let tableHeader, trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
+                insideTargetTable = trimmed == tableHeader
+                newLines.append(line)
+                continue
+            }
+
+            if insideTargetTable {
+                let pattern = "^\(NSRegularExpression.escapedPattern(for: key))\\s*="
+                if line.range(of: pattern, options: .regularExpression) != nil {
+                    continue
+                }
+            }
+
+            newLines.append(line)
+        }
+
+        return newLines.joined(separator: "\n")
     }
 
     private func publishInitError(_ message: String) {
@@ -530,6 +698,10 @@ final class ConfigManager: ObservableObject {
         }
 
         return config.rootToml.widgets.displayed
+    }
+
+    func hasDisplayOverride(for monitorID: String) -> Bool {
+        config.rootToml.widgets.displays[monitorID] != nil
     }
 
     func resolvedWidgetConfig(for item: TomlWidgetItem) -> ConfigData {
