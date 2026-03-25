@@ -31,10 +31,7 @@ private struct SettingsDetailView: View {
                     description: "The shared settings platform is now in place. General app options can land here next."
                 )
             case .appearance:
-                SettingsPlaceholderView(
-                    title: "Appearance",
-                    description: "Appearance controls are a good next step after the first widget settings flow is stable."
-                )
+                AppearanceSettingsView()
             case .displays:
                 DisplaysSettingsView()
             case .time:
@@ -306,6 +303,197 @@ private struct DisplaysSettingsView: View {
         NSScreen.screens
             .map(\.monitorDescriptor)
             .first(where: { $0.id == monitorID })
+    }
+}
+
+private struct AppearanceSettingsView: View {
+    @ObservedObject private var configManager = ConfigManager.shared
+
+    @State private var theme = AppearanceTheme.system
+    @State private var horizontalPadding: Double = 24
+    @State private var notchPadding: Double = 12
+    @State private var widgetSpacing: Double = 15
+    @State private var widgetBackgroundsShown = false
+    @State private var widgetBlur = AppearanceBlur.regular
+    @State private var backgroundShown = true
+    @State private var backgroundBlur = AppearanceBackgroundBlur.ultraThin
+    @State private var isApplyingConfigSnapshot = false
+
+    private let foregroundTable = "experimental.foreground"
+    private let widgetBackgroundTable = "experimental.foreground.widgets-background"
+    private let backgroundTable = "experimental.background"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            SettingsHeaderView(
+                title: "Appearance",
+                description: "Tune the global bar look and spacing. These controls write into the same experimental appearance config the app already uses."
+            )
+
+            SettingsCardView("Theme") {
+                SegmentedPickerRow(
+                    title: "Color Scheme",
+                    description: "Pick a fixed appearance or let Barik follow the current macOS setting.",
+                    selection: $theme,
+                    options: AppearanceTheme.allCases,
+                    titleForOption: \.title
+                )
+                .onChange(of: theme) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        key: "theme",
+                        newValueLiteral: "\"\(newValue.rawValue)\""
+                    )
+                }
+            }
+
+            SettingsCardView("Foreground Bar") {
+                SliderSettingRow(
+                    title: "Horizontal Padding",
+                    description: "Outer left and right padding for displays without a notch.",
+                    value: $horizontalPadding,
+                    range: 0...60,
+                    step: 1,
+                    valueFormat: { "\(Int($0)) pt" }
+                )
+                .onChange(of: horizontalPadding) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: foregroundTable,
+                        key: "horizontal-padding",
+                        newValueLiteral: String(Int(newValue.rounded()))
+                    )
+                }
+
+                SliderSettingRow(
+                    title: "Notch Padding",
+                    description: "Inner padding around the notch gap on displays that split the layout.",
+                    value: $notchPadding,
+                    range: 0...40,
+                    step: 1,
+                    valueFormat: { "\(Int($0)) pt" }
+                )
+                .onChange(of: notchPadding) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: foregroundTable,
+                        key: "notch-horizontal-padding",
+                        newValueLiteral: String(Int(newValue.rounded()))
+                    )
+                }
+
+                SliderSettingRow(
+                    title: "Widget Spacing",
+                    description: "Gap between widgets in the menu bar row.",
+                    value: $widgetSpacing,
+                    range: 0...40,
+                    step: 1,
+                    valueFormat: { "\(Int($0)) pt" }
+                )
+                .onChange(of: widgetSpacing) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: foregroundTable,
+                        key: "spacing",
+                        newValueLiteral: String(Int(newValue.rounded()))
+                    )
+                }
+            }
+
+            SettingsCardView("Widget Capsules") {
+                ToggleRow(
+                    title: "Show Widget Backgrounds",
+                    description: "Wrap compatible widgets in a shared blurred capsule background.",
+                    isOn: $widgetBackgroundsShown
+                )
+                .onChange(of: widgetBackgroundsShown) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: widgetBackgroundTable,
+                        key: "displayed",
+                        newValueLiteral: newValue ? "true" : "false"
+                    )
+                }
+
+                PickerSettingRow(
+                    title: "Widget Blur",
+                    description: "Choose the blur material used for widget capsule backgrounds.",
+                    selection: $widgetBlur,
+                    options: AppearanceBlur.allCases,
+                    titleForOption: \.title
+                )
+                .disabled(!widgetBackgroundsShown)
+                .onChange(of: widgetBlur) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: widgetBackgroundTable,
+                        key: "blur",
+                        newValueLiteral: String(newValue.rawValue)
+                    )
+                }
+            }
+
+            SettingsCardView("Background Bar") {
+                ToggleRow(
+                    title: "Show Background Bar",
+                    description: "Render the full-width bar backdrop behind the widgets.",
+                    isOn: $backgroundShown
+                )
+                .onChange(of: backgroundShown) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: backgroundTable,
+                        key: "displayed",
+                        newValueLiteral: newValue ? "true" : "false"
+                    )
+                }
+
+                PickerSettingRow(
+                    title: "Background Material",
+                    description: "Switch between blur materials or a solid black backdrop.",
+                    selection: $backgroundBlur,
+                    options: AppearanceBackgroundBlur.allCases,
+                    titleForOption: \.title
+                )
+                .disabled(!backgroundShown)
+                .onChange(of: backgroundBlur) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: backgroundTable,
+                        key: "blur",
+                        newValueLiteral: String(newValue.rawValue)
+                    )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(24)
+        .onAppear(perform: loadFromConfig)
+        .onReceive(configManager.$config) { _ in
+            loadFromConfig()
+        }
+    }
+
+    private func loadFromConfig() {
+        isApplyingConfigSnapshot = true
+
+        let config = configManager.config
+        let foreground = config.experimental.foreground
+        let background = config.experimental.background
+
+        theme = AppearanceTheme(rawValue: config.rootToml.theme ?? "system") ?? .system
+        horizontalPadding = foreground.horizontalPadding
+        notchPadding = foreground.notchHorizontalPadding
+        widgetSpacing = foreground.spacing
+        widgetBackgroundsShown = foreground.widgetsBackground.displayed
+        widgetBlur = AppearanceBlur(material: foreground.widgetsBackground.blur) ?? .regular
+        backgroundShown = background.displayed
+        backgroundBlur = AppearanceBackgroundBlur(
+            material: background.blur,
+            isBlack: background.black
+        ) ?? .ultraThin
+
+        isApplyingConfigSnapshot = false
     }
 }
 
@@ -1353,6 +1541,127 @@ private enum WeatherUnit: String, CaseIterable, Identifiable {
     }
 }
 
+private enum AppearanceTheme: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system:
+            return "System"
+        case .light:
+            return "Light"
+        case .dark:
+            return "Dark"
+        }
+    }
+}
+
+private enum AppearanceBlur: Int, CaseIterable, Identifiable {
+    case ultraThin = 1
+    case thin = 2
+    case regular = 3
+    case thick = 4
+    case ultraThick = 5
+    case bar = 6
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .ultraThin:
+            return "Ultra Thin"
+        case .thin:
+            return "Thin"
+        case .regular:
+            return "Regular"
+        case .thick:
+            return "Thick"
+        case .ultraThick:
+            return "Ultra Thick"
+        case .bar:
+            return "Bar"
+        }
+    }
+
+    init?(material: Material) {
+        switch String(describing: material) {
+        case "ultraThin":
+            self = .ultraThin
+        case "thin":
+            self = .thin
+        case "regular":
+            self = .regular
+        case "thick":
+            self = .thick
+        case "ultraThick":
+            self = .ultraThick
+        case "bar":
+            self = .bar
+        default:
+            return nil
+        }
+    }
+}
+
+private enum AppearanceBackgroundBlur: Int, CaseIterable, Identifiable {
+    case ultraThin = 1
+    case thin = 2
+    case regular = 3
+    case thick = 4
+    case ultraThick = 5
+    case bar = 6
+    case solidBlack = 7
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .ultraThin:
+            return "Ultra Thin"
+        case .thin:
+            return "Thin"
+        case .regular:
+            return "Regular"
+        case .thick:
+            return "Thick"
+        case .ultraThick:
+            return "Ultra Thick"
+        case .bar:
+            return "Bar"
+        case .solidBlack:
+            return "Solid Black"
+        }
+    }
+
+    init?(material: Material, isBlack: Bool) {
+        if isBlack {
+            self = .solidBlack
+            return
+        }
+
+        switch String(describing: material) {
+        case "ultraThin":
+            self = .ultraThin
+        case "thin":
+            self = .thin
+        case "regular":
+            self = .regular
+        case "thick":
+            self = .thick
+        case "ultraThick":
+            self = .ultraThick
+        case "bar":
+            self = .bar
+        default:
+            return nil
+        }
+    }
+}
+
 private struct SettingsHeaderView: View {
     let title: String
     let description: String
@@ -1460,5 +1769,61 @@ private struct ToggleRow: View {
             }
         }
         .toggleStyle(.switch)
+    }
+}
+
+private struct SliderSettingRow: View {
+    let title: String
+    let description: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    let valueFormat: (Double) -> String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.headline)
+
+                Spacer(minLength: 8)
+
+                Text(valueFormat(value))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(description)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Slider(value: $value, in: range, step: step)
+        }
+    }
+}
+
+private struct PickerSettingRow<Option: Hashable>: View {
+    let title: String
+    let description: String
+    @Binding var selection: Option
+    let options: [Option]
+    let titleForOption: (Option) -> String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+
+            Text(description)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Picker(title, selection: $selection) {
+                ForEach(options, id: \.self) { option in
+                    Text(titleForOption(option)).tag(option)
+                }
+            }
+            .labelsHidden()
+        }
     }
 }
