@@ -310,12 +310,16 @@ private struct AppearanceSettingsView: View {
     @ObservedObject private var configManager = ConfigManager.shared
 
     @State private var theme = AppearanceTheme.system
+    @State private var foregroundHeightMode = AppearanceHeightMode.defaultHeight
+    @State private var foregroundCustomHeight: Double = 55
     @State private var horizontalPadding: Double = 24
     @State private var notchPadding: Double = 12
     @State private var widgetSpacing: Double = 15
     @State private var widgetBackgroundsShown = false
     @State private var widgetBlur = AppearanceBlur.regular
     @State private var backgroundShown = true
+    @State private var backgroundHeightMode = AppearanceHeightMode.defaultHeight
+    @State private var backgroundCustomHeight: Double = 55
     @State private var backgroundBlur = AppearanceBackgroundBlur.ultraThin
     @State private var isApplyingConfigSnapshot = false
 
@@ -348,6 +352,38 @@ private struct AppearanceSettingsView: View {
             }
 
             SettingsCardView("Foreground Bar", badgeTitle: "Beta") {
+                SegmentedPickerRow(
+                    title: "Bar Height",
+                    description: "Use the Barik default height, match the macOS menu bar, or pick a custom value.",
+                    selection: $foregroundHeightMode,
+                    options: AppearanceHeightMode.allCases,
+                    titleForOption: \.title
+                )
+                .onChange(of: foregroundHeightMode) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    applyForegroundHeight(mode: newValue)
+                }
+
+                if foregroundHeightMode == .custom {
+                    SliderSettingRow(
+                        title: "Custom Foreground Height",
+                        description: "Set the foreground bar height in points.",
+                        value: $foregroundCustomHeight,
+                        range: 20...100,
+                        step: 1,
+                        valueFormat: { "\(Int($0)) pt" }
+                    )
+                    .onChange(of: foregroundCustomHeight) { _, newValue in
+                        guard !isApplyingConfigSnapshot else { return }
+                        guard foregroundHeightMode == .custom else { return }
+                        ConfigManager.shared.updateConfigLiteralValue(
+                            tablePath: foregroundTable,
+                            key: "height",
+                            newValueLiteral: String(Int(newValue.rounded()))
+                        )
+                    }
+                }
+
                 SliderSettingRow(
                     title: "Horizontal Padding",
                     description: "Outer left and right padding for displays without a notch.",
@@ -448,6 +484,40 @@ private struct AppearanceSettingsView: View {
                     )
                 }
 
+                SegmentedPickerRow(
+                    title: "Background Height",
+                    description: "Stretch across the full default height, match the macOS menu bar, or use a custom value.",
+                    selection: $backgroundHeightMode,
+                    options: AppearanceHeightMode.allCases,
+                    titleForOption: \.title
+                )
+                .disabled(!backgroundShown)
+                .onChange(of: backgroundHeightMode) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    applyBackgroundHeight(mode: newValue)
+                }
+
+                if backgroundHeightMode == .custom {
+                    SliderSettingRow(
+                        title: "Custom Background Height",
+                        description: "Set the background bar height in points.",
+                        value: $backgroundCustomHeight,
+                        range: 20...100,
+                        step: 1,
+                        valueFormat: { "\(Int($0)) pt" }
+                    )
+                    .disabled(!backgroundShown)
+                    .onChange(of: backgroundCustomHeight) { _, newValue in
+                        guard !isApplyingConfigSnapshot else { return }
+                        guard backgroundHeightMode == .custom else { return }
+                        ConfigManager.shared.updateConfigLiteralValue(
+                            tablePath: backgroundTable,
+                            key: "height",
+                            newValueLiteral: String(Int(newValue.rounded()))
+                        )
+                    }
+                }
+
                 PickerSettingRow(
                     title: "Background Material",
                     description: "Switch between blur materials or a solid black backdrop.",
@@ -482,18 +552,60 @@ private struct AppearanceSettingsView: View {
         let background = config.experimental.background
 
         theme = AppearanceTheme(rawValue: config.rootToml.theme ?? "system") ?? .system
+        foregroundHeightMode = AppearanceHeightMode(height: foreground.height)
+        foregroundCustomHeight = AppearanceSettingsView.customHeightValue(from: foreground.height)
         horizontalPadding = foreground.horizontalPadding
         notchPadding = foreground.notchHorizontalPadding
         widgetSpacing = foreground.spacing
         widgetBackgroundsShown = foreground.widgetsBackground.displayed
         widgetBlur = AppearanceBlur(material: foreground.widgetsBackground.blur) ?? .regular
         backgroundShown = background.displayed
+        backgroundHeightMode = AppearanceHeightMode(height: background.height)
+        backgroundCustomHeight = AppearanceSettingsView.customHeightValue(from: background.height)
         backgroundBlur = AppearanceBackgroundBlur(
             material: background.blur,
             isBlack: background.black
         ) ?? .ultraThin
 
         isApplyingConfigSnapshot = false
+    }
+
+    private func applyForegroundHeight(mode: AppearanceHeightMode) {
+        ConfigManager.shared.updateConfigLiteralValue(
+            tablePath: foregroundTable,
+            key: "height",
+            newValueLiteral: heightLiteral(for: mode, customValue: foregroundCustomHeight)
+        )
+    }
+
+    private func applyBackgroundHeight(mode: AppearanceHeightMode) {
+        ConfigManager.shared.updateConfigLiteralValue(
+            tablePath: backgroundTable,
+            key: "height",
+            newValueLiteral: heightLiteral(for: mode, customValue: backgroundCustomHeight)
+        )
+    }
+
+    private func heightLiteral(for mode: AppearanceHeightMode, customValue: Double) -> String {
+        switch mode {
+        case .defaultHeight:
+            return "\"default\""
+        case .menuBar:
+            return "\"menu-bar\""
+        case .custom:
+            return String(Int(customValue.rounded()))
+        }
+    }
+
+    private static func customHeightValue(from height: BackgroundForegroundHeight) -> Double {
+        switch height {
+        case .float(let value):
+            return Double(value)
+        case .barikDefault:
+            return 55
+        case .menuBar:
+            return 28
+        }
     }
 }
 
@@ -1556,6 +1668,36 @@ private enum AppearanceTheme: String, CaseIterable, Identifiable {
             return "Light"
         case .dark:
             return "Dark"
+        }
+    }
+}
+
+private enum AppearanceHeightMode: CaseIterable, Identifiable {
+    case defaultHeight
+    case menuBar
+    case custom
+
+    var id: String { title }
+
+    var title: String {
+        switch self {
+        case .defaultHeight:
+            return "Default"
+        case .menuBar:
+            return "Menu Bar"
+        case .custom:
+            return "Custom"
+        }
+    }
+
+    init(height: BackgroundForegroundHeight) {
+        switch height {
+        case .barikDefault:
+            self = .defaultHeight
+        case .menuBar:
+            self = .menuBar
+        case .float:
+            self = .custom
         }
     }
 }
