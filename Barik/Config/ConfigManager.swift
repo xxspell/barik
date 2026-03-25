@@ -505,12 +505,12 @@ final class ConfigManager: ObservableObject {
                     continue
                 }
 
-                if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
+                if let header = tableHeaderPrefix(in: trimmed) {
                     if insideTargetTable && !updatedKey {
                         newLines.append("\(key) = \(newValueLiteral)")
                         updatedKey = true
                     }
-                    if trimmed == tableHeader {
+                    if header == tableHeader {
                         foundTable = true
                         insideTargetTable = true
                     } else {
@@ -590,8 +590,8 @@ final class ConfigManager: ObservableObject {
 
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
-                if trimmed == tableHeader {
+            if let header = tableHeaderPrefix(in: trimmed) {
+                if header == tableHeader {
                     skippingTargetTable = true
                     continue
                 }
@@ -627,8 +627,8 @@ final class ConfigManager: ObservableObject {
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-            if let tableHeader, trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
-                insideTargetTable = trimmed == tableHeader
+            if let tableHeader, let header = tableHeaderPrefix(in: trimmed) {
+                insideTargetTable = header == tableHeader
                 newLines.append(line)
                 continue
             }
@@ -644,6 +644,18 @@ final class ConfigManager: ObservableObject {
         }
 
         return newLines.joined(separator: "\n")
+    }
+
+    private func tableHeaderPrefix(in trimmedLine: String) -> String? {
+        guard trimmedLine.hasPrefix("[") else {
+            return nil
+        }
+
+        guard let closingBracketIndex = trimmedLine.lastIndex(of: "]") else {
+            return nil
+        }
+
+        return String(trimmedLine[...closingBracketIndex])
     }
 
     private func publishInitError(_ message: String) {

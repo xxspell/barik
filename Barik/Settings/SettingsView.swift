@@ -327,7 +327,7 @@ private struct AppearanceSettingsView: View {
         VStack(alignment: .leading, spacing: 22) {
             SettingsHeaderView(
                 title: "Appearance",
-                description: "Tune the global bar look and spacing. These controls write into the same experimental appearance config the app already uses."
+                description: "Tune the global bar look and spacing. Stable settings and experimental bar controls live together here."
             )
 
             SettingsCardView("Theme") {
@@ -347,7 +347,7 @@ private struct AppearanceSettingsView: View {
                 }
             }
 
-            SettingsCardView("Foreground Bar") {
+            SettingsCardView("Foreground Bar", badgeTitle: "Beta") {
                 SliderSettingRow(
                     title: "Horizontal Padding",
                     description: "Outer left and right padding for displays without a notch.",
@@ -400,7 +400,7 @@ private struct AppearanceSettingsView: View {
                 }
             }
 
-            SettingsCardView("Widget Capsules") {
+            SettingsCardView("Widget Capsules", badgeTitle: "Beta") {
                 ToggleRow(
                     title: "Show Widget Backgrounds",
                     description: "Wrap compatible widgets in a shared blurred capsule background.",
@@ -433,7 +433,7 @@ private struct AppearanceSettingsView: View {
                 }
             }
 
-            SettingsCardView("Background Bar") {
+            SettingsCardView("Background Bar", badgeTitle: "Beta") {
                 ToggleRow(
                     title: "Show Background Bar",
                     description: "Render the full-width bar backdrop behind the widgets.",
@@ -1679,17 +1679,32 @@ private struct SettingsHeaderView: View {
 
 private struct SettingsCardView<Content: View>: View {
     let title: String
+    let badgeTitle: String?
     @ViewBuilder let content: () -> Content
 
-    init(_ title: String, @ViewBuilder content: @escaping () -> Content) {
+    init(
+        _ title: String,
+        badgeTitle: String? = nil,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
         self.title = title
+        self.badgeTitle = badgeTitle
         self.content = content
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(title)
-                .font(.title3.weight(.semibold))
+            HStack(alignment: .center, spacing: 10) {
+                Text(title)
+                    .font(.title3.weight(.semibold))
+
+                if let badgeTitle {
+                    SettingsStatusBadge(
+                        title: badgeTitle,
+                        tint: .orange
+                    )
+                }
+            }
 
             content()
         }
@@ -1704,6 +1719,22 @@ private struct SettingsCardBackground: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
             .fill(Color.secondary.opacity(0.08))
+    }
+}
+
+private struct SettingsStatusBadge: View {
+    let title: String
+    let tint: Color
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.caption.weight(.bold))
+            .kerning(0.5)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(tint.opacity(0.14))
+            .clipShape(Capsule())
     }
 }
 
