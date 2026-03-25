@@ -307,20 +307,34 @@ private struct DisplaysSettingsView: View {
 }
 
 private struct AppearanceSettingsView: View {
+    private enum AppearanceDefaults {
+        static let foregroundHeightMode: AppearanceHeightMode = .defaultHeight
+        static let foregroundCustomHeight: Double = 55
+        static let horizontalPadding: Double = 6
+        static let notchPadding: Double = 6
+        static let widgetSpacing: Double = 7
+        static let widgetBackgroundsShown = false
+        static let widgetBlur: AppearanceBlur = .regular
+        static let backgroundShown = false
+        static let backgroundHeightMode: AppearanceHeightMode = .defaultHeight
+        static let backgroundCustomHeight: Double = 55
+        static let backgroundBlur: AppearanceBackgroundBlur = .ultraThin
+    }
+
     @ObservedObject private var configManager = ConfigManager.shared
 
     @State private var theme = AppearanceTheme.system
-    @State private var foregroundHeightMode = AppearanceHeightMode.defaultHeight
-    @State private var foregroundCustomHeight: Double = 55
-    @State private var horizontalPadding: Double = 24
-    @State private var notchPadding: Double = 12
-    @State private var widgetSpacing: Double = 15
-    @State private var widgetBackgroundsShown = false
-    @State private var widgetBlur = AppearanceBlur.regular
-    @State private var backgroundShown = true
-    @State private var backgroundHeightMode = AppearanceHeightMode.defaultHeight
-    @State private var backgroundCustomHeight: Double = 55
-    @State private var backgroundBlur = AppearanceBackgroundBlur.ultraThin
+    @State private var foregroundHeightMode = AppearanceDefaults.foregroundHeightMode
+    @State private var foregroundCustomHeight = AppearanceDefaults.foregroundCustomHeight
+    @State private var horizontalPadding = AppearanceDefaults.horizontalPadding
+    @State private var notchPadding = AppearanceDefaults.notchPadding
+    @State private var widgetSpacing = AppearanceDefaults.widgetSpacing
+    @State private var widgetBackgroundsShown = AppearanceDefaults.widgetBackgroundsShown
+    @State private var widgetBlur = AppearanceDefaults.widgetBlur
+    @State private var backgroundShown = AppearanceDefaults.backgroundShown
+    @State private var backgroundHeightMode = AppearanceDefaults.backgroundHeightMode
+    @State private var backgroundCustomHeight = AppearanceDefaults.backgroundCustomHeight
+    @State private var backgroundBlur = AppearanceDefaults.backgroundBlur
     @State private var isApplyingConfigSnapshot = false
 
     private let foregroundTable = "experimental.foreground"
@@ -351,7 +365,12 @@ private struct AppearanceSettingsView: View {
                 }
             }
 
-            SettingsCardView("Foreground Bar", badgeTitle: "Beta") {
+            SettingsCardView(
+                "Foreground Bar",
+                badgeTitle: "Beta",
+                actionTitle: "Reset",
+                action: resetForegroundDefaults
+            ) {
                 SegmentedPickerRow(
                     title: "Bar Height",
                     description: "Use the Barik default height, match the macOS menu bar, or pick a custom value.",
@@ -436,7 +455,12 @@ private struct AppearanceSettingsView: View {
                 }
             }
 
-            SettingsCardView("Widget Capsules", badgeTitle: "Beta") {
+            SettingsCardView(
+                "Widget Capsules",
+                badgeTitle: "Beta",
+                actionTitle: "Reset",
+                action: resetWidgetCapsuleDefaults
+            ) {
                 ToggleRow(
                     title: "Show Widget Backgrounds",
                     description: "Wrap compatible widgets in a shared blurred capsule background.",
@@ -469,7 +493,12 @@ private struct AppearanceSettingsView: View {
                 }
             }
 
-            SettingsCardView("Background Bar", badgeTitle: "Beta") {
+            SettingsCardView(
+                "Background Bar",
+                badgeTitle: "Beta",
+                actionTitle: "Reset",
+                action: resetBackgroundDefaults
+            ) {
                 ToggleRow(
                     title: "Show Background Bar",
                     description: "Render the full-width bar backdrop behind the widgets.",
@@ -602,10 +631,84 @@ private struct AppearanceSettingsView: View {
         case .float(let value):
             return Double(value)
         case .barikDefault:
-            return 55
+            return AppearanceDefaults.foregroundCustomHeight
         case .menuBar:
             return 28
         }
+    }
+
+    private func resetForegroundDefaults() {
+        isApplyingConfigSnapshot = true
+        foregroundHeightMode = AppearanceDefaults.foregroundHeightMode
+        foregroundCustomHeight = AppearanceDefaults.foregroundCustomHeight
+        horizontalPadding = AppearanceDefaults.horizontalPadding
+        notchPadding = AppearanceDefaults.notchPadding
+        widgetSpacing = AppearanceDefaults.widgetSpacing
+        isApplyingConfigSnapshot = false
+
+        ConfigManager.shared.updateConfigLiteralValue(
+            tablePath: foregroundTable,
+            key: "height",
+            newValueLiteral: "\"default\""
+        )
+        ConfigManager.shared.updateConfigLiteralValue(
+            tablePath: foregroundTable,
+            key: "horizontal-padding",
+            newValueLiteral: String(Int(AppearanceDefaults.horizontalPadding))
+        )
+        ConfigManager.shared.updateConfigLiteralValue(
+            tablePath: foregroundTable,
+            key: "notch-horizontal-padding",
+            newValueLiteral: String(Int(AppearanceDefaults.notchPadding))
+        )
+        ConfigManager.shared.updateConfigLiteralValue(
+            tablePath: foregroundTable,
+            key: "spacing",
+            newValueLiteral: String(Int(AppearanceDefaults.widgetSpacing))
+        )
+    }
+
+    private func resetWidgetCapsuleDefaults() {
+        isApplyingConfigSnapshot = true
+        widgetBackgroundsShown = AppearanceDefaults.widgetBackgroundsShown
+        widgetBlur = AppearanceDefaults.widgetBlur
+        isApplyingConfigSnapshot = false
+
+        ConfigManager.shared.updateConfigLiteralValue(
+            tablePath: widgetBackgroundTable,
+            key: "displayed",
+            newValueLiteral: AppearanceDefaults.widgetBackgroundsShown ? "true" : "false"
+        )
+        ConfigManager.shared.updateConfigLiteralValue(
+            tablePath: widgetBackgroundTable,
+            key: "blur",
+            newValueLiteral: String(AppearanceDefaults.widgetBlur.rawValue)
+        )
+    }
+
+    private func resetBackgroundDefaults() {
+        isApplyingConfigSnapshot = true
+        backgroundShown = AppearanceDefaults.backgroundShown
+        backgroundHeightMode = AppearanceDefaults.backgroundHeightMode
+        backgroundCustomHeight = AppearanceDefaults.backgroundCustomHeight
+        backgroundBlur = AppearanceDefaults.backgroundBlur
+        isApplyingConfigSnapshot = false
+
+        ConfigManager.shared.updateConfigLiteralValue(
+            tablePath: backgroundTable,
+            key: "displayed",
+            newValueLiteral: AppearanceDefaults.backgroundShown ? "true" : "false"
+        )
+        ConfigManager.shared.updateConfigLiteralValue(
+            tablePath: backgroundTable,
+            key: "height",
+            newValueLiteral: "\"default\""
+        )
+        ConfigManager.shared.updateConfigLiteralValue(
+            tablePath: backgroundTable,
+            key: "blur",
+            newValueLiteral: String(AppearanceDefaults.backgroundBlur.rawValue)
+        )
     }
 }
 
@@ -1822,15 +1925,21 @@ private struct SettingsHeaderView: View {
 private struct SettingsCardView<Content: View>: View {
     let title: String
     let badgeTitle: String?
+    let actionTitle: String?
+    let action: (() -> Void)?
     @ViewBuilder let content: () -> Content
 
     init(
         _ title: String,
         badgeTitle: String? = nil,
+        actionTitle: String? = nil,
+        action: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = title
         self.badgeTitle = badgeTitle
+        self.actionTitle = actionTitle
+        self.action = action
         self.content = content
     }
 
@@ -1845,6 +1954,15 @@ private struct SettingsCardView<Content: View>: View {
                         title: badgeTitle,
                         tint: .orange
                     )
+                }
+
+                Spacer(minLength: 8)
+
+                if let actionTitle, let action {
+                    Button(actionTitle, action: action)
+                        .buttonStyle(.plain)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
                 }
             }
 
