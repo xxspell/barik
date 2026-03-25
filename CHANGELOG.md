@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.11.0
+
+### Added
+- Add a unified settings window with routed sections, live TOML-backed updates, and widget popup links that jump directly to the matching settings pane
+- Add broader settings coverage for display layouts, weather, network, system monitor, TickTick, shortcuts, Pomodoro, and usage widgets
+- Add appearance controls for theme, spacing, blur, widget capsule backgrounds, and background bar styling in the settings window
+- Add appearance height controls with Default, Menu Bar, and Custom modes, plus reset actions for experimental appearance cards
+- Add per-display bar layouts with monitor-specific widget overrides, drag-to-reorder layout editing, and notch-aware spacing controls
+- Add English and Russian localization for the expanded settings UI, including section labels, field copy, and display-layout widget catalog text
+
+### Fixed
+- Fix experimental appearance writes so GUI edits update existing commented TOML sections without creating duplicate tables that break parsing
+- Fix Apple Silicon CPU temperature sampling by filtering implausible sensor readings and preserving the last valid value when bad samples appear
+
+### Changed
+- Improve popup anchoring so popups open on the clicked display and clamp more naturally around the active widget
+- Improve weather and settings config handling to avoid stale GUI writes, late callback rollbacks, and leftover values when clearing coordinates or display overrides
+- Clarify that per-display layout overrides fully replace the global widget list for the selected monitor
+- Note that settings edits can normalize touched TOML sections to the canonical table and hyphenated-key format
+
 ## 0.10.0
 
 ### Added
