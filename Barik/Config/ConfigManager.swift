@@ -331,6 +331,14 @@ final class ConfigManager: ObservableObject {
         updateConfigLiteralValue(key: key, newValueLiteral: "\"\(escapedTOMLString(newValue))\"")
     }
 
+    func updateConfigValue(tablePath: String?, key: String, newValue: String) {
+        updateConfigLiteralValue(
+            tablePath: tablePath,
+            key: key,
+            newValueLiteral: "\"\(escapedTOMLString(newValue))\""
+        )
+    }
+
     func updateConfigBoolValue(key: String, newValue: Bool) {
         updateConfigLiteralValue(
             key: key,
@@ -384,8 +392,13 @@ final class ConfigManager: ObservableObject {
             logger.info(
                 "Updating config tablePath=\(tablePath ?? "<root>", privacy: .public) key=\(key, privacy: .public)"
             )
+            let sanitizedText = removingLegacyDottedKeyIfNeeded(
+                from: currentText,
+                tablePath: tablePath,
+                key: key
+            )
             let updatedText = updatedTOMLString(
-                original: currentText,
+                original: sanitizedText,
                 tablePath: tablePath,
                 key: key,
                 newValueLiteral: newValueLiteral
@@ -453,8 +466,13 @@ final class ConfigManager: ObservableObject {
             logger.info(
                 "Removing config value tablePath=\(tablePath ?? "<root>", privacy: .public) key=\(key, privacy: .public)"
             )
-            let updatedText = removingConfigValue(
+            let sanitizedText = removingLegacyDottedKeyIfNeeded(
                 from: currentText,
+                tablePath: tablePath,
+                key: key
+            )
+            let updatedText = removingConfigValue(
+                from: sanitizedText,
                 tablePath: tablePath,
                 key: key
             )
@@ -644,6 +662,19 @@ final class ConfigManager: ObservableObject {
         }
 
         return newLines.joined(separator: "\n")
+    }
+
+    private func removingLegacyDottedKeyIfNeeded(
+        from original: String,
+        tablePath: String?,
+        key: String
+    ) -> String {
+        guard let tablePath else { return original }
+        return removingConfigValue(
+            from: original,
+            tablePath: nil,
+            key: "\(tablePath).\(key)"
+        )
     }
 
     private func tableHeaderPrefix(in trimmedLine: String) -> String? {

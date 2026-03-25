@@ -1,3 +1,4 @@
+import OSLog
 import SwiftUI
 
 private enum SystemMonitorCPUDetail: String, CaseIterable {
@@ -118,95 +119,45 @@ private struct SystemMonitorDetailItem: Identifiable {
 
 struct SystemMonitorPopup: View {
     @EnvironmentObject var configProvider: ConfigProvider
-    @State private var selectedVariant: MenuBarPopupVariant = .vertical
 
     var body: some View {
         MenuBarPopupVariantView(
-            selectedVariant: selectedVariant,
-            onVariantSelected: { variant in
-                selectedVariant = variant
-                ConfigManager.shared.updateConfigValue(
-                    key: "widgets.default.system-monitor.popup.view-variant",
-                    newValue: variant.rawValue
-                )
-            },
+            selectedVariant: .vertical,
+            settingsLinkSection: .systemMonitor,
             vertical: {
                 SystemMonitorDetailsPopup()
                     .environmentObject(configProvider)
-            },
-            settings: {
-                SystemMonitorSettingsPopup()
-                    .environmentObject(configProvider)
             }
         )
-        .onAppear(perform: loadVariant)
-        .onReceive(configProvider.$config, perform: updateVariant)
-    }
-
-    private func loadVariant() {
-        if let variantString = configProvider.config["popup"]?
-            .dictionaryValue?["view-variant"]?.stringValue,
-           let variant = MenuBarPopupVariant(rawValue: variantString) {
-            selectedVariant = variant
-        } else {
-            selectedVariant = .vertical
-        }
-    }
-
-    private func updateVariant(newConfig: ConfigData) {
-        if let variantString = newConfig["popup"]?.dictionaryValue?["view-variant"]?.stringValue,
-           let variant = MenuBarPopupVariant(rawValue: variantString) {
-            selectedVariant = variant
-        }
     }
 }
 
 private struct SystemMonitorDetailsPopup: View {
-    @EnvironmentObject var configProvider: ConfigProvider
+    @ObservedObject private var configManager = ConfigManager.shared
     @ObservedObject private var systemMonitor = SystemMonitorManager.shared
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "barik",
+        category: "SystemMonitorPopup"
+    )
+
     private let popupWidth: CGFloat = 416
     private let popupHeight: CGFloat = 404
     private let popupHorizontalPadding: CGFloat = 12
     private let compactRowSpacing: CGFloat = 8
 
-    private var config: ConfigData { configProvider.config }
-    private var popupConfig: ConfigData { config["popup"]?.dictionaryValue ?? [:] }
-    private var widgetMetrics: [SystemMonitorMetric] {
-        let rawMetrics = config["metrics"]?.stringArrayValue ?? ["cpu", "ram"]
-        let resolved = rawMetrics.compactMap(SystemMonitorMetric.init(rawValue:))
-        return resolved.isEmpty ? [.cpu, .ram] : resolved
-    }
-    private var popupMetrics: [SystemMonitorMetric] {
-        let rawMetrics = popupConfig["metrics"]?.stringArrayValue
-        let resolved = rawMetrics?.compactMap(SystemMonitorMetric.init(rawValue:))
-        let metrics = resolved ?? widgetMetrics
-        return metrics.isEmpty ? widgetMetrics : metrics
-    }
+    @State private var popupMetrics: [SystemMonitorMetric] = [.cpu, .temperature, .ram, .disk, .gpu, .network]
+    @State private var cpuDetails: [SystemMonitorCPUDetail] = [.usage, .temperature, .loadAverage, .cores]
+    @State private var temperatureDetails: [SystemMonitorTemperatureDetail] = [.cpu, .gpu]
+    @State private var ramDetails: [SystemMonitorRAMDetail] = [.used, .app, .free, .pressure]
+    @State private var diskDetails: [SystemMonitorDiskDetail] = [.used, .free, .total]
+    @State private var gpuDetails: [SystemMonitorGPUDetail] = [.utilization, .temperature]
+    @State private var networkDetails: [SystemMonitorNetworkDetail] = [.status, .download, .upload, .interfaceName]
+    @State private var temperatureWarningLevel = 80
+    @State private var temperatureCriticalLevel = 95
+
     private var contentWidth: CGFloat { popupWidth - popupHorizontalPadding * 2 }
     private var compactMetricWidth: CGFloat {
         floor((contentWidth - compactRowSpacing) / 2)
-    }
-
-    private var temperatureWarningLevel: Int { config["temperature-warning-level"]?.intValue ?? 80 }
-    private var temperatureCriticalLevel: Int { config["temperature-critical-level"]?.intValue ?? 95 }
-
-    private var cpuDetails: [SystemMonitorCPUDetail] {
-        detailSelection(key: "cpu-details", defaults: [.usage, .temperature, .loadAverage, .cores])
-    }
-    private var temperatureDetails: [SystemMonitorTemperatureDetail] {
-        detailSelection(key: "temperature-details", defaults: [.cpu, .gpu])
-    }
-    private var ramDetails: [SystemMonitorRAMDetail] {
-        detailSelection(key: "ram-details", defaults: [.used, .app, .free, .pressure])
-    }
-    private var diskDetails: [SystemMonitorDiskDetail] {
-        detailSelection(key: "disk-details", defaults: [.used, .free, .total])
-    }
-    private var gpuDetails: [SystemMonitorGPUDetail] {
-        detailSelection(key: "gpu-details", defaults: [.utilization, .temperature])
-    }
-    private var networkDetails: [SystemMonitorNetworkDetail] {
-        detailSelection(key: "network-details", defaults: [.status, .download, .upload, .interfaceName])
     }
 
     var body: some View {
@@ -233,6 +184,10 @@ private struct SystemMonitorDetailsPopup: View {
         }
         .frame(width: popupWidth, height: popupHeight)
         .background(Color.black)
+        .onAppear(perform: reloadFromConfig)
+        .onReceive(configManager.$config) { _ in
+            reloadFromConfig()
+        }
     }
 
     private var header: some View {
@@ -701,13 +656,76 @@ private struct SystemMonitorDetailsPopup: View {
         return "↑\(speedString(systemMonitor.uploadSpeed))"
     }
 
-    private func detailSelection<Detail: RawRepresentable>(
-        key: String,
-        defaults: [Detail]
+    private func reloadFromConfig() {
+        let config = configManager.globalWidgetConfig(for: "default.system-monitor")
+        let popupConfig = config["popup"]?.dictionaryValue ?? [:]
+
+        let widgetMetrics = resolveMetrics(
+            from: config["metrics"]?.stringArrayValue,
+            fallback: [.cpu, .temperature, .ram, .disk, .gpu, .network]
+        )
+        popupMetrics = resolveMetrics(
+            from: popupConfig["metrics"]?.stringArrayValue,
+            fallback: widgetMetrics
+        )
+
+        cpuDetails = resolveDetails(
+            from: popupConfig["cpu-details"]?.stringArrayValue,
+            fallback: [.usage, .temperature, .loadAverage, .cores]
+        )
+        temperatureDetails = resolveDetails(
+            from: popupConfig["temperature-details"]?.stringArrayValue,
+            fallback: [.cpu, .gpu]
+        )
+        ramDetails = resolveDetails(
+            from: popupConfig["ram-details"]?.stringArrayValue,
+            fallback: [.used, .app, .free, .pressure]
+        )
+        diskDetails = resolveDetails(
+            from: popupConfig["disk-details"]?.stringArrayValue,
+            fallback: [.used, .free, .total]
+        )
+        gpuDetails = resolveDetails(
+            from: popupConfig["gpu-details"]?.stringArrayValue,
+            fallback: [.utilization, .temperature]
+        )
+        networkDetails = resolveDetails(
+            from: popupConfig["network-details"]?.stringArrayValue,
+            fallback: [.status, .download, .upload, .interfaceName]
+        )
+
+        temperatureWarningLevel = config["temperature-warning-level"]?.intValue ?? 80
+        temperatureCriticalLevel = config["temperature-critical-level"]?.intValue ?? 95
+
+        let metricsLog = popupMetrics.map(\.rawValue).joined(separator: ",")
+        let cpuLog = cpuDetails.map(\.rawValue).joined(separator: ",")
+        let temperatureLog = temperatureDetails.map(\.rawValue).joined(separator: ",")
+        let ramLog = ramDetails.map(\.rawValue).joined(separator: ",")
+        let diskLog = diskDetails.map(\.rawValue).joined(separator: ",")
+        let gpuLog = gpuDetails.map(\.rawValue).joined(separator: ",")
+        let networkLog = networkDetails.map(\.rawValue).joined(separator: ",")
+
+        logger.debug(
+            "reloadFromConfig() metrics=\(metricsLog, privacy: .public) cpu=\(cpuLog, privacy: .public) temp=\(temperatureLog, privacy: .public) ram=\(ramLog, privacy: .public) disk=\(diskLog, privacy: .public) gpu=\(gpuLog, privacy: .public) network=\(networkLog, privacy: .public)"
+        )
+    }
+
+    private func resolveMetrics(
+        from rawValues: [String]?,
+        fallback: [SystemMonitorMetric]
+    ) -> [SystemMonitorMetric] {
+        let resolved = rawValues?.compactMap(SystemMonitorMetric.init(rawValue:))
+        let metrics = resolved ?? fallback
+        return metrics.isEmpty ? fallback : metrics
+    }
+
+    private func resolveDetails<Detail: RawRepresentable>(
+        from rawValues: [String]?,
+        fallback: [Detail]
     ) -> [Detail] where Detail.RawValue == String {
-        let rawValues = popupConfig[key]?.stringArrayValue ?? defaults.map(\.rawValue)
-        let resolved = rawValues.compactMap(Detail.init(rawValue:))
-        return resolved.isEmpty ? defaults : resolved
+        let resolved = rawValues?.compactMap(Detail.init(rawValue:))
+        let details = resolved ?? fallback
+        return details.isEmpty ? fallback : details
     }
 
     private var cpuColor: Color {
@@ -779,214 +797,5 @@ private struct SystemMonitorDetailsPopup: View {
 
     private func temperatureString(_ value: Double) -> String {
         "\(Int(value.rounded()))°C"
-    }
-}
-
-private struct SystemMonitorSettingsPopup: View {
-    @EnvironmentObject var configProvider: ConfigProvider
-    private let popupWidth: CGFloat = 416
-    private let popupHeight: CGFloat = 404
-
-    private var config: ConfigData { configProvider.config }
-    private var popupConfig: ConfigData { config["popup"]?.dictionaryValue ?? [:] }
-    private var widgetMetrics: [SystemMonitorMetric] {
-        let rawMetrics = config["metrics"]?.stringArrayValue ?? ["cpu", "ram"]
-        let resolved = rawMetrics.compactMap(SystemMonitorMetric.init(rawValue:))
-        return resolved.isEmpty ? [.cpu, .ram] : resolved
-    }
-    private var popupMetrics: [SystemMonitorMetric] {
-        let rawMetrics = popupConfig["metrics"]?.stringArrayValue
-        let resolved = rawMetrics?.compactMap(SystemMonitorMetric.init(rawValue:))
-        return (resolved?.isEmpty == false ? resolved! : widgetMetrics)
-    }
-
-    var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Popup Settings")
-                    .font(.system(size: 16, weight: .semibold))
-
-                settingsSection(title: "Visible Sections") {
-                    flowLayout(items: SystemMonitorMetric.allCases, id: \.rawValue) { metric in
-                        toggleChip(
-                            title: metric.title,
-                            isSelected: popupMetrics.contains(metric)
-                        ) {
-                            toggleMetric(metric)
-                        }
-                    }
-                }
-
-                detailSection(title: "CPU Fields", items: SystemMonitorCPUDetail.allCases, selected: selectedDetails(key: "cpu-details", defaults: [.usage, .temperature, .loadAverage, .cores]), update: updateCPUDetails)
-                detailSection(title: "Temperature Fields", items: SystemMonitorTemperatureDetail.allCases, selected: selectedDetails(key: "temperature-details", defaults: [.cpu, .gpu]), update: updateTemperatureDetails)
-                detailSection(title: "Memory Fields", items: SystemMonitorRAMDetail.allCases, selected: selectedDetails(key: "ram-details", defaults: [.used, .app, .free, .pressure]), update: updateRAMDetails)
-                detailSection(title: "Disk Fields", items: SystemMonitorDiskDetail.allCases, selected: selectedDetails(key: "disk-details", defaults: [.used, .free, .total]), update: updateDiskDetails)
-                detailSection(title: "GPU Fields", items: SystemMonitorGPUDetail.allCases, selected: selectedDetails(key: "gpu-details", defaults: [.utilization, .temperature]), update: updateGPUDetails)
-                detailSection(title: "Network Fields", items: SystemMonitorNetworkDetail.allCases, selected: selectedDetails(key: "network-details", defaults: [.status, .download, .upload, .interfaceName]), update: updateNetworkDetails)
-
-                Button("Reset Popup Defaults", action: resetToDefaults)
-                    .buttonStyle(.bordered)
-                    .tint(.white.opacity(0.8))
-            }
-            .padding(20)
-        }
-        .frame(width: popupWidth, height: popupHeight)
-        .background(Color.black)
-    }
-
-    private func settingsSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .opacity(0.5)
-                .textCase(.uppercase)
-            content()
-        }
-    }
-
-    private func detailSection<Detail: CaseIterable & RawRepresentable>(
-        title: String,
-        items: Detail.AllCases,
-        selected: [Detail],
-        update: @escaping ([Detail]) -> Void
-    ) -> some View where Detail: Hashable, Detail.RawValue == String {
-        settingsSection(title: title) {
-            flowLayout(items: Array(items), id: \.rawValue) { item in
-                toggleChip(
-                    title: detailTitle(item),
-                    isSelected: selected.contains(item)
-                ) {
-                    var next = selected
-                    if let index = next.firstIndex(of: item) {
-                        guard next.count > 1 else { return }
-                        next.remove(at: index)
-                    } else {
-                        next.append(item)
-                    }
-                    update(next)
-                }
-            }
-        }
-    }
-
-    private func flowLayout<Item: Hashable, Content: View>(
-        items: [Item],
-        id: KeyPath<Item, String>,
-        @ViewBuilder content: @escaping (Item) -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            let columns = [GridItem(.adaptive(minimum: 92), spacing: 8, alignment: .leading)]
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
-                ForEach(items, id: id) { item in
-                    content(item)
-                }
-            }
-        }
-    }
-
-    private func toggleChip(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 11, weight: .medium))
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(isSelected ? Color.white.opacity(0.16) : Color.white.opacity(0.06))
-                .foregroundColor(isSelected ? .white : .white.opacity(0.7))
-                .clipShape(RoundedRectangle(cornerRadius: 9))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func toggleMetric(_ metric: SystemMonitorMetric) {
-        var next = popupMetrics
-        if let index = next.firstIndex(of: metric) {
-            guard next.count > 1 else { return }
-            next.remove(at: index)
-        } else {
-            next.append(metric)
-        }
-        updateMetricSelection(next)
-    }
-
-    private func updateMetricSelection(_ metrics: [SystemMonitorMetric]) {
-        ConfigManager.shared.updateConfigLiteralValue(
-            key: "widgets.default.system-monitor.popup.metrics",
-            newValueLiteral: tomlStringArray(metrics.map(\.rawValue))
-        )
-    }
-
-    private func updateCPUDetails(_ details: [SystemMonitorCPUDetail]) {
-        updateDetails(key: "cpu-details", values: details.map(\.rawValue))
-    }
-
-    private func updateTemperatureDetails(_ details: [SystemMonitorTemperatureDetail]) {
-        updateDetails(key: "temperature-details", values: details.map(\.rawValue))
-    }
-
-    private func updateRAMDetails(_ details: [SystemMonitorRAMDetail]) {
-        updateDetails(key: "ram-details", values: details.map(\.rawValue))
-    }
-
-    private func updateDiskDetails(_ details: [SystemMonitorDiskDetail]) {
-        updateDetails(key: "disk-details", values: details.map(\.rawValue))
-    }
-
-    private func updateGPUDetails(_ details: [SystemMonitorGPUDetail]) {
-        updateDetails(key: "gpu-details", values: details.map(\.rawValue))
-    }
-
-    private func updateNetworkDetails(_ details: [SystemMonitorNetworkDetail]) {
-        updateDetails(key: "network-details", values: details.map(\.rawValue))
-    }
-
-    private func updateDetails(key: String, values: [String]) {
-        ConfigManager.shared.updateConfigLiteralValue(
-            key: "widgets.default.system-monitor.popup.\(key)",
-            newValueLiteral: tomlStringArray(values)
-        )
-    }
-
-    private func resetToDefaults() {
-        updateMetricSelection(widgetMetrics)
-        updateCPUDetails([.usage, .temperature, .loadAverage, .cores])
-        updateTemperatureDetails([.cpu, .gpu])
-        updateRAMDetails([.used, .app, .free, .pressure])
-        updateDiskDetails([.used, .free, .total])
-        updateGPUDetails([.utilization, .temperature])
-        updateNetworkDetails([.status, .download, .upload, .interfaceName])
-    }
-
-    private func selectedDetails<Detail: RawRepresentable>(
-        key: String,
-        defaults: [Detail]
-    ) -> [Detail] where Detail.RawValue == String {
-        let rawValues = popupConfig[key]?.stringArrayValue ?? defaults.map(\.rawValue)
-        let resolved = rawValues.compactMap(Detail.init(rawValue:))
-        return resolved.isEmpty ? defaults : resolved
-    }
-
-    private func tomlStringArray(_ values: [String]) -> String {
-        "[" + values.map { "\"\($0)\"" }.joined(separator: ", ") + "]"
-    }
-
-    private func detailTitle<Detail: RawRepresentable>(_ detail: Detail) -> String
-    where Detail.RawValue == String {
-        switch detail {
-        case let detail as SystemMonitorCPUDetail:
-            return detail.title
-        case let detail as SystemMonitorTemperatureDetail:
-            return detail.title
-        case let detail as SystemMonitorRAMDetail:
-            return detail.title
-        case let detail as SystemMonitorDiskDetail:
-            return detail.title
-        case let detail as SystemMonitorGPUDetail:
-            return detail.title
-        case let detail as SystemMonitorNetworkDetail:
-            return detail.title
-        default:
-            return detail.rawValue
-        }
     }
 }

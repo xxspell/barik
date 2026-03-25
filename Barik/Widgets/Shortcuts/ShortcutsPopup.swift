@@ -121,6 +121,13 @@ struct ShortcutsPopup: View {
                     )
             }
             .buttonStyle(.plain)
+
+            RoutedSettingsLink(section: .shortcuts) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)

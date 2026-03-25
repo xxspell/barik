@@ -53,6 +53,13 @@ final class SettingsStore: ObservableObject {
         configValue(for: field)?.intValue ?? fallback
     }
 
+    func configValueArray(
+        _ field: SettingsFieldKey,
+        fallback: [String] = []
+    ) -> [String] {
+        configValue(for: field)?.stringArrayValue ?? fallback
+    }
+
     func setString(_ value: String, for field: SettingsFieldKey) {
         logger.info(
             "setString() — tablePath=\(field.tablePath, privacy: .public) key=\(field.key, privacy: .public)"

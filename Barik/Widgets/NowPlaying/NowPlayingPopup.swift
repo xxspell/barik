@@ -5,18 +5,42 @@ struct NowPlayingPopup: View {
     @ObservedObject var configProvider: ConfigProvider
     @State private var selectedVariant: MenuBarPopupVariant = .horizontal
 
+    private var popupConfig: ConfigData {
+        configProvider.config["popup"]?.dictionaryValue ?? [:]
+    }
+
+    private var showPlaybackProgress: Bool {
+        popupConfig["show-playback-progress"]?.boolValue ?? true
+    }
+
+    private var showTransportControls: Bool {
+        popupConfig["show-transport-controls"]?.boolValue ?? true
+    }
+
     var body: some View {
         MenuBarPopupVariantView(
             selectedVariant: selectedVariant,
+            settingsLinkSection: .nowPlaying,
             onVariantSelected: { variant in
                 selectedVariant = variant
                 ConfigManager.shared.updateConfigValue(
-                    key: "widgets.default.nowplaying.popup.view-variant",
+                    tablePath: "widgets.default.nowplaying.popup",
+                    key: "view-variant",
                     newValue: variant.rawValue
                 )
             },
-            vertical: { NowPlayingVerticalPopup() },
-            horizontal: { NowPlayingHorizontalPopup() }
+            vertical: {
+                NowPlayingVerticalPopup(
+                    showPlaybackProgress: showPlaybackProgress,
+                    showTransportControls: showTransportControls
+                )
+            },
+            horizontal: {
+                NowPlayingHorizontalPopup(
+                    showPlaybackProgress: showPlaybackProgress,
+                    showTransportControls: showTransportControls
+                )
+            }
         )
         .onAppear(perform: loadVariant)
         .onReceive(configProvider.$config, perform: updateVariant)
@@ -45,6 +69,8 @@ struct NowPlayingPopup: View {
 /// A vertical layout for the now playing popup.
 private struct NowPlayingVerticalPopup: View {
     @ObservedObject private var playingManager = NowPlayingManager.shared
+    let showPlaybackProgress: Bool
+    let showTransportControls: Bool
 
     var body: some View {
         if let song = playingManager.nowPlaying {
@@ -62,18 +88,22 @@ private struct NowPlayingVerticalPopup: View {
                         .fontWeight(.light)
                 }
 
-                PlaybackProgressView(song: song)
+                if showPlaybackProgress {
+                    PlaybackProgressView(song: song)
+                }
 
-                HStack(spacing: 40) {
-                    Image(systemName: "backward.fill")
-                        .font(.system(size: 20))
-                        .onTapGesture { playingManager.previousTrack() }
-                    Image(systemName: song.state == .paused ? "play.fill" : "pause.fill")
-                        .font(.system(size: 30))
-                        .onTapGesture { playingManager.togglePlayPause() }
-                    Image(systemName: "forward.fill")
-                        .font(.system(size: 20))
-                        .onTapGesture { playingManager.nextTrack() }
+                if showTransportControls {
+                    HStack(spacing: 40) {
+                        Image(systemName: "backward.fill")
+                            .font(.system(size: 20))
+                            .onTapGesture { playingManager.previousTrack() }
+                        Image(systemName: song.state == .paused ? "play.fill" : "pause.fill")
+                            .font(.system(size: 30))
+                            .onTapGesture { playingManager.togglePlayPause() }
+                        Image(systemName: "forward.fill")
+                            .font(.system(size: 20))
+                            .onTapGesture { playingManager.nextTrack() }
+                    }
                 }
             }
             .padding(.horizontal, 25)
@@ -87,6 +117,8 @@ private struct NowPlayingVerticalPopup: View {
 /// A horizontal layout for the now playing popup.
 struct NowPlayingHorizontalPopup: View {
     @ObservedObject private var playingManager = NowPlayingManager.shared
+    let showPlaybackProgress: Bool
+    let showTransportControls: Bool
 
     var body: some View {
         if let song = playingManager.nowPlaying {
@@ -107,18 +139,22 @@ struct NowPlayingHorizontalPopup: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                PlaybackProgressView(song: song)
+                if showPlaybackProgress {
+                    PlaybackProgressView(song: song)
+                }
 
-                HStack(spacing: 40) {
-                    Image(systemName: "backward.fill")
-                        .font(.system(size: 20))
-                        .onTapGesture { playingManager.previousTrack() }
-                    Image(systemName: song.state == .paused ? "play.fill" : "pause.fill")
-                        .font(.system(size: 30))
-                        .onTapGesture { playingManager.togglePlayPause() }
-                    Image(systemName: "forward.fill")
-                        .font(.system(size: 20))
-                        .onTapGesture { playingManager.nextTrack() }
+                if showTransportControls {
+                    HStack(spacing: 40) {
+                        Image(systemName: "backward.fill")
+                            .font(.system(size: 20))
+                            .onTapGesture { playingManager.previousTrack() }
+                        Image(systemName: song.state == .paused ? "play.fill" : "pause.fill")
+                            .font(.system(size: 30))
+                            .onTapGesture { playingManager.togglePlayPause() }
+                        Image(systemName: "forward.fill")
+                            .font(.system(size: 20))
+                            .onTapGesture { playingManager.nextTrack() }
+                    }
                 }
             }
             .padding(.horizontal, 25)
@@ -225,12 +261,18 @@ private func timeString(from seconds: Double) -> String {
 struct NowPlayingPopup_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            NowPlayingVerticalPopup()
+            NowPlayingVerticalPopup(
+                showPlaybackProgress: true,
+                showTransportControls: true
+            )
                 .background(Color.black)
                 .frame(height: 600)
                 .previewDisplayName("Vertical")
             
-            NowPlayingHorizontalPopup()
+            NowPlayingHorizontalPopup(
+                showPlaybackProgress: true,
+                showTransportControls: true
+            )
                 .background(Color.black)
                 .previewLayout(.sizeThatFits)
                 .previewDisplayName("Horizontal")

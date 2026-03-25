@@ -145,6 +145,16 @@ struct PomodoroPopup: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.plain)
+
+            RoutedSettingsLink(section: .pomodoro) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.78))
+                    .frame(width: 30, height: 30)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .buttonStyle(.plain)
         }
         .padding(18)
     }

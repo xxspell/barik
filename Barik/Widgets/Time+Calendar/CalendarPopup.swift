@@ -16,7 +16,8 @@ struct CalendarPopup: View {
             onVariantSelected: { variant in
                 selectedVariant = variant
                 ConfigManager.shared.updateConfigValue(
-                    key: "widgets.default.time.popup.view-variant",
+                    tablePath: "widgets.default.time.popup",
+                    key: "view-variant",
                     newValue: variant.rawValue
                 )
             },

@@ -132,6 +132,12 @@ struct CLIProxyUsagePopup: View {
                 .font(.system(size: 16, weight: .semibold))
             Text(localized("CLIProxy"))
                 .font(.system(size: 14, weight: .semibold))
+            RoutedSettingsLink(section: .cliProxyUsage) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .buttonStyle(.plain)
             Spacer()
             Text(
                 String(
@@ -764,11 +770,13 @@ struct CLIProxyUsagePopup: View {
         isSavingConfiguration = true
 
         ConfigManager.shared.updateConfigValue(
-            key: "widgets.default.cliproxy-usage.base-url",
+            tablePath: "widgets.default.cliproxy-usage",
+            key: "base-url",
             newValue: trimmedBaseURL
         )
         ConfigManager.shared.updateConfigValue(
-            key: "widgets.default.cliproxy-usage.api-key",
+            tablePath: "widgets.default.cliproxy-usage",
+            key: "api-key",
             newValue: trimmedAPIKey
         )
 

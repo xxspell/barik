@@ -7,18 +7,18 @@ struct QwenProxyUsageWidget: View {
     @State private var widgetFrame: CGRect = .zero
 
     private var showRing: Bool {
-        configProvider.config["show-ring"]?.boolValue ?? false
+        boolConfig(named: ["show-ring", "show_ring"], default: false)
     }
 
     private var showLabel: Bool {
-        if let explicit = configProvider.config["show-label"]?.boolValue { return explicit }
+        if let explicit = optionalBoolConfig(named: ["show-label", "show_label"]) { return explicit }
         return !showRing
     }
 
     // "failed" (default, like Codex): arc = dead accounts → arc grows on problems
     // "healthy" (like Claude):        arc = live accounts → arc shrinks on problems
     private var ringLogic: String {
-        configProvider.config["ring-logic"]?.stringValue ?? "failed"
+        stringConfig(named: ["ring-logic", "ring_logic"], default: "failed")
     }
 
     private var healthyCount: Int { usageManager.usageData.summary.healthy }
@@ -39,14 +39,13 @@ struct QwenProxyUsageWidget: View {
     // Thresholds in percent (0–100). Defaults: warn=30, critical=50 for "failed" logic.
     // For "healthy" logic the values are inverted (warn triggers below warn threshold).
     private var warnThreshold: Double {
-        let v = configProvider.config["ring-warning-level"]?.intValue
-            ?? configProvider.config["ring-warning-level"]?.intValue
+        let v = intConfig(named: ["ring-warning-level", "ring_warning_level"])
         if let v { return Double(v) / 100.0 }
         return ringLogic == "healthy" ? 0.6 : 0.3
     }
 
     private var criticalThreshold: Double {
-        let v = configProvider.config["ring-critical-level"]?.intValue
+        let v = intConfig(named: ["ring-critical-level", "ring_critical_level"])
         if let v { return Double(v) / 100.0 }
         return ringLogic == "healthy" ? 0.3 : 0.5
     }
@@ -96,6 +95,9 @@ struct QwenProxyUsageWidget: View {
             usageManager.startUpdating(config: configProvider.config)
         }
         .onChange(of: configProvider.config["base-url"]?.stringValue) { _, _ in
+            usageManager.startUpdating(config: configProvider.config)
+        }
+        .onChange(of: configProvider.config["base_url"]?.stringValue) { _, _ in
             usageManager.startUpdating(config: configProvider.config)
         }
     }
@@ -194,5 +196,36 @@ struct QwenProxyUsageWidget: View {
         if clamped >= 0.999 { return 1 }
         if clamped <= 0.001 { return 0 }
         return clamped
+    }
+
+    private func boolConfig(named keys: [String], default defaultValue: Bool) -> Bool {
+        optionalBoolConfig(named: keys) ?? defaultValue
+    }
+
+    private func optionalBoolConfig(named keys: [String]) -> Bool? {
+        for key in keys {
+            if let value = configProvider.config[key]?.boolValue {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private func stringConfig(named keys: [String], default defaultValue: String) -> String {
+        for key in keys {
+            if let value = configProvider.config[key]?.stringValue {
+                return value
+            }
+        }
+        return defaultValue
+    }
+
+    private func intConfig(named keys: [String]) -> Int? {
+        for key in keys {
+            if let value = configProvider.config[key]?.intValue {
+                return value
+            }
+        }
+        return nil
     }
 }

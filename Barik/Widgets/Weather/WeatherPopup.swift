@@ -6,6 +6,7 @@ struct WeatherPopup: View {
 
     @State private var scrollOffset: CGFloat = 0
     @State private var lastOffset: CGFloat = 0
+    @State private var controlsHovered = false
 
     let itemWidth: CGFloat = 50
     let spacing: CGFloat = 20
@@ -37,14 +38,6 @@ struct WeatherPopup: View {
                     Spacer()
 
                     VStack(alignment: .trailing, spacing: 2) {
-                        RoutedSettingsLink(section: .weather) {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.6))
-                                .frame(width: 28, height: 28)
-                        }
-                        .buttonStyle(WeatherPopupIconButtonStyle())
-
                         Image(systemName: weather.symbolName)
                             .symbolRenderingMode(.multicolor)
                             .font(.system(size: 28))
@@ -207,16 +200,54 @@ struct WeatherPopup: View {
         }
         .frame(width: 280)
         .background(Color.black)
+        .overlay(alignment: .bottomTrailing) {
+            HStack(spacing: 3) {
+                RoutedSettingsLink(section: .weather) {
+                    Image(systemName: "gearshape.fill")
+                        .foregroundColor(.white.opacity(0.5))
+                        .frame(width: 13, height: 10)
+                }
+                .buttonStyle(WeatherPopupControlButtonStyle())
+            }
+            .padding(.trailing, 12)
+            .padding(.bottom, 10)
+            .opacity(controlsHovered ? 1 : 0)
+        }
+        .onHover { hovering in
+            withAnimation(.easeIn(duration: 0.2)) {
+                controlsHovered = hovering
+            }
+        }
     }
 }
 
-private struct WeatherPopupIconButtonStyle: ButtonStyle {
+private struct WeatherPopupControlButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.white.opacity(configuration.isPressed ? 0.18 : 0.08))
+                WeatherPopupControlButtonBody(configuration: configuration)
             )
+    }
+}
+
+private struct WeatherPopupControlButtonBody: View {
+    let configuration: WeatherPopupControlButtonStyle.Configuration
+    @State private var isHovered = false
+
+    var body: some View {
+        configuration.label
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(
+                        configuration.isPressed
+                            ? Color.white.opacity(0.18)
+                            : (isHovered ? Color.gray.opacity(0.4) : Color.clear)
+                    )
+            )
+            .onHover { hovering in
+                isHovered = hovering
+            }
     }
 }
 

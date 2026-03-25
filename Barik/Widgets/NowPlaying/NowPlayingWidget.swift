@@ -15,11 +15,20 @@ struct NowPlayingWidget: View {
     @State private var widgetFrame: CGRect = .zero
     @State private var animatedWidth: CGFloat = 0
 
+    private var showAlbumArt: Bool { configProvider.config["show-album-art"]?.boolValue ?? true }
+    private var showArtist: Bool { configProvider.config["show-artist"]?.boolValue ?? true }
+    private var showPauseIndicator: Bool { configProvider.config["show-pause-indicator"]?.boolValue ?? true }
+
     var body: some View {
         ZStack(alignment: .trailing) {
             if let song = playingManager.nowPlaying {
                 // Hidden view for measuring the intrinsic width.
-                MeasurableNowPlayingContent(song: song) { measuredWidth in
+                MeasurableNowPlayingContent(
+                    song: song,
+                    showAlbumArt: showAlbumArt,
+                    showArtist: showArtist,
+                    showPauseIndicator: showPauseIndicator
+                ) { measuredWidth in
                     if animatedWidth == 0 {
                         animatedWidth = measuredWidth
                     } else if animatedWidth != measuredWidth {
@@ -31,7 +40,13 @@ struct NowPlayingWidget: View {
                 .hidden()
 
                 // Visible content with fixed animated width.
-                VisibleNowPlayingContent(song: song, width: animatedWidth)
+                VisibleNowPlayingContent(
+                    song: song,
+                    width: animatedWidth,
+                    showAlbumArt: showAlbumArt,
+                    showArtist: showArtist,
+                    showPauseIndicator: showPauseIndicator
+                )
                     .onTapGesture {
                         MenuBarPopup.show(rect: widgetFrame, id: "nowplaying") {
                             NowPlayingPopup(configProvider: configProvider)
@@ -48,6 +63,9 @@ struct NowPlayingWidget: View {
 /// A view that composes the album art and song text into a capsule-shaped content view.
 struct NowPlayingContent: View {
     let song: NowPlayingSong
+    let showAlbumArt: Bool
+    let showArtist: Bool
+    let showPauseIndicator: Bool
     @ObservedObject var configManager = ConfigManager.shared
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
     
@@ -55,13 +73,17 @@ struct NowPlayingContent: View {
         Group {
             if foregroundHeight < 38 {
                 HStack(spacing: 8) {
-                    AlbumArtView(song: song)
-                    SongTextView(song: song)
+                    if showAlbumArt {
+                        AlbumArtView(song: song, showPauseIndicator: showPauseIndicator)
+                    }
+                    SongTextView(song: song, showArtist: showArtist)
                 }
             } else {
                 HStack(spacing: 8) {
-                    AlbumArtView(song: song)
-                    SongTextView(song: song)
+                    if showAlbumArt {
+                        AlbumArtView(song: song, showPauseIndicator: showPauseIndicator)
+                    }
+                    SongTextView(song: song, showArtist: showArtist)
                 }
                 .padding(.horizontal, foregroundHeight < 45 ? 8 : 12)
                 .frame(height: foregroundHeight < 45 ? NowPlayingWidgetLayout.capsuleHeight : NowPlayingWidgetLayout.compactHeight)
@@ -81,10 +103,18 @@ struct NowPlayingContent: View {
 /// A wrapper view that measures the intrinsic width of the now playing content.
 struct MeasurableNowPlayingContent: View {
     let song: NowPlayingSong
+    let showAlbumArt: Bool
+    let showArtist: Bool
+    let showPauseIndicator: Bool
     let onSizeChange: (CGFloat) -> Void
 
     var body: some View {
-        NowPlayingContent(song: song)
+        NowPlayingContent(
+            song: song,
+            showAlbumArt: showAlbumArt,
+            showArtist: showArtist,
+            showPauseIndicator: showPauseIndicator
+        )
             .background(
                 GeometryReader { geometry in
                     Color.clear
@@ -105,9 +135,17 @@ struct MeasurableNowPlayingContent: View {
 struct VisibleNowPlayingContent: View {
     let song: NowPlayingSong
     let width: CGFloat
+    let showAlbumArt: Bool
+    let showArtist: Bool
+    let showPauseIndicator: Bool
 
     var body: some View {
-        NowPlayingContent(song: song)
+        NowPlayingContent(
+            song: song,
+            showAlbumArt: showAlbumArt,
+            showArtist: showArtist,
+            showPauseIndicator: showPauseIndicator
+        )
             .frame(width: width, height: NowPlayingWidgetLayout.compactHeight)
             .animation(.smooth(duration: 0.1), value: song)
             .transition(.blurReplace)
@@ -119,6 +157,7 @@ struct VisibleNowPlayingContent: View {
 /// A view that displays the album art with a fade animation and a pause indicator if needed.
 struct AlbumArtView: View {
     let song: NowPlayingSong
+    let showPauseIndicator: Bool
 
     var body: some View {
         ZStack {
@@ -149,7 +188,7 @@ struct AlbumArtView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 4))
             }
 
-            if song.state == .paused {
+            if showPauseIndicator && song.state == .paused {
                 Image(systemName: "pause.fill")
                     .foregroundColor(.icon)
                     .transition(.blurReplace)
@@ -164,6 +203,7 @@ struct AlbumArtView: View {
 /// A view that displays the song title and artist.
 struct SongTextView: View {
     let song: NowPlayingSong
+    let showArtist: Bool
     @ObservedObject var configManager = ConfigManager.shared
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
 
@@ -175,12 +215,14 @@ struct SongTextView: View {
                     .font(.system(size: 11))
                     .fontWeight(.medium)
                     .padding(.trailing, 2)
-                Text(song.artist)
-                    .opacity(0.8)
-                    .font(.system(size: 10))
-                    .padding(.trailing, 2)
+                if showArtist {
+                    Text(song.artist)
+                        .opacity(0.8)
+                        .font(.system(size: 10))
+                        .padding(.trailing, 2)
+                }
             } else {
-                Text(song.artist + " — " + song.title)
+                Text(showArtist ? song.artist + " — " + song.title : song.title)
                     .font(.system(size: 12))
             }
         }

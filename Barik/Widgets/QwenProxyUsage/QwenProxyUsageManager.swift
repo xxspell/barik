@@ -148,8 +148,10 @@ final class QwenProxyUsageManager: ObservableObject {
     }
 
     func startUpdating(config: ConfigData) {
-        let configChanged = currentConfig["base_url"]?.stringValue != config["base_url"]?.stringValue
-            || currentConfig["token"]?.stringValue != config["token"]?.stringValue
+        let configChanged = configString(named: ["base-url", "base_url"], in: currentConfig)
+            != configString(named: ["base-url", "base_url"], in: config)
+            || configString(named: ["token"], in: currentConfig)
+            != configString(named: ["token"], in: config)
 
         currentConfig = config
 
@@ -184,8 +186,8 @@ final class QwenProxyUsageManager: ObservableObject {
     }
 
     private func fetchData() {
-        let baseURL = currentConfig["base-url"]?.stringValue ?? ""
-        let token = currentConfig["token"]?.stringValue ?? ""
+        let baseURL = configString(named: ["base-url", "base_url"], in: currentConfig) ?? ""
+        let token = configString(named: ["token"], in: currentConfig) ?? ""
 
         guard !baseURL.isEmpty else {
             fetchFailed = true
@@ -273,5 +275,14 @@ final class QwenProxyUsageManager: ObservableObject {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    private func configString(named keys: [String], in config: ConfigData) -> String? {
+        for key in keys {
+            if let value = config[key]?.stringValue {
+                return value
+            }
+        }
+        return nil
     }
 }

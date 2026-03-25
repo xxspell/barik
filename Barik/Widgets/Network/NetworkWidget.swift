@@ -2,15 +2,19 @@ import SwiftUI
 
 /// Widget for the menu, displaying Wi‑Fi and Ethernet icons.
 struct NetworkWidget: View {
-    @StateObject private var viewModel = NetworkStatusViewModel()
+    @EnvironmentObject var configProvider: ConfigProvider
+    @ObservedObject private var viewModel = NetworkStatusViewModel.shared
     @State private var rect: CGRect = .zero
+
+    private var showWiFi: Bool { configProvider.config["show-wifi"]?.boolValue ?? true }
+    private var showEthernet: Bool { configProvider.config["show-ethernet"]?.boolValue ?? true }
 
     var body: some View {
         HStack(spacing: 15) {
-            if viewModel.wifiState != .notSupported {
+            if showWiFi && viewModel.wifiState != .notSupported {
                 wifiIcon
             }
-            if viewModel.ethernetState != .notSupported {
+            if showEthernet && viewModel.ethernetState != .notSupported {
                 ethernetIcon
             }
         }
@@ -21,7 +25,9 @@ struct NetworkWidget: View {
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))
         .onTapGesture {
-            MenuBarPopup.show(rect: rect, id: "network") { NetworkPopup() }
+            MenuBarPopup.show(rect: rect, id: "network") {
+                NetworkPopup().environmentObject(configProvider)
+            }
         }
     }
 

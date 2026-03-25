@@ -41,6 +41,12 @@ struct CodexUsagePopup: View {
                 .frame(width: 18, height: 18)
             Text(localized("Codex Usage"))
                 .font(.system(size: 14, weight: .semibold))
+            RoutedSettingsLink(section: .codexUsage) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .buttonStyle(.plain)
             Spacer()
             Text(usageManager.usageData.plan)
                 .font(.system(size: 11, weight: .medium))

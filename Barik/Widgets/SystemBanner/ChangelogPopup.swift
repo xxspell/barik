@@ -2,7 +2,14 @@ import MarkdownUI
 import SwiftUI
 
 struct ChangelogPopup: View {
-    @State private var changelogText: String = "Loading..."
+    @Environment(\.dismiss) private var dismiss
+    @State private var changelogText = "Loading..."
+    @State private var availableVersions: [String] = []
+    @State private var selectedVersion: String?
+    @State private var fullChangelog = ""
+
+    private let popupWidth: CGFloat = 760
+    private let popupHeight: CGFloat = 720
 
     private var bundleVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
@@ -11,30 +18,82 @@ struct ChangelogPopup: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("v\(bundleVersion) Changelog")
-                .padding(15)
-                .font(.system(size: 14))
-                .fontWeight(.medium)
-            Rectangle().fill(.white).opacity(0.2).frame(height: 0.5)
+            header
+
+            Rectangle()
+                .fill(.white.opacity(0.12))
+                .frame(height: 1)
+
             ScrollView {
                 Markdown(changelogText)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 20)
-                    .padding(.trailing, 15)
                     .markdownTheme(.barik)
+                    .markdownImageProvider(WebImageProvider())
                     .foregroundStyle(.white)
-            }.offset(x: 15)
-                .markdownImageProvider(WebImageProvider())
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 26)
+                    .padding(.vertical, 22)
+            }
+            .scrollIndicators(.visible)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .scrollIndicators(.hidden)
-        .frame(width: 500)
-        .frame(maxHeight: 600)
+        .frame(width: popupWidth, height: popupHeight)
+        .background(Color.black)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .task {
             await loadChangelog()
         }
     }
 
-    // Asynchronously loads the changelog from the remote URL
+    private var header: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Changelog")
+                    .font(.system(size: 20, weight: .semibold))
+
+                if availableVersions.isEmpty {
+                    Text("Version \(bundleVersion)")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.62))
+                } else {
+                    Picker("Version", selection: Binding(
+                        get: { selectedVersion ?? bundleVersion },
+                        set: { newValue in
+                            selectedVersion = newValue
+                            updateDisplayedVersion(newValue)
+                        }
+                    )) {
+                        ForEach(availableVersions, id: \.self) { version in
+                            Text(version).tag(version)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .tint(.white)
+                }
+            }
+
+            Spacer()
+
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .frame(width: 30, height: 30)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+    }
+
+    private func close() {
+        dismiss()
+        MenuBarPopup.hide()
+    }
+
     private func loadChangelog() async {
         guard
             let url = URL(
@@ -48,33 +107,57 @@ struct ChangelogPopup: View {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             guard let fullChangelog = String(data: data, encoding: .utf8) else {
-                updateChangelogText("Failed to load CHANGELOG.")
+                await updateChangelogText("Failed to load CHANGELOG.")
                 return
             }
 
-            let extractedSection = extractSection(
-                forVersion: bundleVersion, from: fullChangelog)
-            let displayText =
-                extractedSection.isEmpty
-                ? "Changelog for v\(bundleVersion) not found"
-                : extractedSection
+            await MainActor.run {
+                self.fullChangelog = fullChangelog
+                self.availableVersions = extractVersions(from: fullChangelog)
 
-            updateChangelogText(displayText)
+                let initialVersion: String
+                if availableVersions.contains(bundleVersion) {
+                    initialVersion = bundleVersion
+                } else {
+                    initialVersion = availableVersions.first ?? bundleVersion
+                }
+
+                self.selectedVersion = initialVersion
+                updateDisplayedVersion(initialVersion)
+            }
         } catch {
-            updateChangelogText("Failed to load CHANGELOG.")
+            await updateChangelogText("Failed to load CHANGELOG.")
         }
     }
 
-    // Updates the changelog text on the main thread
+    @MainActor
     private func updateChangelogText(_ text: String) {
-        DispatchQueue.main.async {
-            self.changelogText = text
-        }
+        changelogText = text
     }
 
-    // Extracts the section corresponding to the specified version from the changelog
+    @MainActor
+    private func updateDisplayedVersion(_ version: String) {
+        let extractedSection = extractSection(
+            forVersion: version,
+            from: fullChangelog
+        )
+        changelogText = extractedSection.isEmpty
+            ? "Changelog for v\(version) not found"
+            : extractedSection
+    }
+
+    private func extractVersions(from changelog: String) -> [String] {
+        changelog
+            .components(separatedBy: .newlines)
+            .compactMap { line -> String? in
+                guard line.hasPrefix("## ") else { return nil }
+                return String(line.dropFirst(3)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+    }
+
     private func extractSection(
-        forVersion version: String, from changelog: String
+        forVersion version: String,
+        from changelog: String
     ) -> String {
         let lines = changelog.components(separatedBy: .newlines)
 
@@ -94,12 +177,10 @@ struct ChangelogPopup: View {
                 continue
             }
 
-            // End the section when a new version header is encountered
             if i != versionIndex && line.hasPrefix("## ") {
                 break
             }
 
-            // Replace "<br>" with a markdown header if encountered
             if line == "<br>" {
                 sectionLines.append("### ")
             } else {
@@ -110,8 +191,6 @@ struct ChangelogPopup: View {
         return sectionLines.joined(separator: "\n")
     }
 }
-
-// MARK: - Preview
 
 struct ChangelogPopup_Previews: PreviewProvider {
     static var previews: some View {

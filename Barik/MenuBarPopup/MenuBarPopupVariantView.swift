@@ -139,7 +139,7 @@ struct MenuBarPopupVariantView: View {
 
     private func popupSettingsLink(section: SettingsSection) -> some View {
         RoutedSettingsLink(section: section) {
-            Image(systemName: "slider.horizontal.3")
+            Image(systemName: "gearshape.fill")
                 .foregroundColor(.white.opacity(0.5))
                 .frame(width: 13, height: 10)
         }

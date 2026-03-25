@@ -299,6 +299,14 @@ struct TickTickPopup: View {
             }
             .buttonStyle(.plain)
             .onHover { h in h ? NSCursor.pointingHand.push() : NSCursor.pop() }
+
+            RoutedSettingsLink(section: .ticktick) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+            .buttonStyle(.plain)
+            .onHover { h in h ? NSCursor.pointingHand.push() : NSCursor.pop() }
         }
         .padding(.horizontal, 18).padding(.vertical, 12)
     }

@@ -2,7 +2,19 @@ import SwiftUI
 
 /// Window displaying detailed network status information.
 struct NetworkPopup: View {
-    @StateObject private var viewModel = NetworkStatusViewModel()
+    @EnvironmentObject var configProvider: ConfigProvider
+    @ObservedObject private var viewModel = NetworkStatusViewModel.shared
+    @State private var controlsHovered = false
+
+    private var popupConfig: ConfigData {
+        configProvider.config["popup"]?.dictionaryValue ?? [:]
+    }
+
+    private var showSignalStrength: Bool { popupConfig["show-signal-strength"]?.boolValue ?? true }
+    private var showRSSI: Bool { popupConfig["show-rssi"]?.boolValue ?? true }
+    private var showNoise: Bool { popupConfig["show-noise"]?.boolValue ?? true }
+    private var showChannel: Bool { popupConfig["show-channel"]?.boolValue ?? true }
+    private var showEthernetSection: Bool { popupConfig["show-ethernet-section"]?.boolValue ?? true }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -18,19 +30,25 @@ struct NetworkPopup: View {
                     && viewModel.ssid != "No interface"
                 {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(
-                            "Signal strength: \(viewModel.wifiSignalStrength.rawValue)"
-                        )
-                        Text("RSSI: \(viewModel.rssi)")
-                        Text("Noise: \(viewModel.noise)")
-                        Text("Channel: \(viewModel.channel)")
+                        if showSignalStrength {
+                            Text("Signal strength: \(viewModel.wifiSignalStrength.rawValue)")
+                        }
+                        if showRSSI {
+                            Text("RSSI: \(viewModel.rssi)")
+                        }
+                        if showNoise {
+                            Text("Noise: \(viewModel.noise)")
+                        }
+                        if showChannel {
+                            Text("Channel: \(viewModel.channel)")
+                        }
                     }
                     .font(.subheadline)
                 }
             }
 
             // Ethernet section
-            if viewModel.ethernetState != .notSupported {
+            if showEthernetSection && viewModel.ethernetState != .notSupported {
                 HStack(spacing: 8) {
                     ethernetIcon
                     Text("Ethernet: \(viewModel.ethernetState.rawValue)")
@@ -41,6 +59,24 @@ struct NetworkPopup: View {
         }
         .padding(25)
         .background(Color.black)
+        .overlay(alignment: .bottomTrailing) {
+            HStack(spacing: 3) {
+                RoutedSettingsLink(section: .network) {
+                    Image(systemName: "gearshape.fill")
+                        .foregroundColor(.white.opacity(0.5))
+                        .frame(width: 13, height: 10)
+                }
+                .buttonStyle(NetworkPopupControlButtonStyle())
+            }
+            .padding(.trailing, 12)
+            .padding(.bottom, 10)
+            .opacity(controlsHovered ? 1 : 0)
+        }
+        .onHover { hovering in
+            withAnimation(.easeIn(duration: 0.2)) {
+                controlsHovered = hovering
+            }
+        }
     }
 
     /// Chooses the Wi‑Fi icon based on the status and connection availability.
@@ -125,6 +161,36 @@ struct NetworkPopup: View {
                 .background(Color.gray.opacity(0.8))
                 .clipShape(Circle())
         }
+    }
+}
+
+private struct NetworkPopupControlButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                NetworkPopupControlButtonBody(configuration: configuration)
+            )
+    }
+}
+
+private struct NetworkPopupControlButtonBody: View {
+    let configuration: NetworkPopupControlButtonStyle.Configuration
+    @State private var isHovered = false
+
+    var body: some View {
+        configuration.label
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(
+                        configuration.isPressed
+                            ? Color.white.opacity(0.18)
+                            : (isHovered ? Color.gray.opacity(0.4) : Color.clear)
+                    )
+            )
+            .onHover { hovering in
+                isHovered = hovering
+            }
     }
 }
 
