@@ -5,6 +5,7 @@ struct RootToml: Decodable {
     var theme: String?
     var yabai: YabaiConfig?
     var aerospace: AerospaceConfig?
+    var rift: RiftConfig?
     var experimental: ExperimentalConfig?
     var widgets: WidgetsSection
 
@@ -12,6 +13,7 @@ struct RootToml: Decodable {
         self.theme = nil
         self.yabai = nil
         self.aerospace = nil
+        self.rift = nil
         self.widgets = WidgetsSection(displayed: [], others: [:])
     }
 }
@@ -34,7 +36,11 @@ struct Config {
     var aerospace: AerospaceConfig {
         rootToml.aerospace ?? AerospaceConfig()
     }
-    
+
+    var rift: RiftConfig {
+        rootToml.rift ?? RiftConfig()
+    }
+
     var experimental: ExperimentalConfig {
         rootToml.experimental ?? ExperimentalConfig()
     }
@@ -275,6 +281,20 @@ struct AerospaceConfig: Decodable {
             self.path = "/usr/local/bin/aerospace"
         } else {
             self.path = "/opt/homebrew/bin/aerospace"
+        }
+    }
+}
+
+struct RiftConfig: Decodable {
+    let path: String
+
+    init() {
+        if FileManager.default.fileExists(atPath: "/opt/homebrew/bin/rift-cli") {
+            self.path = "/opt/homebrew/bin/rift-cli"
+        } else if FileManager.default.fileExists(atPath: "/usr/local/bin/rift-cli") {
+            self.path = "/usr/local/bin/rift-cli"
+        } else {
+            self.path = "/opt/homebrew/bin/rift-cli"
         }
     }
 }

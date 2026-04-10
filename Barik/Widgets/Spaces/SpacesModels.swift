@@ -60,6 +60,9 @@ struct AnyWindow: Identifiable, Equatable {
 
 struct AnySpace: Identifiable, Equatable {
     let id: String
+    let label: String
+    let sortOrder: Int
+    let displayFrame: CGRect?
     let isFocused: Bool
     let windows: [AnyWindow]
     let supportsDeletion: Bool
@@ -67,12 +70,27 @@ struct AnySpace: Identifiable, Equatable {
     init<S: SpaceModel>(_ space: S) {
         if let aero = space as? AeroSpace {
             self.id = aero.workspace
+            self.label = aero.workspace
+            self.sortOrder = Int(aero.workspace) ?? Int.max
+            self.displayFrame = nil
             self.supportsDeletion = false
         } else if let yabai = space as? YabaiSpace {
             self.id = String(yabai.id)
+            self.label = String(yabai.id)
+            self.sortOrder = yabai.id
+            self.displayFrame = nil
             self.supportsDeletion = true
+        } else if let rift = space as? RiftWorkspace {
+            self.id = rift.sourceId
+            self.label = String(rift.index + 1)
+            self.sortOrder = rift.index
+            self.displayFrame = rift.displayFrame
+            self.supportsDeletion = false
         } else {
             self.id = "0"
+            self.label = "0"
+            self.sortOrder = Int.max
+            self.displayFrame = nil
             self.supportsDeletion = false
         }
         self.isFocused = space.isFocused
@@ -80,7 +98,11 @@ struct AnySpace: Identifiable, Equatable {
     }
 
     static func == (lhs: AnySpace, rhs: AnySpace) -> Bool {
-        return lhs.id == rhs.id && lhs.isFocused == rhs.isFocused
+        return lhs.id == rhs.id
+            && lhs.label == rhs.label
+            && lhs.sortOrder == rhs.sortOrder
+            && lhs.displayFrame == rhs.displayFrame
+            && lhs.isFocused == rhs.isFocused
             && lhs.windows == rhs.windows
     }
 }

@@ -49,9 +49,12 @@ struct SpacesWidget: View {
     private var showInactiveSpaces: Bool { spaceConfig["show-inactive"]?.boolValue ?? true }
 
     private var visibleSpaces: [AnySpace] {
-        guard !showInactiveSpaces else { return viewModel.spaces }
-        return viewModel.spaces.filter(\.isFocused)
+        let spacesOnCurrentDisplay = viewModel.spacesForDisplay(screenFrame)
+        guard !showInactiveSpaces else { return spacesOnCurrentDisplay }
+        return spacesOnCurrentDisplay.filter(\.isFocused)
     }
+
+    @State private var screenFrame: CGRect = .zero
 
     var body: some View {
         HStack(spacing: foregroundHeight < 30 ? 0 : 8) {
@@ -63,6 +66,7 @@ struct SpacesWidget: View {
         .animation(.smooth(duration: 0.3), value: viewModel.spaces)
         .foregroundStyle(Color.foreground)
         .environmentObject(viewModel)
+        .background(ScreenRectReader(screenRect: $screenFrame))
     }
 }
 
@@ -89,7 +93,7 @@ private struct SpaceView: View {
         HStack(spacing: 0) {
             Spacer().frame(width: 10)
             if showKey {
-                Text(space.id)
+                Text(space.label)
                     .font(.headline)
                     .frame(minWidth: 15)
                     .fixedSize(horizontal: true, vertical: false)

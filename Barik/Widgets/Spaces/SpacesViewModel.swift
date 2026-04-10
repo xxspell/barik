@@ -2,6 +2,15 @@ import AppKit
 import Combine
 import Foundation
 
+private extension CGRect {
+    func equalToWithTolerance(_ other: CGRect, tolerance: CGFloat = 1.0) -> Bool {
+        abs(minX - other.minX) <= tolerance
+            && abs(minY - other.minY) <= tolerance
+            && abs(width - other.width) <= tolerance
+            && abs(height - other.height) <= tolerance
+    }
+}
+
 class SpacesViewModel: ObservableObject {
     static let shared = SpacesViewModel()
 
@@ -10,6 +19,8 @@ class SpacesViewModel: ObservableObject {
     private var provider: AnySpacesProvider?
     private var yabaiProvider: YabaiSpacesProvider?
     private var yabaiSignalMonitor: YabaiSignalMonitor?
+    private var riftSignalMonitor: RiftSignalMonitor?
+    private var isRiftProvider = false
     private let loadQueue = DispatchQueue(
         label: "barik.spaces.load",
         qos: .utility
@@ -33,6 +44,15 @@ class SpacesViewModel: ObservableObject {
             }
         } else if runningApps.contains("aerospace") {
             provider = AnySpacesProvider(AerospaceSpacesProvider())
+        } else if runningApps.contains("rift") {
+            let riftProvider = RiftSpacesProvider()
+            provider = AnySpacesProvider(riftProvider)
+            isRiftProvider = true
+            riftSignalMonitor = RiftSignalMonitor(
+                executablePath: riftProvider.executablePath
+            ) { [weak self] in
+                self?.loadSpaces()
+            }
         } else {
             provider = nil
         }
@@ -44,6 +64,12 @@ class SpacesViewModel: ObservableObject {
     }
 
     private func startMonitoring() {
+        if isRiftProvider {
+            riftSignalMonitor?.start()
+            loadSpaces()
+            return
+        }
+
         if yabaiSignalMonitor != nil {
             timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) {
                 [weak self] _ in
@@ -63,6 +89,7 @@ class SpacesViewModel: ObservableObject {
         timer?.invalidate()
         timer = nil
         yabaiSignalMonitor?.stop()
+        riftSignalMonitor?.stop()
     }
 
     private func loadSpaces() {
@@ -76,12 +103,34 @@ class SpacesViewModel: ObservableObject {
 
             self.isLoading = true
 
-            let nextSpaces: [AnySpace]
-            if let provider = self.provider,
-               let spaces = provider.getSpacesWithWindows() {
-                nextSpaces = spaces.sorted { $0.id < $1.id }
-            } else {
-                nextSpaces = []
+            guard let provider = self.provider else {
+                DispatchQueue.main.async {
+                    if !self.spaces.isEmpty {
+                        self.spaces = []
+                    }
+                }
+                self.isLoading = false
+                if self.pendingReload {
+                    self.pendingReload = false
+                    self.loadSpaces()
+                }
+                return
+            }
+
+            guard let spaces = provider.getSpacesWithWindows() else {
+                self.isLoading = false
+                if self.pendingReload {
+                    self.pendingReload = false
+                    self.loadSpaces()
+                }
+                return
+            }
+
+            let nextSpaces = spaces.sorted { lhs, rhs in
+                if lhs.sortOrder == rhs.sortOrder {
+                    return lhs.label < rhs.label
+                }
+                return lhs.sortOrder < rhs.sortOrder
             }
 
             DispatchQueue.main.async {
@@ -95,7 +144,26 @@ class SpacesViewModel: ObservableObject {
                 self.pendingReload = false
                 self.loadSpaces()
             }
+            return
         }
+    }
+
+    func spacesForDisplay(_ screenFrame: CGRect) -> [AnySpace] {
+        guard !screenFrame.isEmpty else {
+            return spaces
+        }
+
+        let spacesWithDisplay = spaces.filter { $0.displayFrame != nil }
+        guard !spacesWithDisplay.isEmpty else {
+            return spaces
+        }
+
+        let matched = spaces.filter { space in
+            guard let frame = space.displayFrame else { return false }
+            return frame.equalToWithTolerance(screenFrame)
+        }
+
+        return matched.isEmpty ? spaces : matched
     }
 
     func refresh() {
@@ -106,12 +174,14 @@ class SpacesViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async {
             self.provider?.focusSpace(
                 spaceId: space.id, needWindowFocus: needWindowFocus)
+            self.loadSpaces()
         }
     }
 
     func switchToWindow(_ window: AnyWindow) {
         DispatchQueue.global(qos: .userInitiated).async {
             self.provider?.focusWindow(windowId: String(window.id))
+            self.loadSpaces()
         }
     }
 
