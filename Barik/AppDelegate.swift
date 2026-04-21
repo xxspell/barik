@@ -1,10 +1,14 @@
 import SwiftUI
 import AppKit
 import OSLog
+import Combine
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var backgroundPanels: [NSPanel] = []
     private var menuBarPanels: [NSPanel] = []
+    private var configCancellable: AnyCancellable?
+    private let tickTickWallpaperManager = TickTickWallpaperManager.shared
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "barik",
         category: "AppDelegate"
@@ -27,6 +31,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         
         MenuBarPopup.setup()
         setupPanels()
+        tickTickWallpaperManager.startUpdating(
+            config: ConfigManager.shared.globalWidgetConfig(for: "default.ticktick")
+        )
+        configCancellable = ConfigManager.shared.$config
+            .receive(on: RunLoop.main)
+            .sink { [weak self] config in
+                let widgetConfig = config.rootToml.widgets.config(for: "default.ticktick") ?? [:]
+                self?.tickTickWallpaperManager.startUpdating(config: widgetConfig)
+            }
 
         NotificationCenter.default.addObserver(
             self,
@@ -37,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func screenParametersDidChange(_ notification: Notification) {
         setupPanels()
+        tickTickWallpaperManager.screenConfigurationDidChange()
     }
 
     private func edgeInsetsDescription(_ insets: NSEdgeInsets) -> String {
