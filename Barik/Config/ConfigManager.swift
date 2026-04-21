@@ -251,6 +251,19 @@ final class ConfigManager: ObservableObject {
             normal = true
             priorities = ["medium", "high"] # low, medium, high
 
+            # Optional wallpaper integration.
+            # Barik will ask your local wallpaper service for a rendered PNG
+            # and apply it to the desktop on the selected cadence.
+            #
+            # [widgets.default.ticktick.wallpaper]
+            # enabled = true
+            # base-url = "http://127.0.0.1:8765"
+            # profile = "default"
+            # style = "glow" # glow, panel, terminal
+            # token = "shared-secret"
+            # interval-seconds = 300
+            # apply-to-all-screens = true
+
             [widgets.default.time]
             format = "E d, J:mm"
             calendar.format = "J:mm"

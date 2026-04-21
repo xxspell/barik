@@ -4174,6 +4174,7 @@ private struct TickTickSettingsView: View {
     @ObservedObject private var configManager = ConfigManager.shared
     @ObservedObject private var settingsStore = SettingsStore.shared
     @ObservedObject private var tickTickManager = TickTickManager.shared
+    @ObservedObject private var wallpaperManager = TickTickWallpaperManager.shared
 
     @State private var displayMode = TickTickDisplayMode.badge
     @State private var tintRotatingItemText = false
@@ -4189,14 +4190,25 @@ private struct TickTickSettingsView: View {
     @State private var includeLowPriority = false
     @State private var includeMediumPriority = true
     @State private var includeHighPriority = true
+    @State private var wallpaperEnabled = false
+    @State private var wallpaperBaseURL = ""
+    @State private var wallpaperProfile = "default"
+    @State private var wallpaperStyle = TickTickWallpaperStyle.glow
+    @State private var wallpaperToken = ""
+    @State private var wallpaperIntervalSeconds = 300.0
+    @State private var wallpaperApplyToAllScreens = true
     @State private var isApplyingConfigSnapshot = false
     @State private var pendingStringWrites: [String: String] = [:]
     @State private var pendingBoolWrites: [String: Bool] = [:]
     @State private var pendingIntWrites: [String: Int] = [:]
     @State private var pendingArrayWrites: [String: [String]] = [:]
+    @State private var wallpaperBaseURLTask: Task<Void, Never>?
+    @State private var wallpaperProfileTask: Task<Void, Never>?
+    @State private var wallpaperTokenTask: Task<Void, Never>?
 
     private let tickTickTable = "widgets.default.ticktick"
     private let rotatingTasksTable = "widgets.default.ticktick.rotating-tasks"
+    private let wallpaperTable = "widgets.default.ticktick.wallpaper"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -4433,6 +4445,156 @@ private struct TickTickSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            SettingsCardView(
+                "Habit Wallpaper",
+                actionTitle: settingsLocalized("settings.action.reset"),
+                action: resetWallpaperDefaults
+            ) {
+                ToggleRow(
+                    title: "Enable wallpaper sync",
+                    description: "Off by default. When enabled, Barik asks your local wallpaper service for a fresh TickTick habits wallpaper.",
+                    isOn: Binding(
+                        get: { wallpaperEnabled },
+                        set: { newValue in
+                            wallpaperEnabled = newValue
+                            setBoolValue(
+                                newValue,
+                                for: .init(tablePath: wallpaperTable, key: "enabled")
+                            )
+                        }
+                    )
+                )
+
+                DebouncedTextSettingRow(
+                    title: "Wallpaper service URL",
+                    description: "Example: http://127.0.0.1:8765",
+                    text: $wallpaperBaseURL
+                )
+                .disabled(!wallpaperEnabled)
+                .onChange(of: wallpaperBaseURL) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    scheduleWallpaperStringWrite(
+                        task: &wallpaperBaseURLTask,
+                        field: .init(tablePath: wallpaperTable, key: "base-url"),
+                        value: newValue
+                    )
+                }
+
+                DebouncedTextSettingRow(
+                    title: "Profile",
+                    description: "Profile name from the wallpaper service config, for example default.",
+                    text: $wallpaperProfile
+                )
+                .disabled(!wallpaperEnabled)
+                .onChange(of: wallpaperProfile) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    scheduleWallpaperStringWrite(
+                        task: &wallpaperProfileTask,
+                        field: .init(tablePath: wallpaperTable, key: "profile"),
+                        value: newValue
+                    )
+                }
+
+                SegmentedPickerRow(
+                    title: "Wallpaper style",
+                    description: "Glow keeps the current soft wallpaper look. Terminal switches to a monochrome TUI-inspired monospace style.",
+                    selection: Binding(
+                        get: { wallpaperStyle },
+                        set: { newValue in
+                            wallpaperStyle = newValue
+                            setStringValue(
+                                newValue.rawValue,
+                                for: .init(tablePath: wallpaperTable, key: "style")
+                            )
+                        }
+                    ),
+                    options: TickTickWallpaperStyle.allCases,
+                    titleForOption: { $0.title }
+                )
+                .disabled(!wallpaperEnabled)
+
+                DebouncedTextSettingRow(
+                    title: "Access token",
+                    description: "Optional shared secret for the wallpaper service. Barik sends it in the request header.",
+                    text: $wallpaperToken
+                )
+                .disabled(!wallpaperEnabled)
+                .onChange(of: wallpaperToken) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    scheduleWallpaperStringWrite(
+                        task: &wallpaperTokenTask,
+                        field: .init(tablePath: wallpaperTable, key: "token"),
+                        value: newValue
+                    )
+                }
+
+                SliderSettingRow(
+                    title: "Refresh interval",
+                    description: "How often Barik fetches and applies a new wallpaper.",
+                    value: $wallpaperIntervalSeconds,
+                    range: 60...3600,
+                    step: 60,
+                    valueFormat: formatTickTickInterval
+                )
+                .disabled(!wallpaperEnabled)
+                .onChange(of: wallpaperIntervalSeconds) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    setIntValue(
+                        Int(newValue.rounded()),
+                        for: .init(tablePath: wallpaperTable, key: "interval-seconds")
+                    )
+                }
+
+                ToggleRow(
+                    title: "Apply to all screens",
+                    description: "When enabled, the same generated wallpaper is applied to every connected display.",
+                    isOn: Binding(
+                        get: { wallpaperApplyToAllScreens },
+                        set: { newValue in
+                            wallpaperApplyToAllScreens = newValue
+                            setBoolValue(
+                                newValue,
+                                for: .init(tablePath: wallpaperTable, key: "apply-to-all-screens")
+                            )
+                        }
+                    )
+                )
+
+                HStack(spacing: 12) {
+                    Button("Apply Now") {
+                        wallpaperManager.refreshNow()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!wallpaperEnabled)
+
+                    Button("Restore Previous Wallpapers") {
+                        wallpaperEnabled = false
+                        setBoolValue(false, for: .init(tablePath: wallpaperTable, key: "enabled"))
+                        wallpaperManager.restorePreviousWallpapers()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!wallpaperManager.canRestorePreviousWallpapers)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(wallpaperManager.canRestorePreviousWallpapers ? "Previous wallpapers are saved and can be restored." : "No saved previous wallpapers yet.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    if let lastAppliedAt = wallpaperManager.lastAppliedAt {
+                        Text("Last applied: \(lastAppliedAt.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let errorMessage = wallpaperManager.lastErrorMessage, !errorMessage.isEmpty {
+                        Text(errorMessage)
+                            .font(.subheadline)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(24)
@@ -4440,6 +4602,11 @@ private struct TickTickSettingsView: View {
         .onReceive(configManager.$config) { config in
             settingsStore.refresh(with: config)
             loadFromConfig()
+        }
+        .onDisappear {
+            wallpaperBaseURLTask?.cancel()
+            wallpaperProfileTask?.cancel()
+            wallpaperTokenTask?.cancel()
         }
     }
 
@@ -4465,6 +4632,13 @@ private struct TickTickSettingsView: View {
         let tomorrowField = SettingsFieldKey(tablePath: rotatingTasksTable, key: "tomorrow")
         let normalField = SettingsFieldKey(tablePath: rotatingTasksTable, key: "normal")
         let prioritiesField = SettingsFieldKey(tablePath: rotatingTasksTable, key: "priorities")
+        let wallpaperEnabledField = SettingsFieldKey(tablePath: wallpaperTable, key: "enabled")
+        let wallpaperBaseURLField = SettingsFieldKey(tablePath: wallpaperTable, key: "base-url")
+        let wallpaperProfileField = SettingsFieldKey(tablePath: wallpaperTable, key: "profile")
+        let wallpaperStyleField = SettingsFieldKey(tablePath: wallpaperTable, key: "style")
+        let wallpaperTokenField = SettingsFieldKey(tablePath: wallpaperTable, key: "token")
+        let wallpaperIntervalField = SettingsFieldKey(tablePath: wallpaperTable, key: "interval-seconds")
+        let wallpaperAllScreensField = SettingsFieldKey(tablePath: wallpaperTable, key: "apply-to-all-screens")
 
         displayMode = TickTickDisplayMode(
             rawValue: resolvedStringValue(
@@ -4538,6 +4712,46 @@ private struct TickTickSettingsView: View {
         includeMediumPriority = priorities.contains("medium")
         includeHighPriority = priorities.contains("high")
 
+        wallpaperEnabled = resolvedBoolValue(
+            for: wallpaperEnabledField,
+            incoming: settingsStore.boolValue(wallpaperEnabledField, fallback: false),
+            current: wallpaperEnabled
+        )
+        wallpaperBaseURL = resolvedStringValue(
+            for: wallpaperBaseURLField,
+            incoming: settingsStore.stringValue(wallpaperBaseURLField, fallback: ""),
+            current: wallpaperBaseURL
+        )
+        wallpaperProfile = resolvedStringValue(
+            for: wallpaperProfileField,
+            incoming: settingsStore.stringValue(wallpaperProfileField, fallback: "default"),
+            current: wallpaperProfile
+        )
+        wallpaperStyle = TickTickWallpaperStyle(
+            rawValue: resolvedStringValue(
+                for: wallpaperStyleField,
+                incoming: settingsStore.stringValue(wallpaperStyleField, fallback: TickTickWallpaperStyle.glow.rawValue),
+                current: wallpaperStyle.rawValue
+            )
+        ) ?? .glow
+        wallpaperToken = resolvedStringValue(
+            for: wallpaperTokenField,
+            incoming: settingsStore.stringValue(wallpaperTokenField, fallback: ""),
+            current: wallpaperToken
+        )
+        wallpaperIntervalSeconds = Double(
+            resolvedIntValue(
+                for: wallpaperIntervalField,
+                incoming: settingsStore.intValue(wallpaperIntervalField, fallback: 300),
+                current: Int(wallpaperIntervalSeconds.rounded())
+            )
+        )
+        wallpaperApplyToAllScreens = resolvedBoolValue(
+            for: wallpaperAllScreensField,
+            incoming: settingsStore.boolValue(wallpaperAllScreensField, fallback: true),
+            current: wallpaperApplyToAllScreens
+        )
+
         isApplyingConfigSnapshot = false
     }
 
@@ -4606,6 +4820,46 @@ private struct TickTickSettingsView: View {
         )
     }
 
+    private func resetWallpaperDefaults() {
+        wallpaperBaseURLTask?.cancel()
+        wallpaperProfileTask?.cancel()
+        wallpaperTokenTask?.cancel()
+
+        let enabledField = SettingsFieldKey(tablePath: wallpaperTable, key: "enabled")
+        let baseURLField = SettingsFieldKey(tablePath: wallpaperTable, key: "base-url")
+        let profileField = SettingsFieldKey(tablePath: wallpaperTable, key: "profile")
+        let styleField = SettingsFieldKey(tablePath: wallpaperTable, key: "style")
+        let tokenField = SettingsFieldKey(tablePath: wallpaperTable, key: "token")
+        let intervalField = SettingsFieldKey(tablePath: wallpaperTable, key: "interval-seconds")
+        let allScreensField = SettingsFieldKey(tablePath: wallpaperTable, key: "apply-to-all-screens")
+
+        isApplyingConfigSnapshot = true
+        wallpaperEnabled = false
+        wallpaperBaseURL = ""
+        wallpaperProfile = "default"
+        wallpaperStyle = .glow
+        wallpaperToken = ""
+        wallpaperIntervalSeconds = 300
+        wallpaperApplyToAllScreens = true
+        isApplyingConfigSnapshot = false
+
+        pendingBoolWrites.removeValue(forKey: fieldIdentifier(enabledField))
+        pendingStringWrites.removeValue(forKey: fieldIdentifier(baseURLField))
+        pendingStringWrites.removeValue(forKey: fieldIdentifier(profileField))
+        pendingStringWrites.removeValue(forKey: fieldIdentifier(styleField))
+        pendingStringWrites.removeValue(forKey: fieldIdentifier(tokenField))
+        pendingIntWrites.removeValue(forKey: fieldIdentifier(intervalField))
+        pendingBoolWrites.removeValue(forKey: fieldIdentifier(allScreensField))
+
+        settingsStore.setBool(false, for: enabledField)
+        ConfigManager.shared.removeConfigValue(tablePath: wallpaperTable, key: "base-url")
+        ConfigManager.shared.removeConfigValue(tablePath: wallpaperTable, key: "profile")
+        ConfigManager.shared.removeConfigValue(tablePath: wallpaperTable, key: "style")
+        ConfigManager.shared.removeConfigValue(tablePath: wallpaperTable, key: "token")
+        ConfigManager.shared.removeConfigValue(tablePath: wallpaperTable, key: "interval-seconds")
+        ConfigManager.shared.removeConfigValue(tablePath: wallpaperTable, key: "apply-to-all-screens")
+    }
+
     private func persistRotationSources() {
         guard !isApplyingConfigSnapshot else { return }
         let field = SettingsFieldKey(tablePath: tickTickTable, key: "rotating-item-sources")
@@ -4663,6 +4917,27 @@ private struct TickTickSettingsView: View {
         let minutes = seconds / 60
         let remainder = seconds % 60
         return remainder == 0 ? "\(minutes) min" : "\(minutes)m \(remainder)s"
+    }
+
+    private func scheduleWallpaperStringWrite(
+        task: inout Task<Void, Never>?,
+        field: SettingsFieldKey,
+        value: String
+    ) {
+        task?.cancel()
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        task = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+
+            if trimmedValue.isEmpty {
+                pendingStringWrites.removeValue(forKey: fieldIdentifier(field))
+                ConfigManager.shared.removeConfigValue(tablePath: field.tablePath, key: field.key)
+            } else {
+                setStringValue(trimmedValue, for: field)
+            }
+        }
     }
 
     private func setStringValue(_ value: String, for field: SettingsFieldKey) {
@@ -6302,6 +6577,25 @@ private enum TickTickRotationSource: String, CaseIterable, Identifiable {
     case habits
 
     var id: String { rawValue }
+}
+
+private enum TickTickWallpaperStyle: String, CaseIterable, Identifiable {
+    case glow
+    case panel
+    case terminal
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .glow:
+            return "Glow"
+        case .panel:
+            return "Panel"
+        case .terminal:
+            return "Terminal"
+        }
+    }
 }
 
 private enum HomebrewDisplayMode: String, CaseIterable, Identifiable {
