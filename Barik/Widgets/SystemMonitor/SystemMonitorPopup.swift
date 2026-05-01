@@ -197,14 +197,14 @@ private struct SystemMonitorDetailsPopup: View {
                     .fill(Color.white.opacity(0.07))
 
                 Image(systemName: "menubar.dock.rectangle")
-                    .font(.system(size: 14, weight: .semibold))
+                    .barikPopupFont(size: 14, weight: .semibold)
                     .foregroundStyle(.white.opacity(0.9))
             }
             .frame(width: 32, height: 32)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(String(localized: "System Monitor"))
-                    .font(.system(size: 15, weight: .semibold))
+                    .barikPopupFont(size: 15, weight: .semibold)
             }
 
             Spacer(minLength: 10)
@@ -224,7 +224,7 @@ private struct SystemMonitorDetailsPopup: View {
 
     private func headerBadge(title: String) -> some View {
         Text(title)
-            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .barikPopupFont(size: 10, weight: .semibold, design: .rounded)
             .foregroundStyle(.white.opacity(0.78))
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -376,7 +376,7 @@ private struct SystemMonitorDetailsPopup: View {
             }
 
             Text(subtitle)
-                .font(.system(size: 11, weight: .medium))
+                .barikPopupFont(size: 11, weight: .medium)
                 .foregroundStyle(.white.opacity(0.48))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -401,13 +401,13 @@ private struct SystemMonitorDetailsPopup: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "network")
-                    .font(.system(size: 11, weight: .semibold))
+                    .barikPopupFont(size: 11, weight: .semibold)
                     .foregroundStyle(.cyan)
                     .frame(width: 14, height: 18)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(String(localized: "Network Activity"))
-                        .font(.system(size: 12, weight: .semibold))
+                        .barikPopupFont(size: 12, weight: .semibold)
 
                     HStack(alignment: .firstTextBaseline, spacing: 18) {
                         networkSpeedBlock(
@@ -443,11 +443,11 @@ private struct SystemMonitorDetailsPopup: View {
     private func networkSpeedBlock(icon: String, value: String, color: Color) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 17, weight: .bold))
+                .barikPopupFont(size: 17, weight: .bold)
                 .foregroundStyle(color)
 
             Text(value)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .barikPopupFont(size: 17, weight: .bold, design: .rounded)
                 .foregroundStyle(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -463,15 +463,15 @@ private struct SystemMonitorDetailsPopup: View {
     ) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: systemImage)
-                .font(.system(size: 11, weight: .semibold))
+                .barikPopupFont(size: 11, weight: .semibold)
                 .foregroundStyle(accent)
                 .frame(width: 14, height: 18)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .barikPopupFont(size: 12, weight: .semibold)
                 Text(headline)
-                    .font(.system(size: 19, weight: .bold, design: .rounded))
+                    .barikPopupFont(size: 19, weight: .bold, design: .rounded)
                     .foregroundStyle(accent)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -510,7 +510,7 @@ private struct SystemMonitorDetailsPopup: View {
             subtitle: description
         ) {
             Text(description)
-                .font(.system(size: 12, weight: .medium))
+                .barikPopupFont(size: 12, weight: .medium)
                 .foregroundStyle(.white.opacity(0.62))
         }
     }
@@ -531,14 +531,14 @@ private struct SystemMonitorDetailsPopup: View {
     private func detailRow(_ item: SystemMonitorDetailItem) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(item.title)
-                .font(.system(size: 11, weight: .medium))
+                .barikPopupFont(size: 11, weight: .medium)
                 .foregroundStyle(.white.opacity(0.56))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(item.value)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .barikPopupFont(size: 11, weight: .semibold, design: .monospaced)
                 .foregroundStyle(.white.opacity(0.9))
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)

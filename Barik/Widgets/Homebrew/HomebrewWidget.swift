@@ -42,7 +42,7 @@ struct HomebrewWidget: View {
                 updatingSpinner(size: 11)
             } else {
                 Text(manager.outdatedCount == 0 ? "✓" : "\(manager.outdatedCount)")
-                    .font(.system(size: 12, weight: .semibold))
+                    .barikFont(size: 12, weight: .semibold)
                     .foregroundStyle(countColor)
                     .contentTransition(.numericText())
                     .animation(.smooth, value: manager.outdatedCount)
@@ -64,7 +64,7 @@ struct HomebrewWidget: View {
 
             if manager.isUpdating {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 6, weight: .bold))
+                    .barikFont(size: 6, weight: .bold)
                     .foregroundColor(.black)
                     .padding(.horizontal, 2.5)
                     .padding(.vertical, 1.5)
@@ -78,7 +78,7 @@ struct HomebrewWidget: View {
                     )
             } else if manager.outdatedCount > 0 {
                 Text("\(manager.outdatedCount)")
-                    .font(.system(size: 7, weight: .bold))
+                    .barikFont(size: 7, weight: .bold)
                     .foregroundColor(.black)
                     .padding(.horizontal, 2.5)
                     .padding(.vertical, 1)
@@ -97,13 +97,13 @@ struct HomebrewWidget: View {
 
     private func brewIcon(size: CGFloat, badgeMode: Bool = false) -> some View {
         Image(systemName: "shippingbox.fill")
-            .font(.system(size: size, weight: .medium))
+            .barikFont(size: size, weight: .medium)
             .foregroundStyle(badgeMode ? Color.foregroundOutside : iconColor)
     }
 
     private func updatingSpinner(size: CGFloat) -> some View {
         Image(systemName: "arrow.triangle.2.circlepath")
-            .font(.system(size: size, weight: .semibold))
+            .barikFont(size: size, weight: .semibold)
             .foregroundStyle(.foregroundOutside)
             .rotationEffect(.degrees(manager.isUpdating ? 360 : 0))
             .animation(

@@ -109,10 +109,10 @@ struct TickTickPopup: View {
                     .frame(width: 34, height: 34)
                     .foregroundStyle(.white.opacity(0.7))
                 Text("TickTick")
-                    .font(.system(size: 17, weight: .semibold))
+                    .barikPopupFont(size: 17, weight: .semibold)
                     .foregroundStyle(.white)
                 Text("Sign in to access your tasks, habits and Eisenhower matrix.")
-                    .font(.system(size: 12))
+                    .barikPopupFont(size: 12)
                     .foregroundStyle(.white.opacity(0.4))
                     .multilineTextAlignment(.center)
             }
@@ -131,7 +131,7 @@ struct TickTickPopup: View {
 
             if let error = manager.errorMessage {
                 Text(error)
-                    .font(.system(size: 11))
+                    .barikPopupFont(size: 11)
                     .foregroundStyle(.red.opacity(0.85))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24).padding(.bottom, 10)
@@ -149,7 +149,7 @@ struct TickTickPopup: View {
     private func authModeTab(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                .barikPopupFont(size: 11, weight: selected ? .semibold : .regular)
                 .foregroundStyle(selected ? .white : .white.opacity(0.4))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
@@ -163,17 +163,17 @@ struct TickTickPopup: View {
         VStack(spacing: 10) {
             VStack(spacing: 6) {
                 HStack {
-                    Image(systemName: "envelope").font(.system(size: 12)).foregroundStyle(.white.opacity(0.3)).frame(width: 20)
+                    Image(systemName: "envelope").barikPopupFont(size: 12).foregroundStyle(.white.opacity(0.3)).frame(width: 20)
                     TextField("Email", text: $loginUsername)
-                        .font(.system(size: 12)).foregroundStyle(.white).textFieldStyle(.plain)
+                        .barikPopupFont(size: 12).foregroundStyle(.white).textFieldStyle(.plain)
                 }
                 .padding(.horizontal, 12).padding(.vertical, 9)
                 .background(Color.white.opacity(0.07)).cornerRadius(8)
 
                 HStack {
-                    Image(systemName: "lock").font(.system(size: 12)).foregroundStyle(.white.opacity(0.3)).frame(width: 20)
+                    Image(systemName: "lock").barikPopupFont(size: 12).foregroundStyle(.white.opacity(0.3)).frame(width: 20)
                     SecureField("Password", text: $loginPassword)
-                        .font(.system(size: 12)).foregroundStyle(.white).textFieldStyle(.plain)
+                        .barikPopupFont(size: 12).foregroundStyle(.white).textFieldStyle(.plain)
                         .onSubmit { submitPasswordLogin() }
                 }
                 .padding(.horizontal, 12).padding(.vertical, 9)
@@ -186,11 +186,11 @@ struct TickTickPopup: View {
                     if manager.isLoading {
                         HStack(spacing: 8) {
                             ProgressView().scaleEffect(0.7).tint(.white)
-                            Text("Signing in…").font(.system(size: 13, weight: .medium))
+                            Text("Signing in…").barikPopupFont(size: 13, weight: .medium)
                         }
                     } else {
                         Text("Sign In")
-                            .font(.system(size: 13, weight: .medium))
+                            .barikPopupFont(size: 13, weight: .medium)
                     }
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 9)
@@ -202,7 +202,7 @@ struct TickTickPopup: View {
             .onHover { h in h ? NSCursor.pointingHand.push() : NSCursor.pop() }
 
             Text("Full access: tasks, habits, matrix. Credentials stored in Keychain.")
-                .font(.system(size: 10)).foregroundStyle(.white.opacity(0.2))
+                .barikPopupFont(size: 10).foregroundStyle(.white.opacity(0.2))
                 .multilineTextAlignment(.center).padding(.horizontal, 24)
         }
     }
@@ -211,7 +211,7 @@ struct TickTickPopup: View {
         VStack(spacing: 10) {
             Button(action: { manager.startOAuth() }) {
                 Label("Authorize via Browser", systemImage: "safari")
-                    .font(.system(size: 13, weight: .medium))
+                    .barikPopupFont(size: 13, weight: .medium)
                     .frame(maxWidth: .infinity).padding(.vertical, 9)
             }
             .buttonStyle(.borderedProminent)
@@ -220,7 +220,7 @@ struct TickTickPopup: View {
             .onHover { h in h ? NSCursor.pointingHand.push() : NSCursor.pop() }
 
             Text("Requires client_id & client_secret in [widgets.default.ticktick].\nHabits are not available in this mode.")
-                .font(.system(size: 10)).foregroundStyle(.white.opacity(0.2))
+                .barikPopupFont(size: 10).foregroundStyle(.white.opacity(0.2))
                 .multilineTextAlignment(.center).padding(.horizontal, 24)
         }
     }
@@ -241,12 +241,12 @@ struct TickTickPopup: View {
                 .frame(width: 14, height: 14)
                 .foregroundStyle(.white.opacity(0.75))
             Text("TickTick")
-                .font(.system(size: 14, weight: .semibold))
+                .barikPopupFont(size: 14, weight: .semibold)
                 .foregroundStyle(.white)
 
             if manager.totalPendingCount > 0 {
                 Text("\(manager.totalPendingCount)")
-                    .font(.system(size: 10, weight: .bold))
+                    .barikPopupFont(size: 10, weight: .bold)
                     .foregroundStyle(.black)
                     .padding(.horizontal, 5).padding(.vertical, 2)
                     .background(Color.white)
@@ -259,17 +259,17 @@ struct TickTickPopup: View {
             if viewMode == .tasks {
                 HStack(spacing: 4) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 10))
+                        .barikPopupFont(size: 10)
                         .foregroundStyle(.white.opacity(0.35))
                     TextField("Search…", text: $searchText)
-                        .font(.system(size: 11))
+                        .barikPopupFont(size: 11)
                         .foregroundStyle(.white)
                         .textFieldStyle(.plain)
                         .frame(width: 90)
                     if !searchText.isEmpty {
                         Button(action: { searchText = "" }) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 9))
+                                .barikPopupFont(size: 9)
                                 .foregroundStyle(.white.opacity(0.35))
                         }.buttonStyle(.plain)
                     }
@@ -287,7 +287,7 @@ struct TickTickPopup: View {
                 }
             }) {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12))
+                    .barikPopupFont(size: 12)
                     .foregroundStyle(.white.opacity(0.4))
                     .rotationEffect(manager.isLoading ? .degrees(360) : .degrees(0))
                     .animation(
@@ -302,7 +302,7 @@ struct TickTickPopup: View {
 
             RoutedSettingsLink(section: .ticktick) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 12))
+                    .barikPopupFont(size: 12)
                     .foregroundStyle(.white.opacity(0.4))
             }
             .buttonStyle(.plain)
@@ -320,9 +320,9 @@ struct TickTickPopup: View {
                 Button(action: { withAnimation(.easeInOut(duration: 0.15)) { viewMode = mode } }) {
                     HStack(spacing: 5) {
                         Image(systemName: mode.icon)
-                            .font(.system(size: 11))
+                            .barikPopupFont(size: 11)
                         Text(mode.title)
-                            .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                            .barikPopupFont(size: 11, weight: isSelected ? .semibold : .regular)
                     }
                     .foregroundStyle(isSelected ? .white : .white.opacity(0.4))
                     .padding(.horizontal, 12).padding(.vertical, 6)
@@ -374,10 +374,10 @@ struct TickTickPopup: View {
                     Circle().fill(Color(hex: hex) ?? .white).frame(width: 6, height: 6)
                 }
                 Text(name)
-                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                    .barikPopupFont(size: 11, weight: isSelected ? .semibold : .regular)
                 if count > 0 {
                     Text("\(count)")
-                        .font(.system(size: 9, weight: .medium))
+                        .barikPopupFont(size: 9, weight: .medium)
                         .foregroundStyle(isSelected ? .black : .white.opacity(0.35))
                         .padding(.horizontal, 4).padding(.vertical, 1)
                         .background(isSelected ? Color.white : Color.white.opacity(0.12))
@@ -417,10 +417,10 @@ struct TickTickPopup: View {
             if visibleTasks.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: searchText.isEmpty ? "checkmark.circle" : "magnifyingglass")
-                        .font(.system(size: 22))
+                        .barikPopupFont(size: 22)
                         .foregroundStyle(.white.opacity(0.15))
                     Text(searchText.isEmpty ? "All done! 🎉" : "No results")
-                        .font(.system(size: 12))
+                        .barikPopupFont(size: 12)
                         .foregroundStyle(.white.opacity(0.3))
                 }
                 .frame(maxWidth: .infinity)
@@ -460,17 +460,17 @@ struct TickTickPopup: View {
 
     private var addTaskView: some View {
         HStack(spacing: 8) {
-            Image(systemName: "square").font(.system(size: 13)).foregroundStyle(.white.opacity(0.25))
+            Image(systemName: "square").barikPopupFont(size: 13).foregroundStyle(.white.opacity(0.25))
             TextField("New task…", text: $newTaskTitle)
-                .font(.system(size: 12)).foregroundStyle(.white)
+                .barikPopupFont(size: 12).foregroundStyle(.white)
                 .textFieldStyle(.plain).onSubmit { submitNewTask() }
             if !newTaskTitle.isEmpty {
                 Button(action: submitNewTask) {
-                    Image(systemName: "return").font(.system(size: 10)).foregroundStyle(.white.opacity(0.4))
+                    Image(systemName: "return").barikPopupFont(size: 10).foregroundStyle(.white.opacity(0.4))
                 }.buttonStyle(.plain)
             }
             Button(action: { showingAddTask = false; newTaskTitle = "" }) {
-                Image(systemName: "xmark").font(.system(size: 10)).foregroundStyle(.white.opacity(0.25))
+                Image(systemName: "xmark").barikPopupFont(size: 10).foregroundStyle(.white.opacity(0.25))
             }.buttonStyle(.plain)
         }
         .padding(.horizontal, 18).padding(.vertical, 10)
@@ -566,7 +566,7 @@ struct TickTickPopup: View {
 
     private func matrixAxisLabel(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 9, weight: .semibold))
+            .barikPopupFont(size: 9, weight: .semibold)
             .foregroundStyle(.white.opacity(0.3))
             .frame(maxWidth: .infinity, alignment: .center)
             .multilineTextAlignment(.center)
@@ -576,7 +576,7 @@ struct TickTickPopup: View {
     private func matrixRowLabel(_ text: String, height: CGFloat) -> some View {
         ZStack {
             Text(text)
-                .font(.system(size: 8, weight: .semibold))
+                .barikPopupFont(size: 8, weight: .semibold)
                 .foregroundStyle(.white.opacity(0.3))
                 .multilineTextAlignment(.center)
                 .fixedSize()
@@ -627,11 +627,11 @@ struct TickTickPopup: View {
         Group {
             if manager.habits.isEmpty && !manager.isLoading {
                 VStack(spacing: 10) {
-                    Image(systemName: "flame").font(.system(size: 26)).foregroundStyle(.white.opacity(0.15))
+                    Image(systemName: "flame").barikPopupFont(size: 26).foregroundStyle(.white.opacity(0.15))
                     Text("No habits found")
-                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.3))
+                        .barikPopupFont(size: 12).foregroundStyle(.white.opacity(0.3))
                     Text("Create habits in TickTick to track them here.")
-                        .font(.system(size: 11)).foregroundStyle(.white.opacity(0.2))
+                        .barikPopupFont(size: 11).foregroundStyle(.white.opacity(0.2))
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 36)
@@ -691,7 +691,7 @@ struct TickTickPopup: View {
             if viewMode == .tasks {
                 Button(action: { withAnimation { showingAddTask.toggle() } }) {
                     Label("Add Task", systemImage: "plus")
-                        .font(.system(size: 11))
+                        .barikPopupFont(size: 11)
                         .foregroundStyle(.white.opacity(0.35))
                 }
                 .buttonStyle(.plain)
@@ -702,20 +702,20 @@ struct TickTickPopup: View {
 
             if let error = manager.errorMessage {
                 Text(error)
-                    .font(.system(size: 10)).foregroundStyle(.red.opacity(0.6))
+                    .barikPopupFont(size: 10).foregroundStyle(.red.opacity(0.6))
                     .lineLimit(1).truncationMode(.tail).frame(maxWidth: 200)
             }
 
             Button(action: { openTickTick() }) {
                 Image(systemName: "arrow.up.right.square")
-                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.2))
+                    .barikPopupFont(size: 11).foregroundStyle(.white.opacity(0.2))
             }
             .buttonStyle(.plain)
             .onHover { h in h ? NSCursor.pointingHand.push() : NSCursor.pop() }
 
             Button(action: { Task { await manager.signOut() } }) {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.2))
+                    .barikPopupFont(size: 11).foregroundStyle(.white.opacity(0.2))
             }
             .buttonStyle(.plain)
             .onHover { h in h ? NSCursor.pointingHand.push() : NSCursor.pop() }
@@ -726,15 +726,15 @@ struct TickTickPopup: View {
     private func taskCompletionToastView(_ toast: TickTickTaskCompletionToast) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 13))
+                .barikPopupFont(size: 13)
                 .foregroundStyle(.green.opacity(0.85))
 
             Text("Task completed")
-                .font(.system(size: 11, weight: .medium))
+                .barikPopupFont(size: 11, weight: .medium)
                 .foregroundStyle(.white.opacity(0.9))
 
             Text(toast.title)
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .foregroundStyle(.white.opacity(0.35))
                 .lineLimit(1)
 
@@ -742,7 +742,7 @@ struct TickTickPopup: View {
 
             Button(action: { manager.undoScheduledTaskCompletion(taskId: toast.id) }) {
                 Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 11, weight: .semibold))
+                    .barikPopupFont(size: 11, weight: .semibold)
                     .foregroundStyle(.white.opacity(0.8))
                     .frame(width: 26, height: 22)
                     .background(Color.white.opacity(0.08))
@@ -762,7 +762,7 @@ struct TickTickPopup: View {
     private var loadingView: some View {
         VStack(spacing: 10) {
             ProgressView().scaleEffect(0.75)
-            Text("Loading…").font(.system(size: 11)).foregroundStyle(.white.opacity(0.35))
+            Text("Loading…").barikPopupFont(size: 11).foregroundStyle(.white.opacity(0.35))
         }
         .frame(maxWidth: .infinity).padding(.vertical, 40)
     }
@@ -896,12 +896,12 @@ private struct MatrixQuadrant: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text(title)
-                    .font(.system(size: 10, weight: .bold))
+                    .barikPopupFont(size: 10, weight: .bold)
                     .foregroundStyle(accentColor)
                 Spacer()
                 if !tasks.isEmpty {
                     Text("\(tasks.count)")
-                        .font(.system(size: 9, weight: .semibold))
+                        .barikPopupFont(size: 9, weight: .semibold)
                         .foregroundStyle(accentColor.opacity(0.7))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
@@ -910,7 +910,7 @@ private struct MatrixQuadrant: View {
                 }
             }
             Text(subtitle)
-                .font(.system(size: 9))
+                .barikPopupFont(size: 9)
                 .foregroundStyle(.white.opacity(0.25))
         }
         .padding(.horizontal, 10)
@@ -922,7 +922,7 @@ private struct MatrixQuadrant: View {
     private var contentView: some View {
         if tasks.isEmpty {
             Text("No tasks")
-                .font(.system(size: 10))
+                .barikPopupFont(size: 10)
                 .foregroundStyle(.white.opacity(0.18))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         } else {
@@ -962,14 +962,14 @@ private struct MatrixTaskRow: View {
             HStack(spacing: 6) {
                 Button(action: onComplete) {
                     Image(systemName: "circle")
-                        .font(.system(size: 12))
+                        .barikPopupFont(size: 12)
                         .foregroundStyle(accentColor.opacity(0.5))
                 }
                 .buttonStyle(.plain)
                 .onHover { h in h ? NSCursor.pointingHand.push() : NSCursor.pop() }
 
                 Text(task.title)
-                    .font(.system(size: 11))
+                    .barikPopupFont(size: 11)
                     .foregroundStyle(.white.opacity(0.85))
                     .lineLimit(isExpanded ? nil : 1)
 
@@ -977,7 +977,7 @@ private struct MatrixTaskRow: View {
 
                 if let due = task.dueDate {
                     Text(matrixDue(due))
-                        .font(.system(size: 9))
+                        .barikPopupFont(size: 9)
                         .foregroundStyle(isOverdue(due) ? .red.opacity(0.7) : .white.opacity(0.2))
                 }
             }
@@ -988,7 +988,7 @@ private struct MatrixTaskRow: View {
                     ForEach(Array(task.subtasks.prefix(5))) { sub in
                         HStack(spacing: 4) {
                             Circle().fill(.white.opacity(0.2)).frame(width: 3, height: 3)
-                            Text(sub.title).font(.system(size: 10)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                            Text(sub.title).barikPopupFont(size: 10).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
                         }
                     }
                 }
@@ -1034,7 +1034,7 @@ private struct HabitRow: View {
                         .fill(todayDone ? habitColor.opacity(0.25) : Color.white.opacity(0.05))
                         .frame(width: 32, height: 32)
                     Image(systemName: todayDone ? "checkmark" : "plus")
-                        .font(.system(size: 12, weight: .semibold))
+                        .barikPopupFont(size: 12, weight: .semibold)
                         .foregroundStyle(todayDone ? habitColor : .white.opacity(0.35))
                 }
             }
@@ -1043,17 +1043,17 @@ private struct HabitRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(habit.name)
-                    .font(.system(size: 12, weight: .medium))
+                    .barikPopupFont(size: 12, weight: .medium)
                     .foregroundStyle(.white.opacity(todayDone ? 0.5 : 0.9))
 
                 HStack(spacing: 8) {
                     // Repeat rule intentionally hidden per UI preference
                     Label("\(habit.totalCheckIns)", systemImage: "bolt.fill")
-                        .font(.system(size: 10))
+                        .barikPopupFont(size: 10)
                         .foregroundStyle(.yellow.opacity(0.8))
                     if habit.streak > 0 {
                         Label("\(habit.streak)d", systemImage: "flame.fill")
-                            .font(.system(size: 10))
+                            .barikPopupFont(size: 10)
                             .foregroundStyle(habit.streak >= 7 ? .orange : .white.opacity(0.35))
                     }
                 }
@@ -1111,10 +1111,10 @@ private struct HabitWeekRing: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(dayNumber(date))
-                .font(.system(size: 9, weight: .semibold))
+                .barikPopupFont(size: 9, weight: .semibold)
                 .foregroundStyle(.white.opacity(0.6))
             Text(weekdayShort(date))
-                .font(.system(size: 8))
+                .barikPopupFont(size: 8)
                 .foregroundStyle(.white.opacity(0.35))
             ZStack {
                 Circle()
@@ -1177,7 +1177,7 @@ private struct TaskRow: View {
                 // Complete button
                 Button(action: onComplete) {
                     Image(systemName: completeHovered ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 15))
+                        .barikPopupFont(size: 15)
                         .foregroundStyle(completeHovered ? .green : .white.opacity(0.35))
                 }
                 .buttonStyle(.plain)
@@ -1191,7 +1191,7 @@ private struct TaskRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .center, spacing: 6) {
                         Text(task.title)
-                            .font(.system(size: 12, weight: .medium))
+                            .barikPopupFont(size: 12, weight: .medium)
                             .foregroundStyle(.white)
                             .lineLimit(isExpanded ? nil : 2)
                         if task.priority != .none {
@@ -1203,24 +1203,24 @@ private struct TaskRow: View {
                     HStack(spacing: 10) {
                         if let due = task.dueDate {
                             Label(formatDue(due), systemImage: "calendar")
-                                .font(.system(size: 10))
+                                .barikPopupFont(size: 10)
                                 .foregroundStyle(isOverdue ? .red.opacity(0.8) : .white.opacity(0.3))
                         }
                         if let proj = projectName {
                             Text(proj)
-                                .font(.system(size: 10))
+                                .barikPopupFont(size: 10)
                                 .foregroundStyle(.white.opacity(0.2))
                         }
                         if !task.items.isEmpty {
                             let done = task.items.filter { $0.isCompleted }.count
                             Label("\(done)/\(task.items.count)", systemImage: "checklist")
-                                .font(.system(size: 10))
+                                .barikPopupFont(size: 10)
                                 .foregroundStyle(.white.opacity(0.3))
                         }
                         if !task.subtasks.isEmpty {
                             let done = task.subtasks.filter { $0.isCompleted }.count
                             Label("\(done)/\(task.subtasks.count)", systemImage: "list.bullet.indent")
-                                .font(.system(size: 10))
+                                .barikPopupFont(size: 10)
                                 .foregroundStyle(.white.opacity(0.3))
                         }
                     }
@@ -1233,7 +1233,7 @@ private struct TaskRow: View {
                     HStack(spacing: 6) {
                         Button(action: onDelete) {
                             Image(systemName: "trash")
-                                .font(.system(size: 11))
+                                .barikPopupFont(size: 11)
                                 .foregroundStyle(deleteHovered ? .red : .white.opacity(0.25))
                         }
                         .buttonStyle(.plain)
@@ -1249,7 +1249,7 @@ private struct TaskRow: View {
                 if !task.items.isEmpty || !task.subtasks.isEmpty || !(task.content ?? "").isEmpty {
                     Button(action: onTap) {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 9))
+                            .barikPopupFont(size: 9)
                             .foregroundStyle(.white.opacity(0.25))
                     }
                     .buttonStyle(.plain)
@@ -1266,7 +1266,7 @@ private struct TaskRow: View {
                     // Content/notes
                     if let content = task.content, !content.isEmpty {
                         Text(content)
-                            .font(.system(size: 11))
+                            .barikPopupFont(size: 11)
                             .foregroundStyle(.white.opacity(0.4))
                             .lineLimit(5)
                             .padding(.leading, 26)
@@ -1278,10 +1278,10 @@ private struct TaskRow: View {
                             ForEach(task.items) { item in
                                 HStack(spacing: 7) {
                                     Image(systemName: item.isCompleted ? "checkmark.square.fill" : "square")
-                                        .font(.system(size: 11))
+                                        .barikPopupFont(size: 11)
                                         .foregroundStyle(item.isCompleted ? .green.opacity(0.6) : .white.opacity(0.25))
                                     Text(item.title)
-                                        .font(.system(size: 11))
+                                        .barikPopupFont(size: 11)
                                         .foregroundStyle(item.isCompleted ? .white.opacity(0.25) : .white.opacity(0.65))
                                         .strikethrough(item.isCompleted)
                                         .lineLimit(2)
@@ -1297,10 +1297,10 @@ private struct TaskRow: View {
                             ForEach(task.subtasks) { sub in
                                 HStack(spacing: 7) {
                                     Image(systemName: sub.isCompleted ? "checkmark.circle.fill" : "circle")
-                                        .font(.system(size: 12))
+                                        .barikPopupFont(size: 12)
                                         .foregroundStyle(sub.isCompleted ? .green.opacity(0.6) : .white.opacity(0.25))
                                     Text(sub.title)
-                                        .font(.system(size: 11))
+                                        .barikPopupFont(size: 11)
                                         .foregroundStyle(sub.isCompleted ? .white.opacity(0.25) : .white.opacity(0.7))
                                         .strikethrough(sub.isCompleted)
                                         .lineLimit(2)
@@ -1308,7 +1308,7 @@ private struct TaskRow: View {
                                     if sub.priority != .none { priorityDot(sub.priority) }
                                     if let due = sub.dueDate {
                                         Text(formatDue(due))
-                                            .font(.system(size: 9))
+                                            .barikPopupFont(size: 9)
                                             .foregroundStyle(.white.opacity(0.2))
                                     }
                                 }

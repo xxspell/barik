@@ -129,12 +129,12 @@ struct CLIProxyUsagePopup: View {
     private var titleBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "server.rack")
-                .font(.system(size: 16, weight: .semibold))
+                .barikPopupFont(size: 16, weight: .semibold)
             Text(localized("CLIProxy"))
-                .font(.system(size: 14, weight: .semibold))
+                .barikPopupFont(size: 14, weight: .semibold)
             RoutedSettingsLink(section: .cliProxyUsage) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                    .barikPopupFont(size: 11, weight: .semibold)
                     .foregroundColor(.white.opacity(0.5))
             }
             .buttonStyle(.plain)
@@ -147,7 +147,7 @@ struct CLIProxyUsagePopup: View {
                     Int64((quotaSummary.percentage * 100).rounded())
                 )
             )
-                .font(.system(size: 11, weight: .medium))
+                .barikPopupFont(size: 11, weight: .medium)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(statusBadgeColor.opacity(0.2))
@@ -185,9 +185,9 @@ struct CLIProxyUsagePopup: View {
             HStack(alignment: .center, spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(Int((quotaSummary.percentage * 100).rounded()))%")
-                        .font(.system(size: 30, weight: .semibold))
+                        .barikPopupFont(size: 30, weight: .semibold)
                     Text(quotaStatusText)
-                        .font(.system(size: 11))
+                        .barikPopupFont(size: 11)
                         .opacity(0.45)
                 }
 
@@ -218,11 +218,11 @@ struct CLIProxyUsagePopup: View {
                                 .scaleEffect(0.72)
                         } else {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 11, weight: .bold))
+                                .barikPopupFont(size: 11, weight: .bold)
                         }
 
                         Text(usageManager.quotaRefreshInProgress ? localized("Refreshing Codex quota…") : localized("Refresh"))
-                            .font(.system(size: 11, weight: .semibold))
+                            .barikPopupFont(size: 11, weight: .semibold)
                     }
                     .foregroundColor(refreshQuotaForegroundColor)
                     .padding(.horizontal, 12)
@@ -248,7 +248,7 @@ struct CLIProxyUsagePopup: View {
                 }
 
                 Text(usageManager.quotaRefreshInProgress ? localized("Checking Codex quota…") : localized("Checks Codex quota and refreshes cache"))
-                    .font(.system(size: 10))
+                    .barikPopupFont(size: 10)
                     .foregroundColor(.white.opacity(0.35))
 
                 Spacer(minLength: 0)
@@ -262,7 +262,7 @@ struct CLIProxyUsagePopup: View {
                         selectedProvider.title
                     )
                 )
-                    .font(.system(size: 11))
+                    .barikPopupFont(size: 11)
                     .foregroundColor(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -272,9 +272,9 @@ struct CLIProxyUsagePopup: View {
                     ForEach(Array(usageManager.usageData.groupedQuotaProviders().enumerated()), id: \.element.filter.id) { index, item in
                         VStack(spacing: 3) {
                             Text("\(Int((item.summary.percentage * 100).rounded()))%")
-                                .font(.system(size: 14, weight: .semibold))
+                                .barikPopupFont(size: 14, weight: .semibold)
                             Text(item.filter.title)
-                                .font(.system(size: 10))
+                                .barikPopupFont(size: 10)
                                 .opacity(0.5)
                         }
 
@@ -320,7 +320,7 @@ struct CLIProxyUsagePopup: View {
                     }
                 }) {
                     Text(tab.title)
-                        .font(.system(size: 11, weight: .medium))
+                        .barikPopupFont(size: 11, weight: .medium)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(isSelected ? Color.white.opacity(0.16) : Color.white.opacity(0.06))
@@ -414,11 +414,11 @@ struct CLIProxyUsagePopup: View {
             HStack {
                 Circle().fill(Color.blue.opacity(0.7)).frame(width: 6, height: 6)
                 Text(localized("input"))
-                    .font(.system(size: 9))
+                    .barikPopupFont(size: 9)
                     .opacity(0.4)
                 Circle().fill(Color.purple.opacity(0.7)).frame(width: 6, height: 6)
                 Text(localized("output"))
-                    .font(.system(size: 9))
+                    .barikPopupFont(size: 9)
                     .opacity(0.4)
                 Spacer()
                 Text(
@@ -428,7 +428,7 @@ struct CLIProxyUsagePopup: View {
                         abbreviatedNumber(tokenSummary.totalTokens)
                     )
                 )
-                    .font(.system(size: 10))
+                    .barikPopupFont(size: 10)
                     .opacity(0.4)
             }
         }
@@ -440,7 +440,7 @@ struct CLIProxyUsagePopup: View {
         HStack {
             if usageManager.fetchFailed {
                 Text(localized("Using cached data"))
-                    .font(.system(size: 11, weight: .medium))
+                    .barikPopupFont(size: 11, weight: .medium)
                     .foregroundColor(.orange)
             } else {
                 Text(
@@ -450,7 +450,7 @@ struct CLIProxyUsagePopup: View {
                         timeAgoString(usageManager.usageData.lastUpdated)
                     )
                 )
-                    .font(.system(size: 11))
+                    .barikPopupFont(size: 11)
                     .opacity(0.4)
             }
 
@@ -458,7 +458,7 @@ struct CLIProxyUsagePopup: View {
 
             Button(action: { usageManager.refresh() }) {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12))
+                    .barikPopupFont(size: 12)
                     .opacity(0.6)
             }
             .buttonStyle(.plain)
@@ -480,13 +480,13 @@ struct CLIProxyUsagePopup: View {
                 sectionTitle("Top Keys")
                 Spacer()
                 Text("\(min(topAPIKeys.count, 10))")
-                    .font(.system(size: 10, weight: .semibold))
+                    .barikPopupFont(size: 10, weight: .semibold)
                     .foregroundColor(.white.opacity(0.4))
             }
 
             if topAPIKeys.isEmpty {
                 Text("—")
-                    .font(.system(size: 11))
+                    .barikPopupFont(size: 11)
                     .foregroundColor(.white.opacity(0.35))
             } else {
                 let maxTokens = max(topAPIKeys.first?.totalTokens ?? 1, 1)
@@ -496,19 +496,19 @@ struct CLIProxyUsagePopup: View {
                         VStack(alignment: .leading, spacing: 5) {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text("\(index + 1).")
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .barikPopupFont(size: 10, weight: .semibold)
                                     .foregroundColor(.white.opacity(0.35))
                                     .frame(width: 16, alignment: .leading)
 
                                 Text(item.displayName)
-                                    .font(.system(size: 11, weight: .medium))
+                                    .barikPopupFont(size: 11, weight: .medium)
                                     .foregroundColor(.white.opacity(0.92))
                                     .lineLimit(1)
 
                                 Spacer(minLength: 8)
 
                                 Text(abbreviatedNumber(item.totalTokens))
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .barikPopupFont(size: 11, weight: .semibold)
                                     .foregroundColor(.white.opacity(0.88))
                             }
 
@@ -532,7 +532,7 @@ struct CLIProxyUsagePopup: View {
                                     .frame(height: 5)
 
                                 Text("\(item.requests)")
-                                    .font(.system(size: 9))
+                                    .barikPopupFont(size: 9)
                                     .foregroundColor(.white.opacity(0.4))
                                     .frame(width: 28, alignment: .trailing)
                             }
@@ -551,13 +551,13 @@ struct CLIProxyUsagePopup: View {
                 sectionTitle("Accounts")
                 Spacer()
                 Text("\(filteredAccounts.count)")
-                    .font(.system(size: 10, weight: .semibold))
+                    .barikPopupFont(size: 10, weight: .semibold)
                     .foregroundColor(.white.opacity(0.4))
             }
 
             if filteredAccounts.isEmpty {
                 Text(localized("No accounts available for this provider."))
-                    .font(.system(size: 11))
+                    .barikPopupFont(size: 11)
                     .foregroundColor(.white.opacity(0.35))
             } else {
                 ScrollView {
@@ -579,12 +579,12 @@ struct CLIProxyUsagePopup: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(account.label)
-                        .font(.system(size: 12, weight: .semibold))
+                        .barikPopupFont(size: 12, weight: .semibold)
                         .foregroundColor(.white.opacity(0.96))
                         .lineLimit(1)
 
                     Text(accountSecondaryLabel(account))
-                        .font(.system(size: 10, weight: .medium))
+                        .barikPopupFont(size: 10, weight: .medium)
                         .foregroundColor(.white.opacity(0.45))
                         .lineLimit(1)
                 }
@@ -593,11 +593,11 @@ struct CLIProxyUsagePopup: View {
 
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(accountQuotaValue(account))
-                        .font(.system(size: 16, weight: .semibold))
+                        .barikPopupFont(size: 16, weight: .semibold)
                         .foregroundColor(accountQuotaColor(account))
 
                     Text(localized("Remaining"))
-                        .font(.system(size: 9, weight: .medium))
+                        .barikPopupFont(size: 9, weight: .medium)
                         .foregroundColor(.white.opacity(0.38))
                 }
             }
@@ -662,7 +662,7 @@ struct CLIProxyUsagePopup: View {
         VStack(spacing: 12) {
             ProgressView().scaleEffect(0.8)
             Text(localized("Loading CLIProxy stats…"))
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .opacity(0.5)
         }
         .frame(maxWidth: .infinity)
@@ -672,20 +672,20 @@ struct CLIProxyUsagePopup: View {
     private var errorView: some View {
         VStack(spacing: 14) {
             Image(systemName: "server.rack")
-                .font(.system(size: 28, weight: .semibold))
+                .barikPopupFont(size: 28, weight: .semibold)
 
             Text(localized("Cannot reach CLIProxy"))
-                .font(.system(size: 13, weight: .medium))
+                .barikPopupFont(size: 13, weight: .medium)
 
             Text(usageManager.errorMessage ?? localized("Check base-url and management key in config."))
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .opacity(0.5)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button(action: { usageManager.refresh() }) {
                 Text(localized("Retry"))
-                    .font(.system(size: 12, weight: .medium))
+                    .barikPopupFont(size: 12, weight: .medium)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
@@ -701,9 +701,9 @@ struct CLIProxyUsagePopup: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "server.rack")
-                    .font(.system(size: 16, weight: .semibold))
+                    .barikPopupFont(size: 16, weight: .semibold)
                 Text(localized("CLIProxy"))
-                    .font(.system(size: 14, weight: .semibold))
+                    .barikPopupFont(size: 14, weight: .semibold)
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -713,13 +713,13 @@ struct CLIProxyUsagePopup: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 Text(localized("Connect the widget to the CLIProxy Management API to see quota and token statistics."))
-                    .font(.system(size: 11))
+                    .barikPopupFont(size: 11)
                     .opacity(0.6)
                     .fixedSize(horizontal: false, vertical: true)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(localized("Base URL"))
-                        .font(.system(size: 10, weight: .medium))
+                        .barikPopupFont(size: 10, weight: .medium)
                         .opacity(0.5)
                     TextField("http://localhost:8317", text: $baseURLInput)
                         .textFieldStyle(.roundedBorder)
@@ -727,14 +727,14 @@ struct CLIProxyUsagePopup: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(localized("Management key"))
-                        .font(.system(size: 10, weight: .medium))
+                        .barikPopupFont(size: 10, weight: .medium)
                         .opacity(0.5)
                     SecureField(localized("Enter key"), text: $apiKeyInput)
                         .textFieldStyle(.roundedBorder)
                 }
 
                 Text(localized("You can paste either the server root URL or the full `/v0/management` path."))
-                    .font(.system(size: 10))
+                    .barikPopupFont(size: 10)
                     .opacity(0.35)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -745,7 +745,7 @@ struct CLIProxyUsagePopup: View {
                                 .controlSize(.small)
                         }
                         Text(isSavingConfiguration ? localized("Connecting…") : localized("Save & Connect"))
-                            .font(.system(size: 12, weight: .medium))
+                            .barikPopupFont(size: 12, weight: .medium)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
@@ -796,7 +796,7 @@ struct CLIProxyUsagePopup: View {
 
     private func sectionTitle(_ title: String) -> some View {
         Text(localized(title))
-            .font(.system(size: 11, weight: .semibold))
+            .barikPopupFont(size: 11, weight: .semibold)
             .opacity(0.5)
             .textCase(.uppercase)
     }
@@ -804,10 +804,10 @@ struct CLIProxyUsagePopup: View {
     private func tokenStat(title: String, value: String, color: Color) -> some View {
         VStack(spacing: 3) {
             Text(value)
-                .font(.system(size: 15, weight: .semibold))
+                .barikPopupFont(size: 15, weight: .semibold)
                 .foregroundColor(color)
             Text(localized(title))
-                .font(.system(size: 10))
+                .barikPopupFont(size: 10)
                 .opacity(0.5)
         }
     }
@@ -818,7 +818,7 @@ struct CLIProxyUsagePopup: View {
                 .fill(enabled ? Color.green : Color.gray.opacity(0.5))
                 .frame(width: 8, height: 8)
             Text(localized(title))
-                .font(.system(size: 11, weight: .medium))
+                .barikPopupFont(size: 11, weight: .medium)
                 .opacity(enabled ? 0.95 : 0.5)
         }
         .padding(.horizontal, 10)
@@ -829,7 +829,7 @@ struct CLIProxyUsagePopup: View {
 
     private func accountPill(title: String, color: Color) -> some View {
         Text(title)
-            .font(.system(size: 10, weight: .medium))
+            .barikPopupFont(size: 10, weight: .medium)
             .foregroundColor(color)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -840,11 +840,11 @@ struct CLIProxyUsagePopup: View {
     private func accountMetricCard(title: String, value: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.system(size: 9, weight: .medium))
+                .barikPopupFont(size: 9, weight: .medium)
                 .foregroundColor(.white.opacity(0.38))
 
             Text(value)
-                .font(.system(size: 10, weight: .semibold))
+                .barikPopupFont(size: 10, weight: .semibold)
                 .foregroundColor(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -868,7 +868,7 @@ struct CLIProxyUsagePopup: View {
                     let isSelected = item.id == selectedID
                     Button(action: { onSelect(item) }) {
                         Text(label(item))
-                            .font(.system(size: 11, weight: .medium))
+                            .barikPopupFont(size: 11, weight: .medium)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .background(isSelected ? Color.white.opacity(0.16) : Color.white.opacity(0.06))

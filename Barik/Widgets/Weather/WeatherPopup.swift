@@ -24,15 +24,15 @@ struct WeatherPopup: View {
 
                         HStack(spacing: 4) {
                             Text(weatherManager.locationName ?? "Current Location")
-                                .font(.system(size: 14, weight: .medium))
+                                .barikPopupFont(size: 14, weight: .medium)
 
                             Image(systemName: "location.fill")
-                                .font(.system(size: 8))
+                                .barikPopupFont(size: 8)
                                 .opacity(0.6)
                         }
 
                         Text(weather.temperature)
-                            .font(.system(size: 48, weight: .regular))
+                            .barikPopupFont(size: 48, weight: .regular)
                     }
 
                     Spacer()
@@ -40,17 +40,17 @@ struct WeatherPopup: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         Image(systemName: weather.symbolName)
                             .symbolRenderingMode(.multicolor)
-                            .font(.system(size: 28))
+                            .barikPopupFont(size: 28)
 
                         Text(LocalizedStringKey(weather.condition))
-                            .font(.system(size: 13))
+                            .barikPopupFont(size: 13)
                             .opacity(0.8)
 
                         if let high = weatherManager.highTemp,
                            let low = weatherManager.lowTemp {
 
                             Text("↑\(high) ↓\(low)")
-                                .font(.system(size: 12))
+                                .barikPopupFont(size: 12)
                                 .opacity(0.6)
                         }
                     }
@@ -69,10 +69,10 @@ struct WeatherPopup: View {
                     HStack(spacing: 8) {
 
                         Image(systemName: "umbrella.fill")
-                            .font(.system(size: 14))
+                            .barikPopupFont(size: 14)
 
                         Text("\(Int(precipitation * 100))% chance of rain")
-                            .font(.system(size: 13))
+                            .barikPopupFont(size: 13)
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
@@ -104,23 +104,23 @@ struct WeatherPopup: View {
                                     VStack(spacing: 8) {
 
                                         Text(hour.timeLabel)
-                                            .font(.system(size: 12, weight: .medium))
+                                            .barikPopupFont(size: 12, weight: .medium)
                                             .opacity(0.8)
 
                                         Image(systemName: hour.symbolName)
                                             .symbolRenderingMode(.multicolor)
-                                            .font(.system(size: 20))
+                                            .barikPopupFont(size: 20)
 
                                         if let precip = hour.precipitationProbability,
                                            precip > 0 {
 
                                             Text("\(precip)%")
-                                                .font(.system(size: 10))
+                                                .barikPopupFont(size: 10)
                                                 .foregroundColor(.cyan)
                                         }
 
                                         Text(hour.temperature)
-                                            .font(.system(size: 14, weight: .medium))
+                                            .barikPopupFont(size: 14, weight: .medium)
                                     }
                                     .frame(width: itemWidth)
                                 }
@@ -161,12 +161,12 @@ struct WeatherPopup: View {
                     HStack {
 
                         Text("Open Weather")
-                            .font(.system(size: 13))
+                            .barikPopupFont(size: 13)
 
                         Spacer()
 
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12))
+                            .barikPopupFont(size: 12)
                             .opacity(0.5)
                     }
                     .padding(.horizontal, 20)
@@ -191,7 +191,7 @@ struct WeatherPopup: View {
                     ProgressView()
 
                     Text("Loading weather...")
-                        .font(.system(size: 13))
+                        .barikPopupFont(size: 13)
                         .opacity(0.6)
                 }
                 .frame(maxWidth: .infinity)

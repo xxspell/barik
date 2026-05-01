@@ -27,10 +27,10 @@ struct ScreenRecordingWidget: View {
                 Button(action: manager.stopRecording) {
                     HStack(spacing: 5) {
                         Image(systemName: "stop.fill")
-                            .font(.system(size: 8, weight: .bold))
+                            .barikFont(size: 8, weight: .bold)
                         if showLabel {
                             Text("REC")
-                                .font(.system(size: 9, weight: .black, design: .rounded))
+                                .barikFont(size: 9, weight: .black, design: .rounded)
                         }
                     }
                     .foregroundStyle(.white)

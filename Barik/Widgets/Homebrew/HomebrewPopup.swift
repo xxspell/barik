@@ -25,25 +25,25 @@ struct HomebrewPopup: View {
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: "shippingbox.fill")
-                .font(.system(size: 16))
+                .barikPopupFont(size: 16)
                 .foregroundStyle(.orange)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Homebrew")
-                    .font(.system(size: 13, weight: .semibold))
+                    .barikPopupFont(size: 13, weight: .semibold)
                     .foregroundStyle(.primary)
 
                 if manager.isRunningUpdate {
                     Text("homebrew.updating")
-                        .font(.system(size: 11))
+                        .barikPopupFont(size: 11)
                         .foregroundStyle(.orange)
                 } else if manager.outdatedCount == 0 {
                     Text("homebrew.all_up_to_date")
-                        .font(.system(size: 11))
+                        .barikPopupFont(size: 11)
                         .foregroundStyle(.secondary)
                 } else {
                     Text(manager.outdatedCount == 1 ? String(localized: "homebrew.one_package_needs_update") : String(format: String(localized: "homebrew.n_packages_need_update"), manager.outdatedCount))
-                        .font(.system(size: 11))
+                        .barikPopupFont(size: 11)
                         .foregroundStyle(.orange)
                 }
             }
@@ -66,7 +66,7 @@ struct HomebrewPopup: View {
             HStack {
                 Spacer()
                 Label("homebrew.nothing_to_update", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 12))
+                    .barikPopupFont(size: 12)
                     .foregroundStyle(.green)
                 Spacer()
             }
@@ -99,17 +99,17 @@ struct HomebrewPopup: View {
         return HStack(spacing: 7) {
             // formula vs cask icon
             Image(systemName: pkg.isCask ? "app.gift" : "cube")
-                .font(.system(size: 10))
+                .barikPopupFont(size: 10)
                 .foregroundStyle(needsSudo ? Color.red.opacity(0.8) : Color.orange.opacity(0.7))
                 .frame(width: 14)
 
             Text(pkg.name)
-                .font(.system(size: 12, weight: .medium))
+                .barikPopupFont(size: 12, weight: .medium)
                 .foregroundStyle(.primary)
 
             if pkg.isCask {
                 Text("homebrew.cask")
-                    .font(.system(size: 9, weight: .medium))
+                    .barikPopupFont(size: 9, weight: .medium)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
@@ -122,7 +122,7 @@ struct HomebrewPopup: View {
             // sudo warning badge
             if needsSudo {
                 Label("sudo", systemImage: "lock.fill")
-                    .font(.system(size: 9, weight: .semibold))
+                    .barikPopupFont(size: 9, weight: .semibold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
@@ -130,7 +130,7 @@ struct HomebrewPopup: View {
                     .clipShape(RoundedRectangle(cornerRadius: 4))
             } else {
                 Text(pkg.versionInfo)
-                    .font(.system(size: 10))
+                    .barikPopupFont(size: 10)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -156,15 +156,15 @@ struct HomebrewPopup: View {
     private func statRow(icon: String, label: LocalizedStringKey, value: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .foregroundStyle(.secondary)
                 .frame(width: 16)
             Text(label)
-                .font(.system(size: 12))
+                .barikPopupFont(size: 12)
                 .foregroundStyle(.secondary)
             Spacer()
             Text(value)
-                .font(.system(size: 12, weight: .medium))
+                .barikPopupFont(size: 12, weight: .medium)
                 .foregroundStyle(.primary)
         }
         .padding(.horizontal, 14)
@@ -200,19 +200,19 @@ struct HomebrewPopup: View {
     private var sudoBanner: some View {
         HStack(spacing: 8) {
             Image(systemName: "lock.fill")
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .foregroundStyle(.red)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("homebrew.sudo_required_title")
-                    .font(.system(size: 11, weight: .semibold))
+                    .barikPopupFont(size: 11, weight: .semibold)
                     .foregroundStyle(.primary)
                 Text(manager.sudoRequiredPackages.sorted().joined(separator: ", "))
-                    .font(.system(size: 10))
+                    .barikPopupFont(size: 10)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 Text("homebrew.sudo_required_hint")
-                    .font(.system(size: 10))
+                    .barikPopupFont(size: 10)
                     .foregroundStyle(.secondary)
             }
         }
@@ -231,14 +231,14 @@ struct HomebrewPopup: View {
                      : manager.updateProgress.hasPrefix(HomebrewProgressPhase.upgradeFormulae)
                      ? String(localized: "homebrew.running_upgrade_formula")
                      : String(localized: "homebrew.running_update"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .barikPopupFont(size: 12, weight: .semibold)
                     .foregroundStyle(.primary)
 
                 if !manager.updateProgress.isEmpty
                     && !manager.updateProgress.hasPrefix("Upgrading")
                     && !manager.updateProgress.hasPrefix("Updating") {
                     Text(manager.updateProgress)
-                        .font(.system(size: 11))
+                        .barikPopupFont(size: 11)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .truncationMode(.tail)
@@ -260,9 +260,9 @@ struct HomebrewPopup: View {
         }) {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .barikPopupFont(size: 13, weight: .semibold)
                 Text("homebrew.update_and_upgrade")
-                    .font(.system(size: 13, weight: .semibold))
+                    .barikPopupFont(size: 13, weight: .semibold)
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
@@ -288,7 +288,7 @@ private struct SpinnerView: View {
 
     var body: some View {
         Image(systemName: "arrow.triangle.2.circlepath")
-            .font(.system(size: 12, weight: .semibold))
+            .barikPopupFont(size: 12, weight: .semibold)
             .foregroundStyle(.orange)
             .rotationEffect(.degrees(angle))
             .onAppear {

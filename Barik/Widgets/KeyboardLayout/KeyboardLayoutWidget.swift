@@ -16,7 +16,7 @@ struct KeyboardLayoutWidget: View {
                 labelView
             } else {
                 Image(systemName: "globe")
-                    .font(.system(size: 14, weight: .semibold))
+                    .barikFont(size: 14, weight: .semibold)
                     .foregroundStyle(.foregroundOutside)
             }
         }
@@ -52,7 +52,7 @@ struct KeyboardLayoutWidget: View {
 
     private var labelView: some View {
         Text(layoutManager.currentSource?.shortLabel ?? "--")
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .barikFont(size: 12, weight: .semibold, design: .rounded)
             .foregroundStyle(.foregroundOutside)
             .monospaced()
             .fixedSize(horizontal: true, vertical: false)

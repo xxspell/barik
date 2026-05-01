@@ -9,7 +9,7 @@ struct UpdateBannerWidget: View {
         if updater.updateAvailable {
             Button(action: handleUpdate) {
                 Text(isUpdating ? "Updating" : "Update")
-                    .fontWeight(.semibold)
+                    .barikFont(size: 13, weight: .semibold)
             }
             .buttonStyle(BannerButtonStyle(color: .blue))
             .disabled(isUpdating)

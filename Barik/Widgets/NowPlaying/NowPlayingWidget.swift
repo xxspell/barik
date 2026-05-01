@@ -212,18 +212,17 @@ struct SongTextView: View {
         VStack(alignment: .leading, spacing: -1) {
             if foregroundHeight >= 30 {
                 Text(song.title)
-                    .font(.system(size: 11))
-                    .fontWeight(.medium)
+                    .barikFont(size: 11, weight: .medium)
                     .padding(.trailing, 2)
                 if showArtist {
                     Text(song.artist)
                         .opacity(0.8)
-                        .font(.system(size: 10))
+                        .barikFont(size: 10)
                         .padding(.trailing, 2)
                 }
             } else {
                 Text(showArtist ? song.artist + " — " + song.title : song.title)
-                    .font(.system(size: 12))
+                    .barikFont(size: 12)
             }
         }
         // Disable animations for text changes.

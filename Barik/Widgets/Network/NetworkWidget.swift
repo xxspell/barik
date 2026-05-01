@@ -20,7 +20,7 @@ struct NetworkWidget: View {
         }
         .captureScreenRect(into: $rect)
         .contentShape(Rectangle())
-        .font(.system(size: 15))
+        .barikFont(size: 15)
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))

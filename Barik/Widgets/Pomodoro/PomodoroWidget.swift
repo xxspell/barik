@@ -87,7 +87,7 @@ struct PomodoroWidget: View {
                 .foregroundStyle(iconColor)
 
             Text(manager.widgetLabel ?? "00:00")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .barikFont(size: 12, weight: .semibold, design: .rounded)
                 .foregroundStyle(.foregroundOutside)
                 .opacity(manager.widgetLabel == nil ? 0 : 1)
                 .frame(width: manager.widgetLabel == nil ? 0 : timerLabelWidth, alignment: .center)
@@ -118,7 +118,7 @@ struct PomodoroWidget: View {
 
                 if manager.statistics.todayCount > 8 {
                     Text("+\(manager.statistics.todayCount - 8)")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .barikFont(size: 10, weight: .bold, design: .rounded)
                         .foregroundStyle(.foregroundOutside.opacity(0.8))
                         .padding(.leading, 1)
                 }

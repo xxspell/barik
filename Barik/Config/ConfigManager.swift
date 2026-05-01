@@ -127,6 +127,8 @@ final class ConfigManager: ObservableObject {
             # ]
 
             [experimental.foreground]
+            # font-family = "JetBrains Mono"
+            # font-apply-to-popups = true
             # Optional tighter edge padding for displays with a notch.
             # Falls back to min(horizontal-padding, 12) when omitted.
             # notch-horizontal-padding = 12

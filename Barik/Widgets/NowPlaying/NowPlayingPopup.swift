@@ -80,11 +80,11 @@ private struct NowPlayingVerticalPopup: View {
                 VStack(alignment: .center) {
                     Text(song.title)
                         .multilineTextAlignment(.center)
-                        .font(.system(size: 15))
+                        .barikPopupFont(size: 15)
                         .fontWeight(.medium)
                     Text(song.artist)
                         .opacity(0.6)
-                        .font(.system(size: 15))
+                        .barikPopupFont(size: 15)
                         .fontWeight(.light)
                 }
 
@@ -95,13 +95,13 @@ private struct NowPlayingVerticalPopup: View {
                 if showTransportControls {
                     HStack(spacing: 40) {
                         Image(systemName: "backward.fill")
-                            .font(.system(size: 20))
+                            .barikPopupFont(size: 20)
                             .onTapGesture { playingManager.previousTrack() }
                         Image(systemName: song.state == .paused ? "play.fill" : "pause.fill")
-                            .font(.system(size: 30))
+                            .barikPopupFont(size: 30)
                             .onTapGesture { playingManager.togglePlayPause() }
                         Image(systemName: "forward.fill")
-                            .font(.system(size: 20))
+                            .barikPopupFont(size: 20)
                             .onTapGesture { playingManager.nextTrack() }
                     }
                 }
@@ -128,11 +128,11 @@ struct NowPlayingHorizontalPopup: View {
 
                     VStack(alignment: .leading, spacing: 0) {
                         Text(song.title)
-                            .font(.headline)
+                            .barikPopupTextStyle(.headline)
                             .fontWeight(.medium)
                         Text(song.artist)
                             .opacity(0.6)
-                            .font(.headline)
+                            .barikPopupTextStyle(.headline)
                             .fontWeight(.light)
                     }
                     .padding(.trailing, 8)
@@ -146,13 +146,13 @@ struct NowPlayingHorizontalPopup: View {
                 if showTransportControls {
                     HStack(spacing: 40) {
                         Image(systemName: "backward.fill")
-                            .font(.system(size: 20))
+                            .barikPopupFont(size: 20)
                             .onTapGesture { playingManager.previousTrack() }
                         Image(systemName: song.state == .paused ? "play.fill" : "pause.fill")
-                            .font(.system(size: 30))
+                            .barikPopupFont(size: 30)
                             .onTapGesture { playingManager.togglePlayPause() }
                         Image(systemName: "forward.fill")
-                            .font(.system(size: 20))
+                            .barikPopupFont(size: 20)
                             .onTapGesture { playingManager.nextTrack() }
                     }
                 }
@@ -186,7 +186,7 @@ private struct PopupAlbumArtView: View {
                     .fill(Color.gray.opacity(0.2))
                     .overlay(
                         Image(systemName: "music.note")
-                            .font(.system(size: min(size.width, size.height) * 0.28))
+                            .barikPopupFont(size: min(size.width, size.height) * 0.28)
                             .foregroundStyle(.white.opacity(0.55))
                     )
             }
@@ -214,12 +214,12 @@ private struct PlaybackProgressView: View {
 
                 HStack {
                     Text(timeString(from: position))
-                        .font(.caption)
+                        .barikPopupTextStyle(.caption)
                     ProgressView(value: position, total: duration)
                         .progressViewStyle(LinearProgressViewStyle())
                         .tint(.white)
                     Text("-" + timeString(from: max(duration - position, 0)))
-                        .font(.caption)
+                        .barikPopupTextStyle(.caption)
                 }
                 .foregroundColor(.gray)
                 .monospacedDigit()

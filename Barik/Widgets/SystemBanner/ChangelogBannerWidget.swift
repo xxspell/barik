@@ -12,7 +12,7 @@ struct ChangelogBannerWidget: View {
         }) {
             HStack(alignment: .center) {
                 Text("What's new")
-                    .fontWeight(.semibold)
+                    .barikFont(size: 13, weight: .semibold)
                 Image(systemName: "xmark.circle.fill")
                     .onTapGesture {
                         NotificationCenter.default.post(name: Notification.Name("HideWhatsNewBanner"), object: nil)

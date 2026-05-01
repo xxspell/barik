@@ -135,7 +135,7 @@ struct SystemMonitorWidget: View {
         HStack(spacing: 6) {
             if showIcon {
                 Image(systemName: "cpu")
-                    .font(.system(size: usesExpandedRowsLayout ? 15 : (usesSingleMetricColumns ? 13 : 12), weight: .medium))
+                    .barikFont(size: usesExpandedRowsLayout ? 15 : (usesSingleMetricColumns ? 13 : 12), weight: .medium)
                     .foregroundStyle(.foregroundOutside)
             }
 
@@ -245,12 +245,12 @@ struct SystemMonitorWidget: View {
     private func metricLabel(for metric: SystemMonitorMetric) -> some View {
         if useMetricIcons {
             Image(systemName: metric.systemImageName)
-                .font(.system(size: usesExpandedRowsLayout ? 11 : (usesSingleMetricColumns ? 10 : 9), weight: .semibold))
+                .barikFont(size: usesExpandedRowsLayout ? 11 : (usesSingleMetricColumns ? 10 : 9), weight: .semibold)
                 .foregroundStyle(.foregroundOutside.opacity(0.8))
                 .frame(width: labelWidth, alignment: .leading)
         } else {
             Text(metric.title)
-                .font(.system(size: usesExpandedRowsLayout ? 11 : (usesSingleMetricColumns ? 10 : 9), weight: .semibold))
+                .barikFont(size: usesExpandedRowsLayout ? 11 : (usesSingleMetricColumns ? 10 : 9), weight: .semibold)
                 .foregroundStyle(.foregroundOutside.opacity(0.8))
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
@@ -301,7 +301,7 @@ struct SystemMonitorWidget: View {
             }
 
             Text(valueText ?? "--")
-                .font(.system(size: usesExpandedRowsLayout ? 11 : (usesSingleMetricColumns ? 10 : 9), weight: .medium, design: .monospaced))
+                .barikFont(size: usesExpandedRowsLayout ? 11 : (usesSingleMetricColumns ? 10 : 9), weight: .medium, design: .monospaced)
                 .foregroundStyle(color)
                 .frame(width: valueWidth, alignment: .trailing)
         }
@@ -312,7 +312,7 @@ struct SystemMonitorWidget: View {
             metricLabel(for: metric)
 
             Text(valueText ?? "--")
-                .font(.system(size: usesSingleMetricColumns ? 11 : 10, weight: .semibold, design: .monospaced))
+                .barikFont(size: usesSingleMetricColumns ? 11 : 10, weight: .semibold, design: .monospaced)
                 .foregroundStyle(color)
                 .frame(minWidth: labelWidth, alignment: .leading)
         }
@@ -333,7 +333,7 @@ struct SystemMonitorWidget: View {
                 }
 
                 Text("--")
-                    .font(.system(size: usesExpandedRowsLayout ? 11 : (usesSingleMetricColumns ? 10 : 9), weight: .medium, design: .monospaced))
+                    .barikFont(size: usesExpandedRowsLayout ? 11 : (usesSingleMetricColumns ? 10 : 9), weight: .medium, design: .monospaced)
                     .foregroundStyle(.foregroundOutside.opacity(0.6))
                     .frame(width: valueWidth, alignment: .trailing)
             }
@@ -361,12 +361,12 @@ struct SystemMonitorWidget: View {
                     metricLabel(for: .network)
 
                     Image(systemName: directionIcon)
-                        .font(.system(size: usesSingleMetricColumns ? 9 : 8, weight: .bold))
+                        .barikFont(size: usesSingleMetricColumns ? 9 : 8, weight: .bold)
                         .foregroundStyle(speedColor)
                 }
 
                 Text(valueText)
-                    .font(.system(size: usesSingleMetricColumns ? 11 : 10, weight: .semibold, design: .monospaced))
+                    .barikFont(size: usesSingleMetricColumns ? 11 : 10, weight: .semibold, design: .monospaced)
                     .foregroundStyle(.foregroundOutside)
                     .frame(minWidth: 32, alignment: .leading)
             }
@@ -375,12 +375,12 @@ struct SystemMonitorWidget: View {
                 metricLabel(for: .network)
 
                 Image(systemName: directionIcon)
-                    .font(.system(size: usesExpandedRowsLayout ? 9 : 8, weight: .bold))
+                    .barikFont(size: usesExpandedRowsLayout ? 9 : 8, weight: .bold)
                     .foregroundStyle(speedColor)
                     .frame(width: usesExpandedRowsLayout ? 10 : 8)
 
                 Text(valueText)
-                    .font(.system(size: usesExpandedRowsLayout ? 11 : (usesSingleMetricColumns ? 10 : 9), weight: .medium, design: .monospaced))
+                    .barikFont(size: usesExpandedRowsLayout ? 11 : (usesSingleMetricColumns ? 10 : 9), weight: .medium, design: .monospaced)
                     .foregroundStyle(.foregroundOutside)
                     .frame(width: usesExpandedRowsLayout ? 56 : 50, alignment: .trailing)
             }
@@ -390,11 +390,11 @@ struct SystemMonitorWidget: View {
     private func networkSpeedLine(icon: String, text: String, color: Color) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: usesSingleMetricColumns ? 9 : 8, weight: .bold))
+                .barikFont(size: usesSingleMetricColumns ? 9 : 8, weight: .bold)
                 .foregroundStyle(color)
 
             Text(text)
-                .font(.system(size: usesSingleMetricColumns ? 11 : 10, weight: .semibold, design: .monospaced))
+                .barikFont(size: usesSingleMetricColumns ? 11 : 10, weight: .semibold, design: .monospaced)
                 .foregroundStyle(.foregroundOutside)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)

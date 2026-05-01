@@ -49,11 +49,11 @@ struct ChangelogPopup: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Changelog")
-                    .font(.system(size: 20, weight: .semibold))
+                    .barikPopupFont(size: 20, weight: .semibold)
 
                 if availableVersions.isEmpty {
                     Text("Version \(bundleVersion)")
-                        .font(.system(size: 13, weight: .medium))
+                        .barikPopupFont(size: 13, weight: .medium)
                         .foregroundStyle(.white.opacity(0.62))
                 } else {
                     Picker("Version", selection: Binding(
@@ -77,7 +77,7 @@ struct ChangelogPopup: View {
 
             Button(action: close) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
+                    .barikPopupFont(size: 12, weight: .bold)
                     .foregroundStyle(.white.opacity(0.82))
                     .frame(width: 30, height: 30)
                     .background(Color.white.opacity(0.08))

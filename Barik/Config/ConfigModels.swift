@@ -301,6 +301,8 @@ struct ExperimentalConfig: Decodable {
 
 struct ForegroundConfig: Decodable {
     let height: BackgroundForegroundHeight
+    let fontFamily: String?
+    let applyFontToPopups: Bool
     let horizontalPadding: CGFloat
     let notchHorizontalPadding: CGFloat
     let widgetsBackground: WidgetBackgroundConfig
@@ -308,6 +310,8 @@ struct ForegroundConfig: Decodable {
     
     init() {
         self.height = .barikDefault
+        self.fontFamily = nil
+        self.applyFontToPopups = false
         self.horizontalPadding = Constants.menuBarHorizontalPadding
         self.notchHorizontalPadding = 12
         self.widgetsBackground = WidgetBackgroundConfig()
@@ -317,6 +321,10 @@ struct ForegroundConfig: Decodable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         height = try container.decodeIfPresent(BackgroundForegroundHeight.self, forKey: .height) ?? .barikDefault
+        let decodedFontFamily = try container.decodeIfPresent(String.self, forKey: .fontFamily)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        fontFamily = decodedFontFamily?.isEmpty == false ? decodedFontFamily : nil
+        applyFontToPopups = try container.decodeIfPresent(Bool.self, forKey: .applyFontToPopups) ?? false
         horizontalPadding = try container.decodeIfPresent(CGFloat.self, forKey: .horizontalPadding) ?? Constants.menuBarHorizontalPadding
         notchHorizontalPadding = try container.decodeIfPresent(CGFloat.self, forKey: .notchHorizontalPadding) ?? min(horizontalPadding, 12)
         widgetsBackground = try container.decodeIfPresent(WidgetBackgroundConfig.self, forKey: .widgetsBackground) ?? WidgetBackgroundConfig()
@@ -325,6 +333,8 @@ struct ForegroundConfig: Decodable {
     
     enum CodingKeys: String, CodingKey {
         case height
+        case fontFamily = "font-family"
+        case applyFontToPopups = "font-apply-to-popups"
         case horizontalPadding = "horizontal-padding"
         case notchHorizontalPadding = "notch-horizontal-padding"
         case widgetsBackground = "widgets-background"

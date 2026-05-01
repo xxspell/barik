@@ -134,10 +134,14 @@ struct RoutedSettingsLink<Label: View>: View {
         SettingsLink {
             label()
         }
+        .buttonStyle(.plain)
         .simultaneousGesture(
             TapGesture().onEnded {
                 SettingsRouter.shared.select(section)
                 NSApp.activate(ignoringOtherApps: true)
+                DispatchQueue.main.async {
+                    MenuBarPopup.hide()
+                }
             }
         )
     }

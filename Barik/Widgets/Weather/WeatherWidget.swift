@@ -34,7 +34,7 @@ struct WeatherWidget: View {
                 Image(systemName: weather.symbolName)
                     .symbolRenderingMode(.multicolor)
                 Text(weather.temperature)
-                    .fontWeight(.semibold)
+                    .barikFont(size: 13, weight: .semibold)
             } else {
                 Image(systemName: "cloud.sun")
                     .symbolRenderingMode(.multicolor)
@@ -44,7 +44,7 @@ struct WeatherWidget: View {
                 }
             }
         }
-        .font(.headline)
+        .barikTextStyle(.headline)
         .foregroundStyle(.primary)
         .shadow(radius: 3)
         .cornerRadius(15)

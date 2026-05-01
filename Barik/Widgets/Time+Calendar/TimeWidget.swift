@@ -55,22 +55,21 @@ struct TimeWidget: View {
         if stacked {
             VStack(alignment: .trailing, spacing: 1) {
                 Text(formattedTime(pattern: stackedTimeFormat, from: currentTime))
-                    .font(.system(size: 14, weight: .semibold))
+                    .barikFont(size: 14, weight: .semibold)
                 Text(formattedTime(pattern: stackedDateFormat, from: currentTime))
-                    .font(.system(size: 11, weight: .medium))
+                    .barikFont(size: 11, weight: .medium)
                     .opacity(0.7)
             }
         } else {
             VStack(alignment: .trailing, spacing: 0) {
                 Text(formattedTime(pattern: format, from: currentTime))
-                    .fontWeight(.semibold)
+                    .barikFont(size: 13, weight: .semibold)
                 if let event = calendarManager.nextEvent, calendarShowEvents {
                     Text(eventText(for: event))
                         .opacity(0.8)
-                        .font(.subheadline)
+                        .barikTextStyle(.subheadline)
                 }
             }
-            .font(.headline)
         }
     }
 

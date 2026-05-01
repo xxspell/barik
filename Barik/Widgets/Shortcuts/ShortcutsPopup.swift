@@ -75,7 +75,7 @@ struct ShortcutsPopup: View {
             ZStack {
                 if manager.isRunningShortcut {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 15, weight: .semibold))
+                        .barikPopupFont(size: 15, weight: .semibold)
                         .foregroundStyle(.white.opacity(0.85))
                         .rotationEffect(.degrees(manager.isRunningShortcut ? 360 : 0))
                         .animation(
@@ -84,7 +84,7 @@ struct ShortcutsPopup: View {
                         )
                 } else {
                     Image(systemName: "square.stack.3d.up.fill")
-                        .font(.system(size: 15, weight: .semibold))
+                        .barikPopupFont(size: 15, weight: .semibold)
                         .foregroundStyle(.white.opacity(0.85))
                 }
             }
@@ -92,11 +92,11 @@ struct ShortcutsPopup: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(String(localized: "shortcuts.title"))
-                    .font(.system(size: 15, weight: .semibold))
+                    .barikPopupFont(size: 15, weight: .semibold)
                     .foregroundStyle(.white)
 
                 Text(subtitleText)
-                    .font(.system(size: 11, weight: .medium))
+                    .barikPopupFont(size: 11, weight: .medium)
                     .foregroundStyle(.white.opacity(0.45))
             }
 
@@ -110,7 +110,7 @@ struct ShortcutsPopup: View {
                 }
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12, weight: .semibold))
+                    .barikPopupFont(size: 12, weight: .semibold)
                     .foregroundStyle(.white.opacity(0.72))
                     .rotationEffect(manager.isLoading ? .degrees(360) : .degrees(0))
                     .animation(
@@ -124,7 +124,7 @@ struct ShortcutsPopup: View {
 
             RoutedSettingsLink(section: .shortcuts) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .barikPopupFont(size: 12, weight: .semibold)
                     .foregroundStyle(.white.opacity(0.72))
             }
             .buttonStyle(.plain)
@@ -174,14 +174,14 @@ struct ShortcutsPopup: View {
         } label: {
             HStack(spacing: 8) {
                 Text(title)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                    .barikPopupFont(size: 12, weight: isSelected ? .semibold : .medium)
                     .foregroundStyle(isSelected ? .white : .white.opacity(0.65))
                     .lineLimit(1)
 
                 Spacer(minLength: 8)
 
                 Text("\(count)")
-                    .font(.system(size: 10, weight: .bold))
+                    .barikPopupFont(size: 10, weight: .bold)
                     .foregroundStyle(isSelected ? .black : .white.opacity(0.6))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -206,7 +206,7 @@ struct ShortcutsPopup: View {
             LazyVStack(alignment: .leading, spacing: 14) {
                 if let errorMessage = manager.errorMessage {
                     Text(errorMessage)
-                        .font(.system(size: 11, weight: .medium))
+                        .barikPopupFont(size: 11, weight: .medium)
                         .foregroundStyle(.orange.opacity(0.95))
                         .padding(.horizontal, 18)
                         .padding(.top, 2)
@@ -230,7 +230,7 @@ struct ShortcutsPopup: View {
             if selectedFolderID == ShortcutFolderSection.allID {
                 HStack(spacing: 8) {
                     Text(section.title)
-                        .font(.system(size: 12, weight: .semibold))
+                        .barikPopupFont(size: 12, weight: .semibold)
                         .foregroundStyle(.white.opacity(0.75))
                     Rectangle()
                         .fill(Color.white.opacity(0.08))
@@ -265,7 +265,7 @@ struct ShortcutsPopup: View {
                             .tint(.white)
                     } else {
                         Image(systemName: "play.fill")
-                            .font(.system(size: 12, weight: .semibold))
+                            .barikPopupFont(size: 12, weight: .semibold)
                             .foregroundStyle(.white.opacity(0.8))
                             .offset(x: 1)
                     }
@@ -273,13 +273,13 @@ struct ShortcutsPopup: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(shortcut.name)
-                        .font(.system(size: 13, weight: .semibold))
+                        .barikPopupFont(size: 13, weight: .semibold)
                         .foregroundStyle(.white.opacity(isAnotherShortcutRunning ? 0.5 : 1.0))
                         .lineLimit(1)
 
                     if selectedFolderID == ShortcutFolderSection.allID {
                         Text(section.title)
-                            .font(.system(size: 11, weight: .medium))
+                            .barikPopupFont(size: 11, weight: .medium)
                             .foregroundStyle(.white.opacity(0.45))
                             .lineLimit(1)
                     }
@@ -289,11 +289,11 @@ struct ShortcutsPopup: View {
 
                 if isRunning {
                     Text(String(localized: "shortcuts.state.running"))
-                        .font(.system(size: 11, weight: .semibold))
+                        .barikPopupFont(size: 11, weight: .semibold)
                         .foregroundStyle(.white.opacity(0.7))
                 } else {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
+                        .barikPopupFont(size: 10, weight: .bold)
                         .foregroundStyle(.white.opacity(0.26))
                 }
             }
@@ -316,12 +316,12 @@ struct ShortcutsPopup: View {
     private var searchField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 10, weight: .medium))
+                .barikPopupFont(size: 10, weight: .medium)
                 .foregroundStyle(.white.opacity(0.35))
 
             TextField(String(localized: "shortcuts.search.placeholder"), text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 11, weight: .medium))
+                .barikPopupFont(size: 11, weight: .medium)
                 .foregroundStyle(.white)
                 .frame(width: 140)
 
@@ -330,7 +330,7 @@ struct ShortcutsPopup: View {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 10))
+                        .barikPopupFont(size: 10)
                         .foregroundStyle(.white.opacity(0.35))
                 }
                 .buttonStyle(.plain)
@@ -348,7 +348,7 @@ struct ShortcutsPopup: View {
                 .controlSize(.regular)
                 .tint(.white)
             Text(String(localized: "shortcuts.loading"))
-                .font(.system(size: 12, weight: .medium))
+                .barikPopupFont(size: 12, weight: .medium)
                 .foregroundStyle(.white.opacity(0.56))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -357,15 +357,15 @@ struct ShortcutsPopup: View {
     private func errorView(message: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 22))
+                .barikPopupFont(size: 22)
                 .foregroundStyle(.orange)
 
             Text(String(localized: "shortcuts.error.title"))
-                .font(.system(size: 14, weight: .semibold))
+                .barikPopupFont(size: 14, weight: .semibold)
                 .foregroundStyle(.white)
 
             Text(message)
-                .font(.system(size: 12, weight: .medium))
+                .barikPopupFont(size: 12, weight: .medium)
                 .foregroundStyle(.white.opacity(0.58))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 320)
@@ -384,15 +384,15 @@ struct ShortcutsPopup: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "square.stack.3d.up.slash")
-                .font(.system(size: 22))
+                .barikPopupFont(size: 22)
                 .foregroundStyle(.white.opacity(0.24))
 
             Text(String(localized: "shortcuts.empty.title"))
-                .font(.system(size: 14, weight: .semibold))
+                .barikPopupFont(size: 14, weight: .semibold)
                 .foregroundStyle(.white)
 
             Text(emptyStateSubtitle)
-                .font(.system(size: 12, weight: .medium))
+                .barikPopupFont(size: 12, weight: .medium)
                 .foregroundStyle(.white.opacity(0.52))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 280)

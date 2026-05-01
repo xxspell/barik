@@ -50,7 +50,7 @@ struct CalendarBoxPopup: View {
     var body: some View {
         VStack(spacing: 0) {
             Text(currentMonthYear)
-                .font(.title2)
+                .barikPopupTextStyle(.title2)
                 .padding(.bottom, 25)
             WeekdayHeaderView()
             CalendarDaysView(
@@ -103,7 +103,7 @@ struct CalendarVerticalPopup: View {
     var body: some View {
         VStack(spacing: 0) {
             Text(currentMonthYear)
-                .font(.title2)
+                .barikPopupTextStyle(.title2)
                 .padding(.bottom, 25)
             WeekdayHeaderView()
             CalendarDaysView(
@@ -172,7 +172,7 @@ struct CalendarHorizontalPopup: View {
         HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(currentMonthYear)
-                    .font(.title2)
+                    .barikPopupTextStyle(.title2)
                     .padding(.bottom, 25)
                     .fixedSize(horizontal: true, vertical: false)
                 WeekdayHeaderView()
@@ -391,7 +391,7 @@ private struct EventListView: View {
         if !events.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
-                    .font(.subheadline)
+                    .barikPopupTextStyle(.subheadline)
                     .foregroundStyle(.gray)
                 ForEach(events, id: \.eventIdentifier) { event in
                     EventRow(event: event)
@@ -443,7 +443,7 @@ private struct CombinedDayAgendaView: View {
             if filteredItems.isEmpty {
                 Text(NSLocalizedString("EMPTY_EVENTS", comment: ""))
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .font(.callout)
+                    .barikPopupTextStyle(.callout)
                     .padding(.top, 3)
             } else {
                 ScrollView {
@@ -555,7 +555,7 @@ private struct CombinedDayAgendaView: View {
     private func filterTab(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: { withAnimation(.easeInOut(duration: 0.12)) { action() } }) {
             Text(title)
-                .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
+                .barikPopupFont(size: 10, weight: isSelected ? .semibold : .regular)
                 .foregroundStyle(isSelected ? .white : .white.opacity(0.4))
                 .padding(.horizontal, 8).padding(.vertical, 4)
                 .background(isSelected ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
@@ -608,15 +608,15 @@ private struct CombinedEventRow: View {
                 .clipShape(Capsule())
             VStack(alignment: .leading, spacing: 1) {
                 Text(event.title)
-                    .font(.headline)
+                    .barikPopupTextStyle(.headline)
                     .lineLimit(1)
                 HStack(spacing: 6) {
                     Text(eventTime)
-                        .font(.caption)
+                        .barikPopupTextStyle(.caption)
                         .fontWeight(.regular)
                         .lineLimit(1)
                     Text(NSLocalizedString("Calendar", comment: ""))
-                        .font(.caption2)
+                        .barikPopupTextStyle(.caption2)
                         .foregroundStyle(.white.opacity(0.35))
                 }
             }
@@ -656,22 +656,22 @@ private struct CombinedTaskRow: View {
                 .clipShape(Capsule())
             VStack(alignment: .leading, spacing: 1) {
                 Text(task.title)
-                    .font(.headline)
+                    .barikPopupTextStyle(.headline)
                     .lineLimit(1)
                 HStack(spacing: 6) {
                     if let lbl = label {
                         Text(lbl)
-                            .font(.caption)
+                            .barikPopupTextStyle(.caption)
                             .fontWeight(.regular)
                             .foregroundStyle(color.opacity(0.8))
                     } else if let due = task.dueDate {
                         Text(taskTime(due))
-                            .font(.caption)
+                            .barikPopupTextStyle(.caption)
                             .fontWeight(.regular)
                             .foregroundStyle(color.opacity(0.7))
                     }
                     Text(NSLocalizedString("TickTick", comment: ""))
-                        .font(.caption2)
+                        .barikPopupTextStyle(.caption2)
                         .foregroundStyle(.white.opacity(0.35))
                 }
             }
@@ -716,10 +716,10 @@ private struct EventRow: View {
                 .clipShape(Capsule())
             VStack(alignment: .leading) {
                 Text(event.title)
-                    .font(.headline)
+                    .barikPopupTextStyle(.headline)
                     .lineLimit(1)
                 Text(eventTime)
-                    .font(.caption)
+                    .barikPopupTextStyle(.caption)
                     .fontWeight(.regular)
                     .lineLimit(1)
             }
@@ -811,15 +811,15 @@ struct TickTickDayTasksView: View {
             // Header
             HStack {
                 Image(systemName: "checkmark.square.fill")
-                    .font(.system(size: 10))
+                    .barikPopupFont(size: 10)
                     .opacity(0.6)
                 Text(dayLabel.uppercased())
-                    .font(.subheadline)
+                    .barikPopupTextStyle(.subheadline)
                     .foregroundStyle(.gray)
                 Spacer()
                 if manager.totalPendingCount > 0 {
                     Text("\(manager.totalPendingCount) total")
-                        .font(.caption)
+                        .barikPopupTextStyle(.caption)
                         .foregroundStyle(.gray.opacity(0.5))
                 }
             }
@@ -834,7 +834,7 @@ struct TickTickDayTasksView: View {
             // Tasks with deadline on this day
             if deadlineTasks.isEmpty && overdueTasks.isEmpty && importantNoDueTasks.isEmpty {
                 Text(NSLocalizedString("No tasks for this day", comment: ""))
-                    .font(.callout)
+                    .barikPopupTextStyle(.callout)
                     .foregroundStyle(.white.opacity(0.3))
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 4)
@@ -847,7 +847,7 @@ struct TickTickDayTasksView: View {
             // Important tasks without deadline (today only)
             if !importantNoDueTasks.isEmpty {
                 Text(NSLocalizedString("IMPORTANT · NO DUE DATE", comment: ""))
-                    .font(.caption2)
+                    .barikPopupTextStyle(.caption2)
                     .foregroundStyle(.gray.opacity(0.5))
                     .padding(.top, 2)
                 ForEach(importantNoDueTasks.prefix(3)) { task in
@@ -867,18 +867,18 @@ struct TickTickDayTasksView: View {
                 .clipShape(Capsule())
             VStack(alignment: .leading, spacing: 1) {
                 Text(task.title)
-                    .font(.headline)
+                    .barikPopupTextStyle(.headline)
                     .lineLimit(1)
                 if let lbl = label {
                     Text(lbl)
-                        .font(.caption)
+                        .barikPopupTextStyle(.caption)
                         .fontWeight(.regular)
                         .foregroundStyle(color.opacity(0.8))
                 } else if let due = task.dueDate {
                     let f = DateFormatter()
                     let _ = { f.setLocalizedDateFormatFromTemplate("j:mm") }()
                     Text(f.string(from: due))
-                        .font(.caption)
+                        .barikPopupTextStyle(.caption)
                         .fontWeight(.regular)
                         .foregroundStyle(color.opacity(0.7))
                 }

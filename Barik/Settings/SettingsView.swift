@@ -754,6 +754,7 @@ private struct AppearanceSettingsView: View {
     private enum AppearanceDefaults {
         static let foregroundHeightMode: AppearanceHeightMode = .defaultHeight
         static let foregroundCustomHeight: Double = 55
+        static let applyFontToPopups = false
         static let horizontalPadding: Double = 6
         static let notchPadding: Double = 6
         static let widgetSpacing: Double = 7
@@ -770,6 +771,9 @@ private struct AppearanceSettingsView: View {
     @State private var theme = AppearanceTheme.system
     @State private var foregroundHeightMode = AppearanceDefaults.foregroundHeightMode
     @State private var foregroundCustomHeight = AppearanceDefaults.foregroundCustomHeight
+    @State private var selectedFontFamily = AppearanceFontFamilyOption.systemDefault
+    @State private var applyFontToPopups = AppearanceDefaults.applyFontToPopups
+    @State private var fontSearchText = ""
     @State private var horizontalPadding = AppearanceDefaults.horizontalPadding
     @State private var notchPadding = AppearanceDefaults.notchPadding
     @State private var widgetSpacing = AppearanceDefaults.widgetSpacing
@@ -784,6 +788,25 @@ private struct AppearanceSettingsView: View {
     private let foregroundTable = "experimental.foreground"
     private let widgetBackgroundTable = "experimental.foreground.widgets-background"
     private let backgroundTable = "experimental.background"
+    private let fontBookURL = URL(fileURLWithPath: "/System/Applications/Font Book.app")
+
+    private var availableFontFamilyOptions: [AppearanceFontFamilyOption] {
+        let filteredFamilies = BarikFontCatalog.availableFamilies().filter { family in
+            fontSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || family.localizedCaseInsensitiveContains(fontSearchText)
+        }
+
+        var options: [AppearanceFontFamilyOption] = [.systemDefault]
+        options.append(contentsOf: filteredFamilies.map(AppearanceFontFamilyOption.custom))
+
+        if case let .custom(currentFamily) = selectedFontFamily,
+           !currentFamily.isEmpty,
+           !options.contains(.custom(currentFamily)) {
+            options.append(.custom(currentFamily))
+        }
+
+        return options
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -805,6 +828,43 @@ private struct AppearanceSettingsView: View {
                     ConfigManager.shared.updateConfigLiteralValue(
                         key: "theme",
                         newValueLiteral: "\"\(newValue.rawValue)\""
+                    )
+                }
+            }
+
+            SettingsCardView(
+                settingsLocalized("settings.appearance.card.font"),
+                actionTitle: settingsLocalized("settings.action.reset"),
+                action: resetFontDefaults
+            ) {
+                FontFamilySettingRow(
+                    title: settingsLocalized("settings.appearance.field.font_family.title"),
+                    description: settingsLocalized("settings.appearance.field.font_family.description"),
+                    searchPlaceholder: settingsLocalized("settings.appearance.field.font_family.search_placeholder"),
+                    installHint: settingsLocalized("settings.appearance.field.font_family.install_hint"),
+                    openFontBookTitle: settingsLocalized("settings.appearance.field.font_family.open_font_book"),
+                    selection: $selectedFontFamily,
+                    searchText: $fontSearchText,
+                    options: availableFontFamilyOptions,
+                    openFontBook: openFontBook
+                )
+                .onChange(of: selectedFontFamily) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    applyFontFamilySelection(newValue)
+                }
+
+                ToggleRow(
+                    title: settingsLocalized("settings.appearance.field.font_family.apply_to_popups.title"),
+                    description: settingsLocalized("settings.appearance.field.font_family.apply_to_popups.description"),
+                    isOn: $applyFontToPopups
+                )
+                .disabled(selectedFontFamily == .systemDefault)
+                .onChange(of: applyFontToPopups) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: foregroundTable,
+                        key: "font-apply-to-popups",
+                        newValueLiteral: newValue ? "true" : "false"
                     )
                 }
             }
@@ -1027,6 +1087,8 @@ private struct AppearanceSettingsView: View {
         theme = AppearanceTheme(rawValue: config.rootToml.theme ?? "system") ?? .system
         foregroundHeightMode = AppearanceHeightMode(height: foreground.height)
         foregroundCustomHeight = AppearanceSettingsView.customHeightValue(from: foreground.height)
+        selectedFontFamily = foreground.fontFamily.map(AppearanceFontFamilyOption.custom) ?? .systemDefault
+        applyFontToPopups = foreground.fontFamily == nil ? false : foreground.applyFontToPopups
         horizontalPadding = foreground.horizontalPadding
         notchPadding = foreground.notchHorizontalPadding
         widgetSpacing = foreground.spacing
@@ -1081,6 +1143,21 @@ private struct AppearanceSettingsView: View {
         }
     }
 
+    private func applyFontFamilySelection(_ selection: AppearanceFontFamilyOption) {
+        switch selection {
+        case .systemDefault:
+            ConfigManager.shared.removeConfigValue(tablePath: foregroundTable, key: "font-family")
+            applyFontToPopups = false
+            ConfigManager.shared.removeConfigValue(tablePath: foregroundTable, key: "font-apply-to-popups")
+        case let .custom(family):
+            ConfigManager.shared.updateConfigLiteralValue(
+                tablePath: foregroundTable,
+                key: "font-family",
+                newValueLiteral: "\"\(family.replacingOccurrences(of: "\"", with: "\\\""))\""
+            )
+        }
+    }
+
     private func resetForegroundDefaults() {
         isApplyingConfigSnapshot = true
         foregroundHeightMode = AppearanceDefaults.foregroundHeightMode
@@ -1110,6 +1187,17 @@ private struct AppearanceSettingsView: View {
             key: "spacing",
             newValueLiteral: String(Int(AppearanceDefaults.widgetSpacing))
         )
+    }
+
+    private func resetFontDefaults() {
+        isApplyingConfigSnapshot = true
+        selectedFontFamily = .systemDefault
+        applyFontToPopups = AppearanceDefaults.applyFontToPopups
+        fontSearchText = ""
+        isApplyingConfigSnapshot = false
+
+        ConfigManager.shared.removeConfigValue(tablePath: foregroundTable, key: "font-family")
+        ConfigManager.shared.removeConfigValue(tablePath: foregroundTable, key: "font-apply-to-popups")
     }
 
     private func resetWidgetCapsuleDefaults() {
@@ -1153,6 +1241,12 @@ private struct AppearanceSettingsView: View {
             key: "blur",
             newValueLiteral: String(AppearanceDefaults.backgroundBlur.rawValue)
         )
+    }
+
+    private func openFontBook() {
+        if FileManager.default.fileExists(atPath: fontBookURL.path) {
+            NSWorkspace.shared.open(fontBookURL)
+        }
     }
 }
 
@@ -7170,5 +7264,93 @@ private struct PickerSettingRow<Option: Hashable>: View {
             }
             .labelsHidden()
         }
+    }
+}
+
+private enum AppearanceFontFamilyOption: Hashable {
+    case systemDefault
+    case custom(String)
+
+    var title: String {
+        switch self {
+        case .systemDefault:
+            return settingsLocalized("settings.appearance.field.font_family.system_default")
+        case let .custom(family):
+            return family
+        }
+    }
+
+    var previewFamilyName: String? {
+        switch self {
+        case .systemDefault:
+            return nil
+        case let .custom(family):
+            return family
+        }
+    }
+}
+
+private struct FontFamilySettingRow: View {
+    let title: String
+    let description: String
+    let searchPlaceholder: String
+    let installHint: String
+    let openFontBookTitle: String
+    @Binding var selection: AppearanceFontFamilyOption
+    @Binding var searchText: String
+    let options: [AppearanceFontFamilyOption]
+    let openFontBook: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.headline)
+
+            Text(description)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            TextField(searchPlaceholder, text: $searchText)
+                .textFieldStyle(.roundedBorder)
+
+            Picker(title, selection: $selection) {
+                ForEach(options, id: \.self) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .labelsHidden()
+
+            Text("Barik Aa 0123456789")
+                .font(previewFont)
+                .foregroundStyle(.primary)
+                .padding(.vertical, 8)
+                .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.primary.opacity(0.04))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+
+            HStack(alignment: .top, spacing: 12) {
+                Text(installHint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 8)
+
+                Button(openFontBookTitle, action: openFontBook)
+            }
+        }
+    }
+
+    private var previewFont: Font {
+        if let family = selection.previewFamilyName {
+            return .custom(family, size: 13).weight(.medium)
+        }
+        return .system(size: 13, weight: .medium)
     }
 }

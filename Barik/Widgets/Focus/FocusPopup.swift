@@ -38,12 +38,12 @@ struct FocusPopup: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Focus")
-                    .font(.system(size: 16, weight: .semibold))
+                    .barikPopupFont(size: 16, weight: .semibold)
 
                 if let activeMode = focusManager.activeMode {
                     HStack(spacing: 6) {
                         Image(systemName: activeMode.resolvedSymbolName)
-                            .font(.system(size: 11, weight: .semibold))
+                            .barikPopupFont(size: 11, weight: .semibold)
                             .foregroundStyle(
                                 tintWithFocusColor
                                     ? ((activeMode.tintColor ?? .white).lightened(by: 0.2))
@@ -51,13 +51,13 @@ struct FocusPopup: View {
                             )
 
                         Text(activeMode.name)
-                            .font(.system(size: 12, weight: .medium))
+                            .barikPopupFont(size: 12, weight: .medium)
                             .foregroundStyle(.white.opacity(0.72))
                             .lineLimit(1)
                     }
                 } else {
                     Text("No active Focus")
-                        .font(.system(size: 12, weight: .medium))
+                        .barikPopupFont(size: 12, weight: .medium)
                         .foregroundStyle(.white.opacity(0.6))
                 }
             }
@@ -68,7 +68,7 @@ struct FocusPopup: View {
                 focusManager.refresh()
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12, weight: .semibold))
+                    .barikPopupFont(size: 12, weight: .semibold)
             }
             .buttonStyle(.plain)
             .foregroundStyle(.white.opacity(0.8))
@@ -78,11 +78,11 @@ struct FocusPopup: View {
     private var noticeBanner: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Focus modes are read-only for now.")
-                .font(.system(size: 12, weight: .semibold))
+                .barikPopupFont(size: 12, weight: .semibold)
                 .foregroundStyle(.white)
 
             Text("Barik currently shows which Focus modes exist and which one is active, but it does not switch them yet.")
-                .font(.system(size: 11, weight: .medium))
+                .barikPopupFont(size: 11, weight: .medium)
                 .foregroundStyle(.white.opacity(0.72))
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -108,18 +108,18 @@ private struct FocusModeRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: mode.resolvedSymbolName)
-                .font(.system(size: 12, weight: .semibold))
+                .barikPopupFont(size: 12, weight: .semibold)
                 .foregroundStyle(tintColor)
                 .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(mode.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .barikPopupFont(size: 13, weight: .semibold)
                     .foregroundStyle(.white)
                     .lineLimit(1)
 
                 Text(mode.id)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .barikPopupFont(size: 10, weight: .medium, design: .monospaced)
                     .foregroundStyle(.white.opacity(0.36))
                     .lineLimit(1)
             }

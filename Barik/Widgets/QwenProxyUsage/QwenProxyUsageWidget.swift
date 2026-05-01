@@ -111,7 +111,7 @@ struct QwenProxyUsageWidget: View {
                 drainableIcon(size: iconSize)
                 if showLabel, usageManager.usageData.isAvailable {
                     Text("\(healthyCount)")
-                        .font(.system(size: 7, weight: .bold))
+                        .barikFont(size: 7, weight: .bold)
                         .foregroundColor(.black)
                         .padding(.horizontal, 2)
                         .background(Color.white.opacity(0.9))
@@ -125,11 +125,11 @@ struct QwenProxyUsageWidget: View {
                 if showLabel {
                     if usageManager.usageData.isAvailable {
                         Text("\(healthyCount)")
-                            .font(.system(size: 12, weight: .medium))
+                            .barikFont(size: 12, weight: .medium)
                             .foregroundStyle(.foregroundOutside)
                     } else if usageManager.fetchFailed {
                         Image(systemName: "exclamationmark.circle.fill")
-                            .font(.system(size: 10))
+                            .barikFont(size: 10)
                             .foregroundColor(.red)
                     }
                 }

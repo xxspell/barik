@@ -40,16 +40,16 @@ struct CodexUsagePopup: View {
                 .scaledToFit()
                 .frame(width: 18, height: 18)
             Text(localized("Codex Usage"))
-                .font(.system(size: 14, weight: .semibold))
+                .barikPopupFont(size: 14, weight: .semibold)
             RoutedSettingsLink(section: .codexUsage) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                    .barikPopupFont(size: 11, weight: .semibold)
                     .foregroundColor(.white.opacity(0.5))
             }
             .buttonStyle(.plain)
             Spacer()
             Text(usageManager.usageData.plan)
-                .font(.system(size: 11, weight: .medium))
+                .barikPopupFont(size: 11, weight: .medium)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(planBadgeColor.opacity(0.3))
@@ -87,13 +87,13 @@ struct CodexUsagePopup: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .barikPopupFont(size: 12)
                     .opacity(0.6)
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .barikPopupFont(size: 13, weight: .medium)
                 Spacer()
                 Text("\(Int(min(percentage, 1.0) * 100))%")
-                    .font(.system(size: 24, weight: .semibold))
+                    .barikPopupFont(size: 24, weight: .semibold)
             }
 
             GeometryReader { geometry in
@@ -114,7 +114,7 @@ struct CodexUsagePopup: View {
 
             if let resetDate {
                 Text(String(format: resetPrefix, locale: .autoupdatingCurrent, resetTimeString(resetDate)))
-                    .font(.system(size: 11))
+                    .barikPopupFont(size: 11)
                     .opacity(0.5)
             }
         }
@@ -193,7 +193,7 @@ struct CodexUsagePopup: View {
                     timeAgoString(usageManager.usageData.lastUpdated)
                 )
             )
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .opacity(0.4)
 
             if let activityDate = usageManager.usageData.lastActivityDate,
@@ -205,7 +205,7 @@ struct CodexUsagePopup: View {
                         timeAgoString(activityDate)
                     )
                 )
-                    .font(.system(size: 10))
+                    .barikPopupFont(size: 10)
                     .opacity(0.3)
             }
 
@@ -216,7 +216,7 @@ struct CodexUsagePopup: View {
                     usageManager.refresh()
                 }) {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 12))
+                        .barikPopupFont(size: 12)
                         .opacity(0.6)
                 }
                 .buttonStyle(.plain)
@@ -248,10 +248,10 @@ struct CodexUsagePopup: View {
                 .frame(width: 28, height: 28)
 
             Text(localized("Codex Usage"))
-                .font(.system(size: 14, weight: .semibold))
+                .barikPopupFont(size: 14, weight: .semibold)
 
             Text(localized("Sign in to Codex to view your rate-limit usage directly in the menu bar."))
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .opacity(0.5)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -260,7 +260,7 @@ struct CodexUsagePopup: View {
                 usageManager.refresh()
             }) {
                 Text(localized("Check Again"))
-                    .font(.system(size: 12, weight: .medium))
+                    .barikPopupFont(size: 12, weight: .medium)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
@@ -275,7 +275,7 @@ struct CodexUsagePopup: View {
             }
 
             Text(localized("Reads `~/.codex/auth.json` and the latest Codex session rate-limit snapshot."))
-                .font(.system(size: 10))
+                .barikPopupFont(size: 10)
                 .opacity(0.3)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -288,14 +288,14 @@ struct CodexUsagePopup: View {
     private var emptyView: some View {
         VStack(spacing: 14) {
             Image(systemName: "chart.pie")
-                .font(.system(size: 24))
+                .barikPopupFont(size: 24)
                 .opacity(0.5)
 
             Text(localized("No usage data yet"))
-                .font(.system(size: 12, weight: .medium))
+                .barikPopupFont(size: 12, weight: .medium)
 
             Text(localized("Run a Codex task first. The widget reads the latest non-empty rate-limit snapshot from your local Codex sessions."))
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .opacity(0.5)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -308,7 +308,7 @@ struct CodexUsagePopup: View {
                         timeAgoString(activityDate)
                     )
                 )
-                    .font(.system(size: 10))
+                    .barikPopupFont(size: 10)
                     .opacity(0.35)
             }
 
@@ -316,7 +316,7 @@ struct CodexUsagePopup: View {
                 usageManager.refresh()
             }) {
                 Text(localized("Refresh"))
-                    .font(.system(size: 12, weight: .medium))
+                    .barikPopupFont(size: 12, weight: .medium)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
@@ -338,14 +338,14 @@ struct CodexUsagePopup: View {
     private var errorView: some View {
         VStack(spacing: 14) {
             Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 24))
+                .barikPopupFont(size: 24)
                 .opacity(0.5)
 
             Text(localized("Unable to load usage data"))
-                .font(.system(size: 12, weight: .medium))
+                .barikPopupFont(size: 12, weight: .medium)
 
             Text(localized("Reading local Codex auth or session files failed."))
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .opacity(0.5)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -354,7 +354,7 @@ struct CodexUsagePopup: View {
                 usageManager.refresh()
             }) {
                 Text(localized("Retry"))
-                    .font(.system(size: 12, weight: .medium))
+                    .barikPopupFont(size: 12, weight: .medium)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }

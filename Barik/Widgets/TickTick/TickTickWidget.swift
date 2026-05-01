@@ -112,7 +112,7 @@ struct TickTickWidget: View {
 
             if manager.isAuthenticated && manager.totalPendingCount > 0 {
                 Text("\(min(manager.totalPendingCount, 99))")
-                    .font(.system(size: 8, weight: .bold))
+                    .barikFont(size: 8, weight: .bold)
                     .foregroundStyle(.black)
                     .padding(.horizontal, 3)
                     .padding(.vertical, 1)
@@ -174,11 +174,11 @@ private struct RotatingTickTickText: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: item.sourceIconName)
-                .font(.system(size: 9, weight: .semibold))
+                .barikFont(size: 9, weight: .semibold)
                 .foregroundStyle(color.opacity(0.9))
 
             Text(item.title)
-                .font(.system(size: 11, weight: .medium))
+                .barikFont(size: 11, weight: .medium)
                 .foregroundStyle(color)
                 .lineLimit(1)
                 .truncationMode(.tail)

@@ -8,9 +8,9 @@ struct KeyboardLayoutPopup: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Keyboard Layout")
-                        .font(.system(size: 16, weight: .semibold))
+                        .barikPopupFont(size: 16, weight: .semibold)
                     Text(layoutManager.currentSource?.localizedName ?? "Unknown")
-                        .font(.system(size: 12, weight: .medium))
+                        .barikPopupFont(size: 12, weight: .medium)
                         .foregroundStyle(.white.opacity(0.65))
                 }
 
@@ -20,7 +20,7 @@ struct KeyboardLayoutPopup: View {
                     layoutManager.refresh()
                 } label: {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 12, weight: .semibold))
+                        .barikPopupFont(size: 12, weight: .semibold)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.white.opacity(0.8))
@@ -55,19 +55,19 @@ private struct KeyboardLayoutRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(source.shortLabel)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .barikPopupFont(size: 11, weight: .bold, design: .rounded)
                 .frame(width: 34, height: 24)
                 .background(Color.white.opacity(source.isSelected ? 0.18 : 0.08))
                 .clipShape(Capsule())
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(source.localizedName)
-                    .font(.system(size: 13, weight: .semibold))
+                    .barikPopupFont(size: 13, weight: .semibold)
                     .foregroundStyle(.white)
 
                 if let language = source.languages.first {
                     Text(language)
-                        .font(.system(size: 11, weight: .medium))
+                        .barikPopupFont(size: 11, weight: .medium)
                         .foregroundStyle(.white.opacity(0.55))
                 }
             }

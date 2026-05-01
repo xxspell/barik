@@ -48,16 +48,16 @@ struct ClaudeUsagePopup: View {
                 .scaledToFit()
                 .frame(width: 18, height: 18)
             Text(localized("Claude Usage"))
-                .font(.system(size: 14, weight: .semibold))
+                .barikPopupFont(size: 14, weight: .semibold)
             RoutedSettingsLink(section: .claudeUsage) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                    .barikPopupFont(size: 11, weight: .semibold)
                     .foregroundColor(.white.opacity(0.5))
             }
             .buttonStyle(.plain)
             Spacer()
             Text(usageManager.usageData.plan)
-                .font(.system(size: 11, weight: .medium))
+                .barikPopupFont(size: 11, weight: .medium)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(planBadgeColor.opacity(0.3))
@@ -93,13 +93,13 @@ struct ClaudeUsagePopup: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .barikPopupFont(size: 12)
                     .opacity(0.6)
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .barikPopupFont(size: 13, weight: .medium)
                 Spacer()
                 Text("\(Int(min(percentage, 1.0) * 100))%")
-                    .font(.system(size: 24, weight: .semibold))
+                    .barikPopupFont(size: 24, weight: .semibold)
             }
 
             GeometryReader { geometry in
@@ -120,7 +120,7 @@ struct ClaudeUsagePopup: View {
 
             if let resetDate {
                 Text(String(format: resetPrefix, locale: .autoupdatingCurrent, resetTimeString(resetDate)))
-                    .font(.system(size: 11))
+                    .barikPopupFont(size: 11)
                     .opacity(0.5)
             }
         }
@@ -173,7 +173,7 @@ struct ClaudeUsagePopup: View {
                     timeAgoString(usageManager.usageData.lastUpdated)
                 )
             )
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .opacity(0.4)
 
             Spacer()
@@ -182,7 +182,7 @@ struct ClaudeUsagePopup: View {
                 usageManager.refresh()
             }) {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12))
+                    .barikPopupFont(size: 12)
                     .opacity(0.6)
             }
             .buttonStyle(.plain)
@@ -213,10 +213,10 @@ struct ClaudeUsagePopup: View {
                 .frame(width: 28, height: 28)
 
             Text(localized("Claude Usage"))
-                .font(.system(size: 14, weight: .semibold))
+                .barikPopupFont(size: 14, weight: .semibold)
 
             Text(localized("View your Claude rate limit usage directly in the menu bar."))
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .opacity(0.5)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -225,7 +225,7 @@ struct ClaudeUsagePopup: View {
                 usageManager.requestAccess()
             }) {
                 Text(localized("Allow Access"))
-                    .font(.system(size: 12, weight: .medium))
+                    .barikPopupFont(size: 12, weight: .medium)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
@@ -240,7 +240,7 @@ struct ClaudeUsagePopup: View {
             }
 
             Text(localized("Reads credentials from your Claude Code keychain entry."))
-                .font(.system(size: 10))
+                .barikPopupFont(size: 10)
                 .opacity(0.3)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -255,7 +255,7 @@ struct ClaudeUsagePopup: View {
             ProgressView()
                 .scaleEffect(0.8)
             Text(localized("Loading usage data..."))
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .opacity(0.5)
         }
         .frame(maxWidth: .infinity)
@@ -265,14 +265,14 @@ struct ClaudeUsagePopup: View {
     private var errorView: some View {
         VStack(spacing: 14) {
             Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 24))
+                .barikPopupFont(size: 24)
                 .opacity(0.5)
 
             Text(localized("Unable to load usage data"))
-                .font(.system(size: 12, weight: .medium))
+                .barikPopupFont(size: 12, weight: .medium)
 
             Text(usageManager.errorMessage ?? "The request failed. Your token may have expired.")
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .opacity(0.5)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -281,7 +281,7 @@ struct ClaudeUsagePopup: View {
                 usageManager.refresh()
             }) {
                 Text(localized("Retry"))
-                    .font(.system(size: 12, weight: .medium))
+                    .barikPopupFont(size: 12, weight: .medium)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }

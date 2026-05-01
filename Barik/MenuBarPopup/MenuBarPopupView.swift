@@ -11,7 +11,6 @@ struct MenuBarPopupView<Content: View>: View {
     private let horizontalMargin: CGFloat = 16
 
     @State private var contentSize: CGSize = .zero
-    @State private var viewFrame: CGRect = .zero
     @State private var animationValue: Double = 0.01
     private var animated: Bool { isShowAnimation || isHideAnimation }
     @State private var isShowAnimation = false
@@ -52,7 +51,14 @@ struct MenuBarPopupView<Content: View>: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    MenuBarPopup.hide()
+                }
+
             content
+                .barikPopupTextStyle(.body)
                 .fixedSize(horizontal: true, vertical: true)
                 .background(
                     GeometryReader { geometry in
@@ -78,6 +84,9 @@ struct MenuBarPopupView<Content: View>: View {
                 )
                 .offset(x: computedOffset, y: popupTopPosition)
                 .opacity(animationValue)
+                .onTapGesture {
+                    // Consume taps inside the popup card so only background taps dismiss it.
+                }
                 .transaction { transaction in
                     if isHideAnimation {
                         transaction.animation = .linear(duration: 0.1)
@@ -154,19 +163,6 @@ struct MenuBarPopupView<Content: View>: View {
                     value: animated ? 0 : computedYOffset
                 )
         }
-        .background(
-            GeometryReader { geometry in
-                Color.clear
-                    .onAppear {
-                        DispatchQueue.main.async {
-                            viewFrame = geometry.frame(in: .global)
-                        }
-                    }
-                    .onChange(of: geometry.size) { _, __ in
-                        viewFrame = geometry.frame(in: .global)
-                    }
-            }
-        )
         .foregroundStyle(.white)
         .preferredColorScheme(.dark)
     }

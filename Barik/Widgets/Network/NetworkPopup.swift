@@ -23,7 +23,7 @@ struct NetworkPopup: View {
                     wifiIcon
                     Text(viewModel.ssid)
                         .foregroundColor(.white)
-                        .font(.headline)
+                        .barikPopupTextStyle(.headline)
                 }
 
                 if viewModel.ssid != "Not connected"
@@ -43,7 +43,7 @@ struct NetworkPopup: View {
                             Text("Channel: \(viewModel.channel)")
                         }
                     }
-                    .font(.subheadline)
+                    .barikPopupTextStyle(.subheadline)
                 }
             }
 
@@ -53,7 +53,7 @@ struct NetworkPopup: View {
                     ethernetIcon
                     Text("Ethernet: \(viewModel.ethernetState.rawValue)")
                         .foregroundColor(.white)
-                        .font(.headline)
+                        .barikPopupTextStyle(.headline)
                 }
             }
         }

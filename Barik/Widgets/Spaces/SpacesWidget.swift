@@ -90,7 +90,7 @@ private struct SpaceView: View {
             Spacer().frame(width: 10)
             if showKey {
                 Text(space.id)
-                    .font(.headline)
+                    .barikTextStyle(.headline)
                     .frame(minWidth: 15)
                     .fixedSize(horizontal: true, vertical: false)
                 Spacer().frame(width: 5)
@@ -121,7 +121,7 @@ private struct SpaceView: View {
                     viewModel.deleteSpace(space)
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
+                        .barikFont(size: 8, weight: .bold)
                         .foregroundStyle(.black.opacity(0.82))
                         .frame(width: 15, height: 15)
                         .background(Color.white.opacity(0.96))
@@ -223,7 +223,7 @@ private struct WindowView: View {
                     )
                     .fixedSize(horizontal: true, vertical: false)
                     .shadow(color: .foregroundShadow, radius: 3)
-                    .fontWeight(.semibold)
+                    .barikFont(size: 12, weight: .semibold)
                     Spacer().frame(width: 5)
                 }
                 .transition(.blurReplace)
@@ -298,7 +298,7 @@ private struct HiddenWindowBadge: View {
                 .frame(width: 10, height: 10)
 
             Image(systemName: "minus")
-                .font(.system(size: 6, weight: .bold))
+                .barikFont(size: 6, weight: .bold)
                 .foregroundStyle(.white.opacity(0.95))
         }
         .shadow(color: .black.opacity(0.18), radius: 1)
@@ -356,7 +356,7 @@ private struct HoverTooltipBubble: View {
         VStack(alignment: .leading, spacing: 2) {
             ForEach(text.components(separatedBy: "\n"), id: \.self) { line in
                 Text(line)
-                    .font(.system(size: 12, weight: .medium))
+                    .barikFont(size: 12, weight: .medium)
                     .foregroundStyle(.white.opacity(0.96))
                     .lineLimit(1)
             }

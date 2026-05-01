@@ -53,10 +53,10 @@ struct QwenProxyStatsView: View {
                 .scaledToFit()
                 .frame(width: 18, height: 18)
             Text("Qwen Proxy")
-                .font(.system(size: 14, weight: .semibold))
+                .barikPopupFont(size: 14, weight: .semibold)
             RoutedSettingsLink(section: .qwenProxyUsage) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                    .barikPopupFont(size: 11, weight: .semibold)
                     .foregroundColor(.white.opacity(0.5))
             }
             .buttonStyle(.plain)
@@ -72,7 +72,7 @@ struct QwenProxyStatsView: View {
         let total = usageManager.usageData.summary.total
         let color: Color = healthy == total ? .green : (healthy > 0 ? .orange : .red)
         return Text(String(localized: "\(healthy)/\(total) alive"))
-            .font(.system(size: 11, weight: .medium))
+            .barikPopupFont(size: 11, weight: .medium)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(color.opacity(0.2))
@@ -85,7 +85,7 @@ struct QwenProxyStatsView: View {
     private var accountsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Accounts")
-                .font(.system(size: 11, weight: .semibold))
+                .barikPopupFont(size: 11, weight: .semibold)
                 .opacity(0.5)
                 .textCase(.uppercase)
 
@@ -109,10 +109,10 @@ struct QwenProxyStatsView: View {
     private func accountStat(label: String, value: String, color: Color) -> some View {
         VStack(spacing: 3) {
             Text(value)
-                .font(.system(size: 18, weight: .semibold))
+                .barikPopupFont(size: 18, weight: .semibold)
                 .foregroundColor(color)
             Text(label)
-                .font(.system(size: 10))
+                .barikPopupFont(size: 10)
                 .opacity(0.5)
         }
     }
@@ -126,31 +126,31 @@ struct QwenProxyStatsView: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Today")
-                    .font(.system(size: 11, weight: .semibold))
+                    .barikPopupFont(size: 11, weight: .semibold)
                     .opacity(0.5)
                     .textCase(.uppercase)
                 Spacer()
                 if !summary.lastReset.isEmpty {
                     Text("since \(summary.lastReset)")
-                        .font(.system(size: 10))
+                        .barikPopupFont(size: 10)
                         .opacity(0.3)
                 }
             }
 
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Requests").font(.system(size: 10)).opacity(0.5)
-                    Text("\(summary.totalRequestsToday)").font(.system(size: 15, weight: .semibold))
+                    Text("Requests").barikPopupFont(size: 10).opacity(0.5)
+                    Text("\(summary.totalRequestsToday)").barikPopupFont(size: 15, weight: .semibold)
                 }
                 Rectangle().fill(Color.white.opacity(0.15)).frame(width: 1, height: 30)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Input").font(.system(size: 10)).opacity(0.5)
-                    Text(formatTokens(usage.inputTokensToday)).font(.system(size: 15, weight: .semibold))
+                    Text("Input").barikPopupFont(size: 10).opacity(0.5)
+                    Text(formatTokens(usage.inputTokensToday)).barikPopupFont(size: 15, weight: .semibold)
                 }
                 Rectangle().fill(Color.white.opacity(0.15)).frame(width: 1, height: 30)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Output").font(.system(size: 10)).opacity(0.5)
-                    Text(formatTokens(usage.outputTokensToday)).font(.system(size: 15, weight: .semibold))
+                    Text("Output").barikPopupFont(size: 10).opacity(0.5)
+                    Text(formatTokens(usage.outputTokensToday)).barikPopupFont(size: 15, weight: .semibold)
                 }
                 Spacer()
             }
@@ -170,11 +170,11 @@ struct QwenProxyStatsView: View {
 
             HStack {
                 Circle().fill(Color.blue.opacity(0.6)).frame(width: 6, height: 6)
-                Text("input").font(.system(size: 9)).opacity(0.4)
+                Text("input").barikPopupFont(size: 9).opacity(0.4)
                 Circle().fill(Color.purple.opacity(0.6)).frame(width: 6, height: 6)
-                Text("output").font(.system(size: 9)).opacity(0.4)
+                Text("output").barikPopupFont(size: 9).opacity(0.4)
                 Spacer()
-                Text("total: \(formatTokens(usage.totalTokensToday))").font(.system(size: 10)).opacity(0.4)
+                Text("total: \(formatTokens(usage.totalTokensToday))").barikPopupFont(size: 10).opacity(0.4)
             }
         }
         .padding(.horizontal, 20)
@@ -187,7 +187,7 @@ struct QwenProxyStatsView: View {
         let info = usageManager.usageData.serverInfo
         return VStack(alignment: .leading, spacing: 10) {
             Text("Server")
-                .font(.system(size: 11, weight: .semibold))
+                .barikPopupFont(size: 11, weight: .semibold)
                 .opacity(0.5)
                 .textCase(.uppercase)
 
@@ -201,8 +201,8 @@ struct QwenProxyStatsView: View {
 
             if !info.nodeVersion.isEmpty {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 9)).opacity(0.4)
-                    Text("Node \(info.nodeVersion)  ·  \(info.platform)").font(.system(size: 10)).opacity(0.35)
+                    Image(systemName: "chevron.left.forwardslash.chevron.right").barikPopupFont(size: 9).opacity(0.4)
+                    Text("Node \(info.nodeVersion)  ·  \(info.platform)").barikPopupFont(size: 10).opacity(0.35)
                 }
             }
         }
@@ -213,10 +213,10 @@ struct QwenProxyStatsView: View {
     private func serverInfoRow(icon: String, label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 9)).opacity(0.45)
-                Text(label).font(.system(size: 9)).opacity(0.45)
+                Image(systemName: icon).barikPopupFont(size: 9).opacity(0.45)
+                Text(label).barikPopupFont(size: 9).opacity(0.45)
             }
-            Text(value).font(.system(size: 12, weight: .medium))
+            Text(value).barikPopupFont(size: 12, weight: .medium)
         }
     }
 
@@ -225,11 +225,11 @@ struct QwenProxyStatsView: View {
     private var footerSection: some View {
         HStack {
             Text("Updated \(timeAgoString(usageManager.usageData.lastUpdated))")
-                .font(.system(size: 11))
+                .barikPopupFont(size: 11)
                 .opacity(0.4)
             Spacer()
             Button(action: { usageManager.refresh() }) {
-                Image(systemName: "arrow.clockwise").font(.system(size: 12)).opacity(0.6)
+                Image(systemName: "arrow.clockwise").barikPopupFont(size: 12).opacity(0.6)
             }
             .buttonStyle(.plain)
             .onHover { h in if h { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
@@ -243,7 +243,7 @@ struct QwenProxyStatsView: View {
     private var loadingView: some View {
         VStack(spacing: 12) {
             ProgressView().scaleEffect(0.8)
-            Text("Connecting to proxy…").font(.system(size: 11)).opacity(0.5)
+            Text("Connecting to proxy…").barikPopupFont(size: 11).opacity(0.5)
         }
         .frame(maxWidth: .infinity)
         .padding(40)
@@ -256,13 +256,13 @@ struct QwenProxyStatsView: View {
                 .renderingMode(.template)
                 .scaledToFit()
                 .frame(width: 28, height: 28)
-            Text("Cannot reach Qwen Proxy").font(.system(size: 13, weight: .medium))
+            Text("Cannot reach Qwen Proxy").barikPopupFont(size: 13, weight: .medium)
             Text(usageManager.errorMessage ?? "Check base-url and token in config.")
-                .font(.system(size: 11)).opacity(0.5)
+                .barikPopupFont(size: 11).opacity(0.5)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             Button(action: { usageManager.refresh() }) {
-                Text("Retry").font(.system(size: 12, weight: .medium))
+                Text("Retry").barikPopupFont(size: 12, weight: .medium)
                     .frame(maxWidth: .infinity).padding(.vertical, 6)
             }
             .buttonStyle(.borderedProminent)
@@ -330,7 +330,7 @@ struct QwenProxyStatsView: View {
 //                    .scaledToFit()
 //                    .frame(width: 18, height: 18)
 //                Text("Widget Settings")
-//                    .font(.system(size: 14, weight: .semibold))
+//                    .barikPopupFont(size: 14, weight: .semibold)
 //                Spacer()
 //            }
 //            .padding(.horizontal, 20)
@@ -360,14 +360,14 @@ struct QwenProxyStatsView: View {
 //                    VStack(alignment: .leading, spacing: 8) {
 //                        HStack(spacing: 8) {
 //                            Image(systemName: "arrow.triangle.2.circlepath")
-//                                .font(.system(size: 13))
+//                                .barikPopupFont(size: 13)
 //                                .opacity(0.6)
 //                                .frame(width: 20)
 //                            VStack(alignment: .leading, spacing: 2) {
 //                                Text("Ring logic")
-//                                    .font(.system(size: 13, weight: .medium))
+//                                    .barikPopupFont(size: 13, weight: .medium)
 //                                Text("What the arc size represents")
-//                                    .font(.system(size: 11))
+//                                    .barikPopupFont(size: 11)
 //                                    .opacity(0.45)
 //                            }
 //                        }
@@ -393,11 +393,11 @@ struct QwenProxyStatsView: View {
 //                    VStack(alignment: .leading, spacing: 10) {
 //                        HStack(spacing: 8) {
 //                            Image(systemName: "slider.horizontal.3")
-//                                .font(.system(size: 13))
+//                                .barikPopupFont(size: 13)
 //                                .opacity(0.6)
 //                                .frame(width: 20)
 //                            Text("Color thresholds")
-//                                .font(.system(size: 13, weight: .medium))
+//                                .barikPopupFont(size: 13, weight: .medium)
 //                            Spacer()
 //                        }
 //
@@ -450,10 +450,10 @@ struct QwenProxyStatsView: View {
 //            // Config file note
 //            HStack(spacing: 6) {
 //                Image(systemName: "doc.text")
-//                    .font(.system(size: 10))
+//                    .barikPopupFont(size: 10)
 //                    .opacity(0.35)
 //                Text("Changes are saved to your config file")
-//                    .font(.system(size: 10))
+//                    .barikPopupFont(size: 10)
 //                    .opacity(0.35)
 //            }
 //            .padding(.horizontal, 20)
@@ -475,12 +475,12 @@ struct QwenProxyStatsView: View {
 //    ) -> some View {
 //        HStack(alignment: .center, spacing: 8) {
 //            Image(systemName: icon)
-//                .font(.system(size: 13))
+//                .barikPopupFont(size: 13)
 //                .opacity(0.6)
 //                .frame(width: 20)
 //            VStack(alignment: .leading, spacing: 2) {
-//                Text(title).font(.system(size: 13, weight: .medium))
-//                Text(subtitle).font(.system(size: 11)).opacity(0.45)
+//                Text(title).barikPopupFont(size: 13, weight: .medium)
+//                Text(subtitle).barikPopupFont(size: 11).opacity(0.45)
 //            }
 //            Spacer()
 //            control()
@@ -506,10 +506,10 @@ struct QwenProxyStatsView: View {
 //                }
 //                VStack(alignment: .leading, spacing: 2) {
 //                    Text(title)
-//                        .font(.system(size: 12, weight: selected ? .semibold : .regular))
+//                        .barikPopupFont(size: 12, weight: selected ? .semibold : .regular)
 //                        .foregroundColor(.white.opacity(selected ? 1 : 0.6))
 //                    Text(subtitle)
-//                        .font(.system(size: 10))
+//                        .barikPopupFont(size: 10)
 //                        .foregroundColor(.white.opacity(0.35))
 //                }
 //                Spacer()
@@ -540,11 +540,11 @@ struct QwenProxyStatsView: View {
 //                    .fill(color.opacity(0.8))
 //                    .frame(width: 8, height: 8)
 //                Text(label)
-//                    .font(.system(size: 11, weight: .medium))
+//                    .barikPopupFont(size: 11, weight: .medium)
 //                    .foregroundColor(color.opacity(0.9))
 //                Spacer()
 //                Text("\(value.wrappedValue)%")
-//                    .font(.system(size: 11, weight: .semibold))
+//                    .barikPopupFont(size: 11, weight: .semibold)
 //                    .monospacedDigit()
 //                    .frame(width: 36, alignment: .trailing)
 //            }
@@ -556,7 +556,7 @@ struct QwenProxyStatsView: View {
 //            .onAppear { }
 //            .simultaneousGesture(DragGesture(minimumDistance: 0).onEnded { _ in onRelease() })
 //            Text(hint)
-//                .font(.system(size: 10))
+//                .barikPopupFont(size: 10)
 //                .opacity(0.4)
 //        }
 //    }

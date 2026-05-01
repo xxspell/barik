@@ -29,7 +29,7 @@ struct FocusWidget: View {
         Group {
             if let activeMode {
                 Image(systemName: activeMode.resolvedSymbolName)
-                    .font(.system(size: FocusWidgetLayout.iconSize, weight: .semibold))
+                    .barikFont(size: FocusWidgetLayout.iconSize, weight: .semibold)
                     .foregroundStyle(foregroundColor)
                     .frame(
                         width: FocusWidgetLayout.badgeSize,

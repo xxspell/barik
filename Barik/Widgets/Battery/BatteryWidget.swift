@@ -86,25 +86,24 @@ private struct BatteryText: View {
         HStack(alignment: .center, spacing: -1) {
             if showPercentage {
                 Text("\(level)")
-                    .font(.system(size: 12))
+                    .barikFont(size: 12, weight: .semibold)
                     .transition(.blurReplace)
             }
 
             if isCharging && level != 100 {
                 Image(systemName: "bolt.fill")
-                    .font(.system(size: showPercentage ? 8 : 10))
+                    .barikFont(size: showPercentage ? 8 : 10)
             }
 
             if !isCharging && isPluggedIn && level != 100 {
                 Image(systemName: "powerplug.portrait.fill")
-                    .font(.system(size: 8))
+                    .barikFont(size: 8)
                     .padding(.leading, 1)
             }
         }
         .foregroundStyle(
             showPercentage ? .foregroundOutsideInvert : .foregroundOutside
         )
-        .fontWeight(.semibold)
         .transition(.blurReplace)
         .animation(.smooth, value: isCharging)
         .frame(width: 26, height: 15)
