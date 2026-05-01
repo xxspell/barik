@@ -19,8 +19,14 @@ class AerospaceSpacesProvider: SpacesProvider, SwitchableSpacesProvider {
             }
         }
         let focusedWindow = fetchFocusedWindow()
-        var spaceDict = Dictionary(
-            uniqueKeysWithValues: spaces.map { ($0.id, $0) })
+        var spaceDict: [String: AeroSpace] = [:]
+        for space in spaces {
+            if spaceDict.updateValue(space, forKey: space.id) != nil {
+                logger.error(
+                    "getSpacesWithWindows() — duplicate AeroSpace id=\(space.id, privacy: .public); keeping latest value"
+                )
+            }
+        }
         for window in windows {
             var mutableWindow = window
             if let focused = focusedWindow, window.id == focused.id {

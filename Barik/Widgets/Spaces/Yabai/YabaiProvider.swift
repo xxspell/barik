@@ -149,8 +149,14 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider, DeletableSp
                 && (shouldShowHiddenWindows || !$0.isHidden)
         }
         logger.debug("getSpacesWithWindows() — filteredWindows=\(filteredWindows.count)")
-        var spaceDict = Dictionary(
-            uniqueKeysWithValues: spaces.map { ($0.id, $0) })
+        var spaceDict: [Int: YabaiSpace] = [:]
+        for space in spaces {
+            if spaceDict.updateValue(space, forKey: space.id) != nil {
+                logger.error(
+                    "getSpacesWithWindows() — duplicate yabai space id=\(space.id, privacy: .public); keeping latest value"
+                )
+            }
+        }
         for window in filteredWindows {
             if var space = spaceDict[window.spaceId] {
                 space.windows.append(window)
