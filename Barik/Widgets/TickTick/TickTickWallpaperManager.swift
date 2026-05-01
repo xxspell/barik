@@ -11,12 +11,18 @@ final class TickTickWallpaperManager: ObservableObject {
         var urlsByScreenID: [String: String]
     }
 
+    private struct StoredWallpaperRemoteState: Codable {
+        var etag: String
+        var requestKey: String
+    }
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "barik",
         category: "TickTickWallpaperManager"
     )
     private let defaults = UserDefaults.standard
     private let storedWallpapersKey = "barik.ticktick.wallpaper.previous"
+    private let storedRemoteStateKey = "barik.ticktick.wallpaper.remote-state"
 
     private var refreshTimer: Timer?
     private var isEnabled = false
@@ -28,6 +34,8 @@ final class TickTickWallpaperManager: ObservableObject {
     private var applyToAllScreens = true
     private var activeTask: Task<Void, Never>?
     private var storedWallpaperURLsByScreenID: [String: URL] = [:]
+    private var lastWallpaperETag: String?
+    private var lastWallpaperRequestKey: String?
 
     @Published private(set) var canRestorePreviousWallpapers = false
     @Published private(set) var lastAppliedAt: Date?
@@ -41,6 +49,7 @@ final class TickTickWallpaperManager: ObservableObject {
 
     private init() {
         loadStoredWallpaperState()
+        loadStoredRemoteState()
     }
 
     func startUpdating(config: ConfigData) {
@@ -78,6 +87,7 @@ final class TickTickWallpaperManager: ObservableObject {
         if !enabled || baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             logger.debug("startUpdating() — wallpaper integration disabled")
             stopUpdating()
+            clearStoredRemoteState()
             return
         }
 
@@ -149,24 +159,34 @@ final class TickTickWallpaperManager: ObservableObject {
 
     private func refreshNow(reason: String) async {
         guard isEnabled else { return }
-        guard let request = wallpaperRequest() else {
+        guard let requestContext = wallpaperRequest() else {
             logger.error("refreshNow() — failed to build wallpaper URL")
             lastErrorMessage = "Failed to build wallpaper URL."
             return
         }
 
-        logger.info("refreshNow() — reason=\(reason, privacy: .public) url=\(request.url?.absoluteString ?? "", privacy: .public)")
+        logger.info("refreshNow() — reason=\(reason, privacy: .public) url=\(requestContext.request.url?.absoluteString ?? "", privacy: .public)")
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: requestContext.request)
             guard let httpResponse = response as? HTTPURLResponse else {
                 logger.error("refreshNow() — missing HTTP response")
+                return
+            }
+            if httpResponse.statusCode == 304 {
+                logger.info("refreshNow() — wallpaper not modified, skipped download and apply")
+                lastErrorMessage = nil
                 return
             }
             guard httpResponse.statusCode == 200 else {
                 logger.error("refreshNow() — HTTP \(httpResponse.statusCode, privacy: .public)")
                 return
             }
+
+            persistRemoteState(
+                etag: httpResponse.value(forHTTPHeaderField: "ETag"),
+                requestKey: requestContext.requestKey
+            )
 
             let hash = wallpaperContentHash(for: data)
             let fileURL = try cachedWallpaperFileURL(hash: hash)
@@ -215,7 +235,7 @@ final class TickTickWallpaperManager: ObservableObject {
         )
     }
 
-    private func wallpaperRequest() -> URLRequest? {
+    private func wallpaperRequest() -> (request: URLRequest, requestKey: String)? {
         guard var components = URLComponents(string: baseURLString) else { return nil }
         let path = components.path.hasSuffix("/")
             ? "\(components.path.dropLast())/v1/wallpaper.png"
@@ -242,7 +262,11 @@ final class TickTickWallpaperManager: ObservableObject {
         if !authToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             request.setValue(authToken, forHTTPHeaderField: "X-Wallpaper-Token")
         }
-        return request
+        let requestKey = url.absoluteString
+        if lastWallpaperRequestKey == requestKey, let lastWallpaperETag, !lastWallpaperETag.isEmpty {
+            request.setValue(lastWallpaperETag, forHTTPHeaderField: "If-None-Match")
+        }
+        return (request, requestKey)
     }
 
     private func screenMetrics(for screen: NSScreen) -> (width: Int, height: Int) {
@@ -304,6 +328,42 @@ final class TickTickWallpaperManager: ObservableObject {
             storedWallpaperURLsByScreenID = [:]
         }
         canRestorePreviousWallpapers = !storedWallpaperURLsByScreenID.isEmpty
+    }
+
+    private func persistRemoteState(etag: String?, requestKey: String) {
+        guard let etag, !etag.isEmpty else {
+            clearStoredRemoteState()
+            return
+        }
+
+        lastWallpaperETag = etag
+        lastWallpaperRequestKey = requestKey
+
+        let state = StoredWallpaperRemoteState(etag: etag, requestKey: requestKey)
+        do {
+            let data = try JSONEncoder().encode(state)
+            defaults.set(data, forKey: storedRemoteStateKey)
+        } catch {
+            logger.error("persistRemoteState() — \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func loadStoredRemoteState() {
+        guard let data = defaults.data(forKey: storedRemoteStateKey) else { return }
+        do {
+            let state = try JSONDecoder().decode(StoredWallpaperRemoteState.self, from: data)
+            lastWallpaperETag = state.etag
+            lastWallpaperRequestKey = state.requestKey
+        } catch {
+            logger.error("loadStoredRemoteState() — \(error.localizedDescription, privacy: .public)")
+            clearStoredRemoteState()
+        }
+    }
+
+    private func clearStoredRemoteState() {
+        lastWallpaperETag = nil
+        lastWallpaperRequestKey = nil
+        defaults.removeObject(forKey: storedRemoteStateKey)
     }
 
     private func clearStoredWallpaperState() {
