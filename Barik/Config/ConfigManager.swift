@@ -522,11 +522,13 @@ final class ConfigManager: ObservableObject {
     ) -> String {
         if let tablePath {
             let tableHeader = "[\(tablePath)]"
+            let descendantPrefix = "[\(tablePath)."
             let lines = original.components(separatedBy: "\n")
             var newLines: [String] = []
             var insideTargetTable = false
             var updatedKey = false
             var foundTable = false
+            var insertedBeforeDescendant = false
             var skippingExistingMultilineValue = false
 
             for line in lines {
@@ -541,6 +543,16 @@ final class ConfigManager: ObservableObject {
                 if let header = tableHeaderPrefix(in: trimmed) {
                     if insideTargetTable && !updatedKey {
                         newLines.append("\(key) = \(newValueLiteral)")
+                        updatedKey = true
+                    }
+                    if !foundTable
+                        && !insertedBeforeDescendant
+                        && header.hasPrefix(descendantPrefix)
+                    {
+                        newLines.append("")
+                        newLines.append(tableHeader)
+                        newLines.append("\(key) = \(newValueLiteral)")
+                        insertedBeforeDescendant = true
                         updatedKey = true
                     }
                     if header == tableHeader {
@@ -572,9 +584,9 @@ final class ConfigManager: ObservableObject {
                 newLines.append("\(key) = \(newValueLiteral)")
             }
 
-            if !foundTable {
+            if !foundTable && !insertedBeforeDescendant {
                 newLines.append("")
-                newLines.append("[\(tablePath)]")
+                newLines.append(tableHeader)
                 newLines.append("\(key) = \(newValueLiteral)")
             }
             return newLines.joined(separator: "\n")
