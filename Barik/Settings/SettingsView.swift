@@ -2747,6 +2747,20 @@ private struct NetworkSettingsView: View {
 }
 
 private struct NowPlayingSettingsView: View {
+    private enum NowPlayingBackgroundFillSource: String, CaseIterable {
+        case accent
+        case custom
+
+        var title: String {
+            switch self {
+            case .accent:
+                settingsLocalized("settings.now_playing.field.background_fill_source.option.accent")
+            case .custom:
+                settingsLocalized("settings.now_playing.field.background_fill_source.option.custom")
+            }
+        }
+    }
+
     @ObservedObject private var configManager = ConfigManager.shared
     @ObservedObject private var settingsStore = SettingsStore.shared
     @ObservedObject private var nowPlayingManager = NowPlayingManager.shared
@@ -2754,15 +2768,32 @@ private struct NowPlayingSettingsView: View {
     @State private var showAlbumArt = true
     @State private var showArtist = true
     @State private var showPauseIndicator = true
+    @State private var backgroundFillEnabled = false
+    @State private var backgroundFillSource = NowPlayingBackgroundFillSource.accent
+    @State private var backgroundFillColorHex = "#4A90E2"
+    @State private var hideAfterPausedMinutes = 10.0
+    @State private var maxCharactersPerLine = 25.0
+    @State private var scrollLongText = false
     @State private var popupLayout = NowPlayingPopupLayout.horizontal
     @State private var showPlaybackProgress = true
     @State private var showTransportControls = true
     @State private var isApplyingConfigSnapshot = false
     @State private var pendingBoolWrites: [String: Bool] = [:]
     @State private var pendingStringWrites: [String: String] = [:]
+    @State private var pendingIntWrites: [String: Int] = [:]
 
     private let nowPlayingTable = "widgets.default.nowplaying"
     private let nowPlayingPopupTable = "widgets.default.nowplaying.popup"
+    private var backgroundFillColorBinding: Binding<Color> {
+        Binding(
+            get: { Color(hex: backgroundFillColorHex) ?? Color(red: 74 / 255, green: 144 / 255, blue: 226 / 255) },
+            set: { newValue in
+                let hex = newValue.toHexString() ?? "#4A90E2"
+                backgroundFillColorHex = hex
+                setStringValue(hex, for: .init(tablePath: nowPlayingTable, key: "background-fill-color"))
+            }
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -2800,6 +2831,79 @@ private struct NowPlayingSettingsView: View {
                     isOn: bindingForBool(
                         $showPauseIndicator,
                         field: .init(tablePath: nowPlayingTable, key: "show-pause-indicator")
+                    )
+                )
+
+                ToggleRow(
+                    title: settingsLocalized("settings.now_playing.field.background_fill_enabled.title"),
+                    description: settingsLocalized("settings.now_playing.field.background_fill_enabled.description"),
+                    isOn: bindingForBool(
+                        $backgroundFillEnabled,
+                        field: .init(tablePath: nowPlayingTable, key: "background-fill-enabled")
+                    )
+                )
+
+                if backgroundFillEnabled {
+                    SegmentedPickerRow(
+                        title: settingsLocalized("settings.now_playing.field.background_fill_source.title"),
+                        description: settingsLocalized("settings.now_playing.field.background_fill_source.description"),
+                        selection: Binding(
+                            get: { backgroundFillSource },
+                            set: { newValue in
+                                backgroundFillSource = newValue
+                                setStringValue(newValue.rawValue, for: .init(tablePath: nowPlayingTable, key: "background-fill-source"))
+                            }
+                        ),
+                        options: NowPlayingBackgroundFillSource.allCases,
+                        titleForOption: { $0.title }
+                    )
+
+                    if backgroundFillSource == .custom {
+                        ColorSettingRow(
+                            title: settingsLocalized("settings.now_playing.field.background_fill_color.title"),
+                            description: settingsLocalized("settings.now_playing.field.background_fill_color.description"),
+                            color: backgroundFillColorBinding,
+                            hexText: Binding(
+                                get: { backgroundFillColorHex },
+                                set: { newValue in
+                                    backgroundFillColorHex = newValue
+                                    setStringValue(newValue, for: .init(tablePath: nowPlayingTable, key: "background-fill-color"))
+                                }
+                            )
+                        )
+                    }
+                }
+
+                SliderSettingRow(
+                    title: settingsLocalized("settings.now_playing.field.hide_after_paused_minutes.title"),
+                    description: settingsLocalized("settings.now_playing.field.hide_after_paused_minutes.description"),
+                    value: $hideAfterPausedMinutes,
+                    range: 1...120,
+                    step: 1,
+                    valueFormat: { "\($0.formatted(.number.precision(.fractionLength(0)))) min" }
+                )
+                .onChange(of: hideAfterPausedMinutes) { _, newValue in
+                    setIntValue(Int(newValue.rounded()), for: .init(tablePath: nowPlayingTable, key: "hide-after-paused-minutes"))
+                }
+
+                SliderSettingRow(
+                    title: settingsLocalized("settings.now_playing.field.max_characters_per_line.title"),
+                    description: settingsLocalized("settings.now_playing.field.max_characters_per_line.description"),
+                    value: $maxCharactersPerLine,
+                    range: 8...60,
+                    step: 1,
+                    valueFormat: { "\($0.formatted(.number.precision(.fractionLength(0))))" }
+                )
+                .onChange(of: maxCharactersPerLine) { _, newValue in
+                    setIntValue(Int(newValue.rounded()), for: .init(tablePath: nowPlayingTable, key: "max-characters-per-line"))
+                }
+
+                ToggleRow(
+                    title: settingsLocalized("settings.now_playing.field.scroll_long_text.title"),
+                    description: settingsLocalized("settings.now_playing.field.scroll_long_text.description"),
+                    isOn: bindingForBool(
+                        $scrollLongText,
+                        field: .init(tablePath: nowPlayingTable, key: "scroll-long-text")
                     )
                 )
             }
@@ -2874,6 +2978,12 @@ private struct NowPlayingSettingsView: View {
         let showAlbumArtField = SettingsFieldKey(tablePath: nowPlayingTable, key: "show-album-art")
         let showArtistField = SettingsFieldKey(tablePath: nowPlayingTable, key: "show-artist")
         let showPauseIndicatorField = SettingsFieldKey(tablePath: nowPlayingTable, key: "show-pause-indicator")
+        let backgroundFillEnabledField = SettingsFieldKey(tablePath: nowPlayingTable, key: "background-fill-enabled")
+        let backgroundFillSourceField = SettingsFieldKey(tablePath: nowPlayingTable, key: "background-fill-source")
+        let backgroundFillColorField = SettingsFieldKey(tablePath: nowPlayingTable, key: "background-fill-color")
+        let hideAfterPausedMinutesField = SettingsFieldKey(tablePath: nowPlayingTable, key: "hide-after-paused-minutes")
+        let maxCharactersPerLineField = SettingsFieldKey(tablePath: nowPlayingTable, key: "max-characters-per-line")
+        let scrollLongTextField = SettingsFieldKey(tablePath: nowPlayingTable, key: "scroll-long-text")
         let popupLayoutField = SettingsFieldKey(tablePath: nowPlayingPopupTable, key: "view-variant")
         let showPlaybackProgressField = SettingsFieldKey(tablePath: nowPlayingPopupTable, key: "show-playback-progress")
         let showTransportControlsField = SettingsFieldKey(tablePath: nowPlayingPopupTable, key: "show-transport-controls")
@@ -2881,6 +2991,22 @@ private struct NowPlayingSettingsView: View {
         showAlbumArt = resolvedBoolValue(for: showAlbumArtField, incoming: settingsStore.boolValue(showAlbumArtField, fallback: true), current: showAlbumArt)
         showArtist = resolvedBoolValue(for: showArtistField, incoming: settingsStore.boolValue(showArtistField, fallback: true), current: showArtist)
         showPauseIndicator = resolvedBoolValue(for: showPauseIndicatorField, incoming: settingsStore.boolValue(showPauseIndicatorField, fallback: true), current: showPauseIndicator)
+        backgroundFillEnabled = resolvedBoolValue(for: backgroundFillEnabledField, incoming: settingsStore.boolValue(backgroundFillEnabledField, fallback: false), current: backgroundFillEnabled)
+        backgroundFillSource = NowPlayingBackgroundFillSource(
+            rawValue: resolvedStringValue(
+                for: backgroundFillSourceField,
+                incoming: settingsStore.stringValue(backgroundFillSourceField, fallback: NowPlayingBackgroundFillSource.accent.rawValue),
+                current: backgroundFillSource.rawValue
+            )
+        ) ?? .accent
+        backgroundFillColorHex = resolvedStringValue(
+            for: backgroundFillColorField,
+            incoming: settingsStore.stringValue(backgroundFillColorField, fallback: "#4A90E2"),
+            current: backgroundFillColorHex
+        )
+        hideAfterPausedMinutes = Double(resolvedIntValue(for: hideAfterPausedMinutesField, incoming: settingsStore.intValue(hideAfterPausedMinutesField, fallback: 10), current: Int(hideAfterPausedMinutes.rounded())))
+        maxCharactersPerLine = Double(resolvedIntValue(for: maxCharactersPerLineField, incoming: settingsStore.intValue(maxCharactersPerLineField, fallback: 25), current: Int(maxCharactersPerLine.rounded())))
+        scrollLongText = resolvedBoolValue(for: scrollLongTextField, incoming: settingsStore.boolValue(scrollLongTextField, fallback: false), current: scrollLongText)
         popupLayout = NowPlayingPopupLayout(
             rawValue: resolvedStringValue(
                 for: popupLayoutField,
@@ -2923,6 +3049,14 @@ private struct NowPlayingSettingsView: View {
         }
     }
 
+    private func setIntValue(_ value: Int, for field: SettingsFieldKey) {
+        guard !isApplyingConfigSnapshot else { return }
+        pendingIntWrites[fieldIdentifier(field)] = value
+        Task { @MainActor in
+            settingsStore.setInt(value, for: field)
+        }
+    }
+
     private func resolvedBoolValue(for field: SettingsFieldKey, incoming: Bool, current: Bool) -> Bool {
         let fieldID = fieldIdentifier(field)
         if let pendingValue = pendingBoolWrites[fieldID] {
@@ -2947,6 +3081,18 @@ private struct NowPlayingSettingsView: View {
         return incoming
     }
 
+    private func resolvedIntValue(for field: SettingsFieldKey, incoming: Int, current: Int) -> Int {
+        let fieldID = fieldIdentifier(field)
+        if let pendingValue = pendingIntWrites[fieldID] {
+            if incoming == pendingValue {
+                pendingIntWrites.removeValue(forKey: fieldID)
+                return incoming
+            }
+            return current
+        }
+        return incoming
+    }
+
     private func fieldIdentifier(_ field: SettingsFieldKey) -> String {
         "\(field.tablePath).\(field.key)"
     }
@@ -2956,11 +3102,23 @@ private struct NowPlayingSettingsView: View {
         showAlbumArt = true
         showArtist = true
         showPauseIndicator = true
+        backgroundFillEnabled = false
+        backgroundFillSource = .accent
+        backgroundFillColorHex = "#4A90E2"
+        hideAfterPausedMinutes = 10
+        maxCharactersPerLine = 25
+        scrollLongText = false
         isApplyingConfigSnapshot = false
 
         settingsStore.setBool(true, for: .init(tablePath: nowPlayingTable, key: "show-album-art"))
         settingsStore.setBool(true, for: .init(tablePath: nowPlayingTable, key: "show-artist"))
         settingsStore.setBool(true, for: .init(tablePath: nowPlayingTable, key: "show-pause-indicator"))
+        settingsStore.setBool(false, for: .init(tablePath: nowPlayingTable, key: "background-fill-enabled"))
+        settingsStore.setString("accent", for: .init(tablePath: nowPlayingTable, key: "background-fill-source"))
+        settingsStore.setString("#4A90E2", for: .init(tablePath: nowPlayingTable, key: "background-fill-color"))
+        settingsStore.setInt(10, for: .init(tablePath: nowPlayingTable, key: "hide-after-paused-minutes"))
+        settingsStore.setInt(25, for: .init(tablePath: nowPlayingTable, key: "max-characters-per-line"))
+        settingsStore.setBool(false, for: .init(tablePath: nowPlayingTable, key: "scroll-long-text"))
     }
 
     private func resetPopupDefaults() {
@@ -7091,6 +7249,42 @@ private struct DebouncedTextSettingRow: View {
     }
 }
 
+private struct ColorSettingRow: View {
+    let title: String
+    let description: String
+    @Binding var color: Color
+    @Binding var hexText: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.headline)
+
+            Text(description)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 12) {
+                ColorPicker("", selection: $color, supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 44, height: 28)
+
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(color)
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                    )
+
+                TextField("#RRGGBB", text: $hexText)
+                    .textFieldStyle(.roundedBorder)
+                    .monospaced()
+            }
+        }
+    }
+}
+
 private struct SecureTextSettingRow: View {
     let title: String
     let description: String
@@ -7238,6 +7432,19 @@ private struct SliderSettingRow: View {
 
             Slider(value: $value, in: range, step: step)
         }
+    }
+}
+
+private extension Color {
+    func toHexString() -> String? {
+        let nsColor = NSColor(self).usingColorSpace(.deviceRGB)
+        guard let nsColor else { return nil }
+
+        let red = Int(round(nsColor.redComponent * 255))
+        let green = Int(round(nsColor.greenComponent * 255))
+        let blue = Int(round(nsColor.blueComponent * 255))
+
+        return String(format: "#%02X%02X%02X", red, green, blue)
     }
 }
 

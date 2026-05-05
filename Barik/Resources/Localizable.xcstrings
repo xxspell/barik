@@ -8508,6 +8508,244 @@
         }
       }
     },
+    "settings.now_playing.field.hide_after_paused_minutes.description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide the menu bar widget after playback has been paused for this many minutes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрывать виджет в меню-баре, если воспроизведение стоит на паузе дольше указанного количества минут."
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.background_fill_color.description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hex color for the left-to-right background fill, for example #4A90E2."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hex-цвет для заливки фона слева направо, например #4A90E2."
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.background_fill_color.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Background Fill Color"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цвет заливки фона"
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.background_fill_enabled.description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tint the widget background from left to right with an accent or custom color."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подкрашивать фон виджета слева направо акцентным или выбранным цветом."
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.background_fill_enabled.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Background Fill"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Заливка фона"
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.background_fill_source.description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use the system accent color or provide your own fixed color for the background fill."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Использовать системный акцентный цвет или задать свой цвет для заливки фона."
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.background_fill_source.option.accent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accent"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Акцент"
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.background_fill_source.option.custom" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Свой"
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.background_fill_source.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fill Source"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Источник цвета"
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.hide_after_paused_minutes.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide After Pause"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрывать после паузы"
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.max_characters_per_line.description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limit each visible text line in the compact widget to roughly this many characters before truncation or scrolling kicks in."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ограничивать каждую видимую строку текста в компактном виджете примерно таким количеством символов перед обрезкой или прокруткой."
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.max_characters_per_line.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Max Characters Per Line"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Макс. символов в строке"
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.scroll_long_text.description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scroll overflowing text inside the compact widget instead of cutting it off with an ellipsis."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Прокручивать длинный текст внутри компактного виджета вместо обрезки с многоточием."
+          }
+        }
+      }
+    },
+    "settings.now_playing.field.scroll_long_text.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scroll Long Text"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Прокручивать длинный текст"
+          }
+        }
+      }
+    },
     "settings.now_playing.field.show_album_art.description": {
       "extractionState": "stale",
       "localizations": {

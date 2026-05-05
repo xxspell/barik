@@ -14,20 +14,38 @@ struct NowPlayingWidget: View {
 
     @State private var widgetFrame: CGRect = .zero
     @State private var animatedWidth: CGFloat = 0
+    @State private var now = Date()
 
     private var showAlbumArt: Bool { configProvider.config["show-album-art"]?.boolValue ?? true }
     private var showArtist: Bool { configProvider.config["show-artist"]?.boolValue ?? true }
     private var showPauseIndicator: Bool { configProvider.config["show-pause-indicator"]?.boolValue ?? true }
+    private var backgroundFillEnabled: Bool { configProvider.config["background-fill-enabled"]?.boolValue ?? false }
+    private var backgroundFillSource: String { configProvider.config["background-fill-source"]?.stringValue ?? "accent" }
+    private var backgroundFillColorHex: String { configProvider.config["background-fill-color"]?.stringValue ?? "#4A90E2" }
+    private var hideAfterPausedMinutes: Int { configProvider.config["hide-after-paused-minutes"]?.intValue ?? 10 }
+    private var maxCharactersPerLine: Int { max(configProvider.config["max-characters-per-line"]?.intValue ?? 25, 1) }
+    private var scrollLongText: Bool { configProvider.config["scroll-long-text"]?.boolValue ?? false }
+
+    private var visibleSong: NowPlayingSong? {
+        guard let song = playingManager.nowPlaying else { return nil }
+        guard song.state == .paused else { return song }
+        return now.timeIntervalSince(song.stateTimestamp) >= Double(hideAfterPausedMinutes * 60) ? nil : song
+    }
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            if let song = playingManager.nowPlaying {
+            if let song = visibleSong {
                 // Hidden view for measuring the intrinsic width.
                 MeasurableNowPlayingContent(
                     song: song,
                     showAlbumArt: showAlbumArt,
                     showArtist: showArtist,
-                    showPauseIndicator: showPauseIndicator
+                    showPauseIndicator: showPauseIndicator,
+                    backgroundFillEnabled: backgroundFillEnabled,
+                    backgroundFillSource: backgroundFillSource,
+                    backgroundFillColorHex: backgroundFillColorHex,
+                    maxCharactersPerLine: maxCharactersPerLine,
+                    scrollLongText: scrollLongText
                 ) { measuredWidth in
                     if animatedWidth == 0 {
                         animatedWidth = measuredWidth
@@ -45,7 +63,12 @@ struct NowPlayingWidget: View {
                     width: animatedWidth,
                     showAlbumArt: showAlbumArt,
                     showArtist: showArtist,
-                    showPauseIndicator: showPauseIndicator
+                    showPauseIndicator: showPauseIndicator,
+                    backgroundFillEnabled: backgroundFillEnabled,
+                    backgroundFillSource: backgroundFillSource,
+                    backgroundFillColorHex: backgroundFillColorHex,
+                    maxCharactersPerLine: maxCharactersPerLine,
+                    scrollLongText: scrollLongText
                 )
                     .onTapGesture {
                         MenuBarPopup.show(rect: widgetFrame, id: "nowplaying") {
@@ -55,6 +78,11 @@ struct NowPlayingWidget: View {
             }
         }
         .captureScreenRect(into: $widgetFrame)
+        .onReceive(
+            Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+        ) { currentDate in
+            now = currentDate
+        }
     }
 }
 
@@ -66,35 +94,129 @@ struct NowPlayingContent: View {
     let showAlbumArt: Bool
     let showArtist: Bool
     let showPauseIndicator: Bool
+    let backgroundFillEnabled: Bool
+    let backgroundFillSource: String
+    let backgroundFillColorHex: String
+    let maxCharactersPerLine: Int
+    let scrollLongText: Bool
     @ObservedObject var configManager = ConfigManager.shared
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
+    private var backgroundFillColor: Color {
+        if backgroundFillSource == "custom", let customColor = Color(hex: backgroundFillColorHex) {
+            return customColor
+        }
+        return .accentColor
+    }
+    private func estimatedPosition(at date: Date) -> Double {
+        guard let basePosition = song.position else {
+            return 0
+        }
+
+        let progressedPosition: Double
+        if song.state == .playing,
+           let timestamp = song.positionTimestamp {
+            progressedPosition = basePosition + max(date.timeIntervalSince(timestamp), 0)
+        } else {
+            progressedPosition = basePosition
+        }
+
+        if let duration = song.duration {
+            return min(max(progressedPosition, 0), duration)
+        }
+
+        return max(progressedPosition, 0)
+    }
+
+    private func playbackProgress(at date: Date) -> CGFloat {
+        guard let duration = song.duration, duration > 0 else {
+            return 0
+        }
+
+        let progress = estimatedPosition(at: date) / duration
+        return CGFloat(min(max(progress, 0), 1))
+    }
+
+    @ViewBuilder
+    private func backgroundFillLayer(for date: Date) -> some View {
+        GeometryReader { geometry in
+            let progress = playbackProgress(at: date)
+            let totalWidth = geometry.size.width
+            let progressWidth = totalWidth * progress
+            let featherWidth = min(max(totalWidth * 0.045, 16), 34)
+
+            ZStack(alignment: .leading) {
+                Capsule().fill(.clear)
+
+                if progress > 0.001 {
+                    HStack(spacing: 0) {
+                        Rectangle()
+                            .fill(backgroundFillColor.opacity(0.12))
+                            .frame(width: max(progressWidth - featherWidth, 0))
+
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        backgroundFillColor.opacity(0.12),
+                                        backgroundFillColor.opacity(0.08),
+                                        backgroundFillColor.opacity(0.03),
+                                        .clear
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: min(progressWidth, featherWidth))
+
+                        Spacer(minLength: 0)
+                    }
+                    .mask(Capsule())
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
     
     var body: some View {
-        Group {
+        TimelineView(.animation(minimumInterval: 1)) { context in
             if foregroundHeight < 38 {
-                HStack(spacing: 8) {
-                    if showAlbumArt {
-                        AlbumArtView(song: song, showPauseIndicator: showPauseIndicator)
+                ZStack(alignment: .leading) {
+                    if backgroundFillEnabled {
+                        backgroundFillLayer(for: context.date)
                     }
-                    SongTextView(song: song, showArtist: showArtist)
+
+                    HStack(spacing: 8) {
+                        if showAlbumArt {
+                            AlbumArtView(song: song, showPauseIndicator: showPauseIndicator)
+                        }
+                        SongTextView(song: song, showArtist: showArtist, maxCharactersPerLine: maxCharactersPerLine, scrollLongText: scrollLongText)
+                    }
                 }
+                .foregroundColor(.foreground)
             } else {
                 HStack(spacing: 8) {
                     if showAlbumArt {
                         AlbumArtView(song: song, showPauseIndicator: showPauseIndicator)
                     }
-                    SongTextView(song: song, showArtist: showArtist)
+                    SongTextView(song: song, showArtist: showArtist, maxCharactersPerLine: maxCharactersPerLine, scrollLongText: scrollLongText)
                 }
                 .padding(.horizontal, foregroundHeight < 45 ? 8 : 12)
                 .frame(height: foregroundHeight < 45 ? NowPlayingWidgetLayout.capsuleHeight : NowPlayingWidgetLayout.compactHeight)
-                .background(configManager.config.experimental.foreground.widgetsBackground.blur)
+                .background {
+                    ZStack {
+                        Capsule().fill(configManager.config.experimental.foreground.widgetsBackground.blur)
+                        if backgroundFillEnabled {
+                            backgroundFillLayer(for: context.date)
+                        }
+                    }
+                }
                 .clipShape(Capsule())
                 .overlay(
                     Capsule().stroke(Color.noActive, lineWidth: 1)
                 )
+                .foregroundColor(.foreground)
             }
         }
-        .foregroundColor(.foreground)
     }
 }
 
@@ -106,6 +228,11 @@ struct MeasurableNowPlayingContent: View {
     let showAlbumArt: Bool
     let showArtist: Bool
     let showPauseIndicator: Bool
+    let backgroundFillEnabled: Bool
+    let backgroundFillSource: String
+    let backgroundFillColorHex: String
+    let maxCharactersPerLine: Int
+    let scrollLongText: Bool
     let onSizeChange: (CGFloat) -> Void
 
     var body: some View {
@@ -113,7 +240,12 @@ struct MeasurableNowPlayingContent: View {
             song: song,
             showAlbumArt: showAlbumArt,
             showArtist: showArtist,
-            showPauseIndicator: showPauseIndicator
+            showPauseIndicator: showPauseIndicator,
+            backgroundFillEnabled: backgroundFillEnabled,
+            backgroundFillSource: backgroundFillSource,
+            backgroundFillColorHex: backgroundFillColorHex,
+            maxCharactersPerLine: maxCharactersPerLine,
+            scrollLongText: scrollLongText
         )
             .background(
                 GeometryReader { geometry in
@@ -138,13 +270,23 @@ struct VisibleNowPlayingContent: View {
     let showAlbumArt: Bool
     let showArtist: Bool
     let showPauseIndicator: Bool
+    let backgroundFillEnabled: Bool
+    let backgroundFillSource: String
+    let backgroundFillColorHex: String
+    let maxCharactersPerLine: Int
+    let scrollLongText: Bool
 
     var body: some View {
         NowPlayingContent(
             song: song,
             showAlbumArt: showAlbumArt,
             showArtist: showArtist,
-            showPauseIndicator: showPauseIndicator
+            showPauseIndicator: showPauseIndicator,
+            backgroundFillEnabled: backgroundFillEnabled,
+            backgroundFillSource: backgroundFillSource,
+            backgroundFillColorHex: backgroundFillColorHex,
+            maxCharactersPerLine: maxCharactersPerLine,
+            scrollLongText: scrollLongText
         )
             .frame(width: width, height: NowPlayingWidgetLayout.compactHeight)
             .animation(.smooth(duration: 0.1), value: song)
@@ -204,6 +346,8 @@ struct AlbumArtView: View {
 struct SongTextView: View {
     let song: NowPlayingSong
     let showArtist: Bool
+    let maxCharactersPerLine: Int
+    let scrollLongText: Bool
     @ObservedObject var configManager = ConfigManager.shared
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
 
@@ -211,24 +355,134 @@ struct SongTextView: View {
 
         VStack(alignment: .leading, spacing: -1) {
             if foregroundHeight >= 30 {
-                Text(song.title)
-                    .barikFont(size: 11, weight: .medium)
-                    .padding(.trailing, 2)
+                WidgetTextLine(text: song.title, maxCharacters: maxCharactersPerLine, fontSize: 11, weight: .medium, scrollLongText: scrollLongText)
                 if showArtist {
-                    Text(song.artist)
-                        .opacity(0.8)
-                        .barikFont(size: 10)
-                        .padding(.trailing, 2)
+                    WidgetTextLine(text: song.artist, maxCharacters: maxCharactersPerLine, fontSize: 10, weight: .regular, scrollLongText: scrollLongText, opacity: 0.8)
                 }
             } else {
-                Text(showArtist ? song.artist + " — " + song.title : song.title)
-                    .barikFont(size: 12)
+                WidgetTextLine(text: showArtist ? song.artist + " — " + song.title : song.title, maxCharacters: maxCharactersPerLine, fontSize: 12, weight: .regular, scrollLongText: scrollLongText)
             }
         }
         // Disable animations for text changes.
         .transaction { transaction in
             transaction.animation = nil
         }
+    }
+}
+
+private struct WidgetTextLine: View {
+    let text: String
+    let maxCharacters: Int
+    let fontSize: CGFloat
+    let weight: Font.Weight
+    let scrollLongText: Bool
+    var opacity: Double = 1
+
+    private var exceedsLimit: Bool { text.count > maxCharacters }
+    private var staticPreviewText: String {
+        exceedsLimit ? truncatedText : text
+    }
+    private var truncatedText: String {
+        guard exceedsLimit, maxCharacters > 2 else { return text }
+        return String(text.prefix(maxCharacters - 2)) + ".."
+    }
+
+    var body: some View {
+        Group {
+            if scrollLongText && exceedsLimit {
+                ScrollingTextLine(
+                    text: text,
+                    previewText: truncatedText,
+                    fontSize: fontSize,
+                    weight: weight,
+                    opacity: opacity
+                )
+            } else {
+                Text(staticPreviewText)
+                    .barikFont(size: fontSize, weight: weight)
+                    .lineLimit(1)
+                    .opacity(opacity)
+            }
+        }
+        .padding(.trailing, 2)
+    }
+}
+
+private struct ScrollingTextLine: View {
+    let text: String
+    let previewText: String
+    let fontSize: CGFloat
+    let weight: Font.Weight
+    let opacity: Double
+
+    @State private var textWidth: CGFloat = 0
+    @State private var separatorWidth: CGFloat = 0
+    @State private var containerWidth: CGFloat = 0
+
+    private let separator = "     "
+
+    var body: some View {
+        Text(previewText)
+            .barikFont(size: fontSize, weight: weight)
+            .lineLimit(1)
+            .hidden()
+            .background(
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear { containerWidth = geometry.size.width }
+                        .onChange(of: geometry.size.width) { _, newValue in
+                            containerWidth = newValue
+                        }
+                }
+            )
+            .overlay(alignment: .leading) {
+                TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                    let cycleWidth = textWidth + separatorWidth
+                    let shouldScroll = textWidth > containerWidth && cycleWidth > 0
+                    let speed: CGFloat = 18
+                    let elapsed = context.date.timeIntervalSinceReferenceDate
+                    let offset = shouldScroll
+                        ? -CGFloat(elapsed * Double(speed)).truncatingRemainder(dividingBy: cycleWidth)
+                        : 0
+
+                    HStack(spacing: 0) {
+                        scrollingSegment(text)
+                            .background(
+                                GeometryReader { geometry in
+                                    Color.clear
+                                        .onAppear { textWidth = geometry.size.width }
+                                        .onChange(of: geometry.size.width) { _, newValue in
+                                            textWidth = newValue
+                                        }
+                                }
+                            )
+                        scrollingSegment(separator)
+                            .background(
+                                GeometryReader { geometry in
+                                    Color.clear
+                                        .onAppear { separatorWidth = geometry.size.width }
+                                        .onChange(of: geometry.size.width) { _, newValue in
+                                            separatorWidth = newValue
+                                        }
+                                }
+                            )
+                        scrollingSegment(text)
+                    }
+                    .offset(x: offset)
+                    .frame(width: containerWidth, alignment: .leading)
+                    .clipped()
+                    .opacity(opacity)
+                }
+            }
+        .clipped()
+    }
+
+    @ViewBuilder
+    private func scrollingSegment(_ value: String) -> some View {
+        Text(value)
+            .barikFont(size: fontSize, weight: weight)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
     }
 }
 

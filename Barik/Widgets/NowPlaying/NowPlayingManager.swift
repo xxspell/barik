@@ -19,6 +19,7 @@ struct NowPlayingSong: Equatable, Identifiable {
     var id: String { title + artist }
     let appName: String
     let state: PlaybackState
+    let stateTimestamp: Date
     let title: String
     let artist: String
     let albumArtURL: URL?  // Still keep for compatibility with existing UI components
@@ -28,9 +29,10 @@ struct NowPlayingSong: Equatable, Identifiable {
     let positionTimestamp: Date?
 
     /// Initializes a song model with all parameters (new version with image).
-    init(appName: String, state: PlaybackState, title: String, artist: String, albumArtURL: URL?, albumArtImage: NSImage?, position: Double?, duration: Double?, positionTimestamp: Date?) {
+    init(appName: String, state: PlaybackState, stateTimestamp: Date = Date(), title: String, artist: String, albumArtURL: URL?, albumArtImage: NSImage?, position: Double?, duration: Double?, positionTimestamp: Date?) {
         self.appName = appName
         self.state = state
+        self.stateTimestamp = stateTimestamp
         self.title = title
         self.artist = artist
         self.albumArtURL = albumArtURL
@@ -41,9 +43,10 @@ struct NowPlayingSong: Equatable, Identifiable {
     }
 
     /// Initializes a song model with all parameters (legacy version without image).
-    init(appName: String, state: PlaybackState, title: String, artist: String, albumArtURL: URL?, position: Double?, duration: Double?, positionTimestamp: Date? = nil) {
+    init(appName: String, state: PlaybackState, stateTimestamp: Date = Date(), title: String, artist: String, albumArtURL: URL?, position: Double?, duration: Double?, positionTimestamp: Date? = nil) {
         self.appName = appName
         self.state = state
+        self.stateTimestamp = stateTimestamp
         self.title = title
         self.artist = artist
         self.albumArtURL = albumArtURL
@@ -329,6 +332,7 @@ final class NowPlayingManager: ObservableObject {
                                 let updatedSong = NowPlayingSong(
                                     appName: existingSong.appName,
                                     state: existingSong.state,
+                                    stateTimestamp: existingSong.stateTimestamp,
                                     title: existingSong.title,
                                     artist: existingSong.artist,
                                     albumArtURL: albumArtURL,
@@ -386,10 +390,22 @@ final class NowPlayingManager: ObservableObject {
                                 finalAlbumArtURL = existingSong.albumArtURL
                             }
 
+                            let stateTimestamp: Date
+                            if let existingSong = self?.nowPlaying,
+                               existingSong.appName == bundleId,
+                               existingSong.title == actualTitle,
+                               existingSong.artist == actualArtist,
+                               existingSong.state == state {
+                                stateTimestamp = existingSong.stateTimestamp
+                            } else {
+                                stateTimestamp = Date()
+                            }
+
                             // Create the song object
                             let song = NowPlayingSong(
                                 appName: bundleId,
                                 state: state,
+                                stateTimestamp: stateTimestamp,
                                 title: actualTitle,
                                 artist: actualArtist,
                                 albumArtURL: nil, // No more temporary files
@@ -465,6 +481,7 @@ final class NowPlayingManager: ObservableObject {
         let song = NowPlayingSong(
             appName: "Music",
             state: state,
+            stateTimestamp: Date(),
             title: title,
             artist: artist,
             albumArtURL: nil, // Not available through notifications
@@ -493,6 +510,7 @@ final class NowPlayingManager: ObservableObject {
         let song = NowPlayingSong(
             appName: "Spotify",
             state: state,
+            stateTimestamp: Date(),
             title: title,
             artist: artist,
             albumArtURL: nil, // Not available through notifications
