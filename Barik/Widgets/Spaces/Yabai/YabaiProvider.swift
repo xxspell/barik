@@ -25,6 +25,12 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider, DeletableSp
             .dictionaryValue?["show-empty"]?.boolValue ?? true
     }
 
+    private var shouldResolveDisplayOwnership: Bool {
+        ConfigManager.shared.config.rootToml.widgets
+            .config(for: "default.spaces")?["space"]?
+            .dictionaryValue?["show-only-current-display-spaces"]?.boolValue ?? false
+    }
+
     private func runYabaiCommand(arguments: [String]) -> Data? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executablePath)
@@ -163,8 +169,13 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider, DeletableSp
         guard let spaces = fetchSpaces(), let windows = fetchWindows() else {
             return nil
         }
-        let displays = fetchDisplays() ?? []
-        let displayMonitorMap = monitorMappingByDisplayID(displays: displays)
+        let displayMonitorMap: [Int: String]
+        if shouldResolveDisplayOwnership {
+            let displays = fetchDisplays() ?? []
+            displayMonitorMap = monitorMappingByDisplayID(displays: displays)
+        } else {
+            displayMonitorMap = [:]
+        }
 
         updateWindowCaches(with: windows)
         let mergedWindows = mergeWindows(liveWindows: windows)

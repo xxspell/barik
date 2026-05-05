@@ -55,46 +55,87 @@ enum SystemMonitorMetric: String, CaseIterable {
     }
 }
 
+private struct SystemMonitorSnapshot: Equatable {
+    var cpuLoad: Double = 0
+    var userLoad: Double = 0
+    var systemLoad: Double = 0
+    var idleLoad: Double = 100
+    var loadAverage: Double = 0
+    var cpuCoreCount: Int = 0
+
+    var ramUsage: Double = 0
+    var totalRAM: Double = 0
+    var usedRAM: Double = 0
+    var activeRAM: Double = 0
+    var inactiveRAM: Double = 0
+    var wiredRAM: Double = 0
+    var compressedRAM: Double = 0
+    var appRAM: Double = 0
+    var cachedRAM: Double = 0
+    var freeRAM: Double = 0
+    var swapUsedRAM: Double = 0
+    var memoryPressure: String = "Normal"
+
+    var diskUsage: Double = 0
+    var totalDisk: Double = 0
+    var usedDisk: Double = 0
+    var freeDisk: Double = 0
+    var diskVolumeName: String = "/"
+
+    var gpuLoad: Double?
+    var cpuTemperature: Double?
+    var gpuTemperature: Double?
+
+    var uploadSpeed: Double = 0
+    var downloadSpeed: Double = 0
+    var totalUploadedBytes: UInt64 = 0
+    var totalDownloadedBytes: UInt64 = 0
+    var activeNetworkInterface: String = ""
+    var networkLinkIsUp: Bool = false
+}
+
 @MainActor
 final class SystemMonitorManager: ObservableObject {
     static let shared = SystemMonitorManager()
 
-    @Published private(set) var cpuLoad: Double = 0
-    @Published private(set) var userLoad: Double = 0
-    @Published private(set) var systemLoad: Double = 0
-    @Published private(set) var idleLoad: Double = 100
-    @Published private(set) var loadAverage: Double = 0
-    @Published private(set) var cpuCoreCount: Int = 0
+    @Published private var snapshot = SystemMonitorSnapshot()
 
-    @Published private(set) var ramUsage: Double = 0
-    @Published private(set) var totalRAM: Double = 0
-    @Published private(set) var usedRAM: Double = 0
-    @Published private(set) var activeRAM: Double = 0
-    @Published private(set) var inactiveRAM: Double = 0
-    @Published private(set) var wiredRAM: Double = 0
-    @Published private(set) var compressedRAM: Double = 0
-    @Published private(set) var appRAM: Double = 0
-    @Published private(set) var cachedRAM: Double = 0
-    @Published private(set) var freeRAM: Double = 0
-    @Published private(set) var swapUsedRAM: Double = 0
-    @Published private(set) var memoryPressure: String = "Normal"
+    var cpuLoad: Double { snapshot.cpuLoad }
+    var userLoad: Double { snapshot.userLoad }
+    var systemLoad: Double { snapshot.systemLoad }
+    var idleLoad: Double { snapshot.idleLoad }
+    var loadAverage: Double { snapshot.loadAverage }
+    var cpuCoreCount: Int { snapshot.cpuCoreCount }
 
-    @Published private(set) var diskUsage: Double = 0
-    @Published private(set) var totalDisk: Double = 0
-    @Published private(set) var usedDisk: Double = 0
-    @Published private(set) var freeDisk: Double = 0
-    @Published private(set) var diskVolumeName: String = "/"
+    var ramUsage: Double { snapshot.ramUsage }
+    var totalRAM: Double { snapshot.totalRAM }
+    var usedRAM: Double { snapshot.usedRAM }
+    var activeRAM: Double { snapshot.activeRAM }
+    var inactiveRAM: Double { snapshot.inactiveRAM }
+    var wiredRAM: Double { snapshot.wiredRAM }
+    var compressedRAM: Double { snapshot.compressedRAM }
+    var appRAM: Double { snapshot.appRAM }
+    var cachedRAM: Double { snapshot.cachedRAM }
+    var freeRAM: Double { snapshot.freeRAM }
+    var swapUsedRAM: Double { snapshot.swapUsedRAM }
+    var memoryPressure: String { snapshot.memoryPressure }
 
-    @Published private(set) var gpuLoad: Double?
-    @Published private(set) var cpuTemperature: Double?
-    @Published private(set) var gpuTemperature: Double?
+    var diskUsage: Double { snapshot.diskUsage }
+    var totalDisk: Double { snapshot.totalDisk }
+    var usedDisk: Double { snapshot.usedDisk }
+    var freeDisk: Double { snapshot.freeDisk }
+    var diskVolumeName: String { snapshot.diskVolumeName }
 
-    @Published private(set) var uploadSpeed: Double = 0
-    @Published private(set) var downloadSpeed: Double = 0
-    @Published private(set) var totalUploadedBytes: UInt64 = 0
-    @Published private(set) var totalDownloadedBytes: UInt64 = 0
-    @Published private(set) var activeNetworkInterface: String = ""
-    @Published private(set) var networkLinkIsUp: Bool = false
+    var gpuLoad: Double? { snapshot.gpuLoad }
+    var cpuTemperature: Double? { snapshot.cpuTemperature }
+    var gpuTemperature: Double? { snapshot.gpuTemperature }
+
+    var uploadSpeed: Double { snapshot.uploadSpeed }
+    var downloadSpeed: Double { snapshot.downloadSpeed }
+    var totalUploadedBytes: UInt64 { snapshot.totalUploadedBytes }
+    var totalDownloadedBytes: UInt64 { snapshot.totalDownloadedBytes }
+    var activeNetworkInterface: String { snapshot.activeNetworkInterface }
+    var networkLinkIsUp: Bool { snapshot.networkLinkIsUp }
 
     private var timer: Timer?
     private var previousCPUTicks: (user: UInt32, system: UInt32, idle: UInt32, nice: UInt32)?
@@ -124,7 +165,17 @@ final class SystemMonitorManager: ObservableObject {
         Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
 
-            let cpuSnapshot = Self.readCPUUsage(previous: await self.previousCPUTicks)
+            let currentState = await MainActor.run {
+                (
+                    previousCPUTicks: self.previousCPUTicks,
+                    previousNetworkData: self.previousNetworkData,
+                    lastNetworkUpdate: self.lastNetworkUpdate,
+                    lastValidCPUTemperature: self.lastValidCPUTemperature,
+                    snapshot: self.snapshot
+                )
+            }
+
+            let cpuSnapshot = Self.readCPUUsage(previous: currentState.previousCPUTicks)
             let ramSnapshot = Self.readRAMUsage()
             let diskSnapshot = Self.readDiskUsage()
             let gpuSnapshot = Self.readGPUStats()
@@ -132,51 +183,53 @@ final class SystemMonitorManager: ObservableObject {
             let loadAverage = Self.readLoadAverage()
             let cpuCoreCount = Self.readCPUCoreCount()
             let networkSnapshot = Self.readNetworkActivity(
-                previous: await self.previousNetworkData,
-                lastUpdate: await self.lastNetworkUpdate
+                previous: currentState.previousNetworkData,
+                lastUpdate: currentState.lastNetworkUpdate
             )
 
             await MainActor.run {
+                var nextSnapshot = currentState.snapshot
+
                 if let cpuSnapshot {
                     self.previousCPUTicks = cpuSnapshot.currentTicks
-                    self.cpuLoad = cpuSnapshot.cpuLoad
-                    self.userLoad = cpuSnapshot.userLoad
-                    self.systemLoad = cpuSnapshot.systemLoad
-                    self.idleLoad = cpuSnapshot.idleLoad
+                    nextSnapshot.cpuLoad = cpuSnapshot.cpuLoad
+                    nextSnapshot.userLoad = cpuSnapshot.userLoad
+                    nextSnapshot.systemLoad = cpuSnapshot.systemLoad
+                    nextSnapshot.idleLoad = cpuSnapshot.idleLoad
                 }
-                self.loadAverage = loadAverage
-                self.cpuCoreCount = cpuCoreCount
+                nextSnapshot.loadAverage = loadAverage
+                nextSnapshot.cpuCoreCount = cpuCoreCount
 
                 if let ramSnapshot {
-                    self.ramUsage = ramSnapshot.ramUsage
-                    self.totalRAM = ramSnapshot.totalRAM
-                    self.usedRAM = ramSnapshot.usedRAM
-                    self.activeRAM = ramSnapshot.activeRAM
-                    self.inactiveRAM = ramSnapshot.inactiveRAM
-                    self.wiredRAM = ramSnapshot.wiredRAM
-                    self.compressedRAM = ramSnapshot.compressedRAM
-                    self.appRAM = ramSnapshot.appRAM
-                    self.cachedRAM = ramSnapshot.cachedRAM
-                    self.freeRAM = ramSnapshot.freeRAM
-                    self.swapUsedRAM = ramSnapshot.swapUsedRAM
-                    self.memoryPressure = ramSnapshot.memoryPressure
+                    nextSnapshot.ramUsage = ramSnapshot.ramUsage
+                    nextSnapshot.totalRAM = ramSnapshot.totalRAM
+                    nextSnapshot.usedRAM = ramSnapshot.usedRAM
+                    nextSnapshot.activeRAM = ramSnapshot.activeRAM
+                    nextSnapshot.inactiveRAM = ramSnapshot.inactiveRAM
+                    nextSnapshot.wiredRAM = ramSnapshot.wiredRAM
+                    nextSnapshot.compressedRAM = ramSnapshot.compressedRAM
+                    nextSnapshot.appRAM = ramSnapshot.appRAM
+                    nextSnapshot.cachedRAM = ramSnapshot.cachedRAM
+                    nextSnapshot.freeRAM = ramSnapshot.freeRAM
+                    nextSnapshot.swapUsedRAM = ramSnapshot.swapUsedRAM
+                    nextSnapshot.memoryPressure = ramSnapshot.memoryPressure
                 }
 
                 if let diskSnapshot {
-                    self.diskUsage = diskSnapshot.diskUsage
-                    self.totalDisk = diskSnapshot.totalDisk
-                    self.usedDisk = diskSnapshot.usedDisk
-                    self.freeDisk = diskSnapshot.freeDisk
-                    self.diskVolumeName = diskSnapshot.diskVolumeName
+                    nextSnapshot.diskUsage = diskSnapshot.diskUsage
+                    nextSnapshot.totalDisk = diskSnapshot.totalDisk
+                    nextSnapshot.usedDisk = diskSnapshot.usedDisk
+                    nextSnapshot.freeDisk = diskSnapshot.freeDisk
+                    nextSnapshot.diskVolumeName = diskSnapshot.diskVolumeName
                 }
 
-                self.gpuLoad = gpuSnapshot.load
-                self.gpuTemperature = gpuSnapshot.temperature
+                nextSnapshot.gpuLoad = gpuSnapshot.load
+                nextSnapshot.gpuTemperature = gpuSnapshot.temperature
                 let resolvedCPUTemperature = Self.stabilizedCPUTemperature(
                     rawCPUTemperature,
-                    previousValid: self.lastValidCPUTemperature
+                    previousValid: currentState.lastValidCPUTemperature
                 )
-                self.cpuTemperature = resolvedCPUTemperature
+                nextSnapshot.cpuTemperature = resolvedCPUTemperature
                 if let resolvedCPUTemperature {
                     self.lastValidCPUTemperature = resolvedCPUTemperature
                 }
@@ -184,12 +237,16 @@ final class SystemMonitorManager: ObservableObject {
                 if let networkSnapshot {
                     self.previousNetworkData = networkSnapshot.currentNetworkData
                     self.lastNetworkUpdate = networkSnapshot.currentTime
-                    self.uploadSpeed = networkSnapshot.uploadSpeed
-                    self.downloadSpeed = networkSnapshot.downloadSpeed
-                    self.totalUploadedBytes = networkSnapshot.totalUploadedBytes
-                    self.totalDownloadedBytes = networkSnapshot.totalDownloadedBytes
-                    self.activeNetworkInterface = networkSnapshot.activeInterface
-                    self.networkLinkIsUp = networkSnapshot.linkIsUp
+                    nextSnapshot.uploadSpeed = networkSnapshot.uploadSpeed
+                    nextSnapshot.downloadSpeed = networkSnapshot.downloadSpeed
+                    nextSnapshot.totalUploadedBytes = networkSnapshot.totalUploadedBytes
+                    nextSnapshot.totalDownloadedBytes = networkSnapshot.totalDownloadedBytes
+                    nextSnapshot.activeNetworkInterface = networkSnapshot.activeInterface
+                    nextSnapshot.networkLinkIsUp = networkSnapshot.linkIsUp
+                }
+
+                if self.snapshot != nextSnapshot {
+                    self.snapshot = nextSnapshot
                 }
             }
         }

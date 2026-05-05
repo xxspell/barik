@@ -377,7 +377,11 @@ private struct WindowView: View {
                         .frame(width: size, height: size)
                 }
             }
-            .background(ScreenRectReader(screenRect: $iconFrame))
+            .background {
+                if showHoverTooltip {
+                    ScreenRectReader(screenRect: $iconFrame)
+                }
+            }
             .overlay(alignment: .topTrailing) {
                 if showHiddenWindows && window.isHidden {
                     HiddenWindowBadge()
@@ -411,10 +415,12 @@ private struct WindowView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             viewModel.switchToSpace(space)
-            usleep(100_000)
-            viewModel.switchToWindow(window)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                viewModel.switchToWindow(window)
+            }
         }
         .onHover { value in
+            guard showHoverTooltip else { return }
             isHovered = value
             if value {
                 HoverCardPanelController.shared.show(
@@ -466,7 +472,11 @@ private struct CompactWindowIconView: View {
                     .frame(width: size, height: size)
             }
         }
-        .background(ScreenRectReader(screenRect: $iconFrame))
+        .background {
+            if showHoverTooltip {
+                ScreenRectReader(screenRect: $iconFrame)
+            }
+        }
         .overlay(alignment: .topTrailing) {
             if showHiddenWindows && window.isHidden {
                 HiddenWindowBadge()
@@ -483,10 +493,12 @@ private struct CompactWindowIconView: View {
         .animation(.smooth, value: isHovered)
         .onTapGesture {
             viewModel.switchToSpace(space)
-            usleep(100_000)
-            viewModel.switchToWindow(window)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                viewModel.switchToWindow(window)
+            }
         }
         .onHover { value in
+            guard showHoverTooltip else { return }
             isHovered = value
             if value {
                 HoverCardPanelController.shared.show(
@@ -626,6 +638,7 @@ private struct ScreenRectReader: NSViewRepresentable {
 
 private final class TrackingRectView: NSView {
     var onScreenRectChange: ((CGRect) -> Void)?
+    private var lastReportedRect: CGRect = .null
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -641,7 +654,18 @@ private final class TrackingRectView: NSView {
         guard let window else { return }
         let localRect = convert(bounds, to: nil)
         let screenRect = window.convertToScreen(localRect)
+        guard shouldReport(screenRect) else { return }
+        lastReportedRect = screenRect
         onScreenRectChange?(screenRect)
+    }
+
+    private func shouldReport(_ rect: CGRect) -> Bool {
+        guard !lastReportedRect.isNull else { return true }
+
+        return abs(lastReportedRect.minX - rect.minX) > 0.5
+            || abs(lastReportedRect.minY - rect.minY) > 0.5
+            || abs(lastReportedRect.width - rect.width) > 0.5
+            || abs(lastReportedRect.height - rect.height) > 0.5
     }
 }
 

@@ -14,7 +14,8 @@ struct NowPlayingWidget: View {
 
     @State private var widgetFrame: CGRect = .zero
     @State private var animatedWidth: CGFloat = 0
-    @State private var now = Date()
+    @State private var pauseHideWorkItem: DispatchWorkItem?
+    @State private var pauseVisibilityRevision = 0
 
     private var showAlbumArt: Bool { configProvider.config["show-album-art"]?.boolValue ?? true }
     private var showArtist: Bool { configProvider.config["show-artist"]?.boolValue ?? true }
@@ -29,7 +30,13 @@ struct NowPlayingWidget: View {
     private var visibleSong: NowPlayingSong? {
         guard let song = playingManager.nowPlaying else { return nil }
         guard song.state == .paused else { return song }
-        return now.timeIntervalSince(song.stateTimestamp) >= Double(hideAfterPausedMinutes * 60) ? nil : song
+        let hideAfterSeconds = Double(hideAfterPausedMinutes * 60)
+        return Date().timeIntervalSince(song.stateTimestamp) >= hideAfterSeconds ? nil : song
+    }
+
+    private var pauseRefreshKey: String {
+        guard let song = playingManager.nowPlaying else { return "none:\(hideAfterPausedMinutes)" }
+        return "\(song.id):\(song.state.rawValue):\(song.stateTimestamp.timeIntervalSinceReferenceDate):\(hideAfterPausedMinutes)"
     }
 
     var body: some View {
@@ -78,11 +85,34 @@ struct NowPlayingWidget: View {
             }
         }
         .captureScreenRect(into: $widgetFrame)
-        .onReceive(
-            Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-        ) { currentDate in
-            now = currentDate
+        .onAppear(perform: schedulePauseVisibilityRefresh)
+        .onChange(of: pauseRefreshKey) { _, _ in
+            schedulePauseVisibilityRefresh()
         }
+        .onDisappear {
+            pauseHideWorkItem?.cancel()
+            pauseHideWorkItem = nil
+        }
+    }
+
+    private func schedulePauseVisibilityRefresh() {
+        pauseHideWorkItem?.cancel()
+        pauseHideWorkItem = nil
+
+        guard let song = playingManager.nowPlaying, song.state == .paused else { return }
+
+        let hideAfterSeconds = Double(hideAfterPausedMinutes * 60)
+        let delay = hideAfterSeconds - Date().timeIntervalSince(song.stateTimestamp)
+        guard delay > 0 else {
+            pauseVisibilityRevision += 1
+            return
+        }
+
+        let workItem = DispatchWorkItem {
+            pauseVisibilityRevision += 1
+        }
+        pauseHideWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 }
 
@@ -234,30 +264,33 @@ struct MeasurableNowPlayingContent: View {
     let maxCharactersPerLine: Int
     let scrollLongText: Bool
     let onSizeChange: (CGFloat) -> Void
+    @ObservedObject var configManager = ConfigManager.shared
+    var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
 
     var body: some View {
-        NowPlayingContent(
-            song: song,
-            showAlbumArt: showAlbumArt,
-            showArtist: showArtist,
-            showPauseIndicator: showPauseIndicator,
-            backgroundFillEnabled: backgroundFillEnabled,
-            backgroundFillSource: backgroundFillSource,
-            backgroundFillColorHex: backgroundFillColorHex,
-            maxCharactersPerLine: maxCharactersPerLine,
-            scrollLongText: scrollLongText
-        )
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .onAppear {
-                            onSizeChange(geometry.size.width)
-                        }
-                        .onChange(of: geometry.size.width) { _, newWidth in
-                            onSizeChange(newWidth)
-                        }
-                }
+        HStack(spacing: 8) {
+            if showAlbumArt {
+                AlbumArtView(song: song, showPauseIndicator: showPauseIndicator)
+            }
+            StaticSongTextView(
+                song: song,
+                showArtist: showArtist,
+                maxCharactersPerLine: maxCharactersPerLine
             )
+        }
+        .padding(.horizontal, foregroundHeight < 38 ? 0 : (foregroundHeight < 45 ? 8 : 12))
+        .frame(height: foregroundHeight < 45 ? NowPlayingWidgetLayout.capsuleHeight : NowPlayingWidgetLayout.compactHeight)
+        .background(
+            GeometryReader { geometry in
+                Color.clear
+                    .onAppear {
+                        onSizeChange(geometry.size.width)
+                    }
+                    .onChange(of: geometry.size.width) { _, newWidth in
+                        onSizeChange(newWidth)
+                    }
+            }
+        )
     }
 }
 
@@ -370,6 +403,43 @@ struct SongTextView: View {
     }
 }
 
+private struct StaticSongTextView: View {
+    let song: NowPlayingSong
+    let showArtist: Bool
+    let maxCharactersPerLine: Int
+    @ObservedObject var configManager = ConfigManager.shared
+    var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: -1) {
+            if foregroundHeight >= 30 {
+                Text(Self.truncated(song.title, maxCharacters: maxCharactersPerLine))
+                    .barikFont(size: 11, weight: .medium)
+                    .lineLimit(1)
+                if showArtist {
+                    Text(Self.truncated(song.artist, maxCharacters: maxCharactersPerLine))
+                        .barikFont(size: 10, weight: .regular)
+                        .lineLimit(1)
+                        .opacity(0.8)
+                }
+            } else {
+                Text(Self.truncated(showArtist ? song.artist + " — " + song.title : song.title, maxCharacters: maxCharactersPerLine))
+                    .barikFont(size: 12, weight: .regular)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.trailing, 2)
+        .transaction { transaction in
+            transaction.animation = nil
+        }
+    }
+
+    private static func truncated(_ text: String, maxCharacters: Int) -> String {
+        guard text.count > maxCharacters, maxCharacters > 2 else { return text }
+        return String(text.prefix(maxCharacters - 2)) + ".."
+    }
+}
+
 private struct WidgetTextLine: View {
     let text: String
     let maxCharacters: Int
@@ -436,7 +506,7 @@ private struct ScrollingTextLine: View {
                 }
             )
             .overlay(alignment: .leading) {
-                TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                TimelineView(.animation(minimumInterval: 1 / 15)) { context in
                     let cycleWidth = textWidth + separatorWidth
                     let shouldScroll = textWidth > containerWidth && cycleWidth > 0
                     let speed: CGFloat = 18
