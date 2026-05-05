@@ -135,6 +135,10 @@ final class ConfigManager: ObservableObject {
 
             [widgets.default.spaces]
             space.show-key = true        # show space number (or character, if you use AeroSpace)
+            space.display-mode = "classic" # classic, focused-strip
+            space.visual-style = "standard" # standard, rounded
+            space.show-outline = false
+            space.show-only-current-display-spaces = false
             space.show-inactive = true
             space.show-empty = true
             space.show-delete-button = true

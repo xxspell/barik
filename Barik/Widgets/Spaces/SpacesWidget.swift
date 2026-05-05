@@ -38,6 +38,8 @@ private extension NSScreen {
 }
 
 struct SpacesWidget: View {
+    let monitorID: String
+
     @EnvironmentObject var configProvider: ConfigProvider
     @ObservedObject var viewModel = SpacesViewModel.shared
 
@@ -47,22 +49,173 @@ struct SpacesWidget: View {
     private var config: ConfigData { configProvider.config }
     private var spaceConfig: ConfigData { config["space"]?.dictionaryValue ?? [:] }
     private var showInactiveSpaces: Bool { spaceConfig["show-inactive"]?.boolValue ?? true }
+    private var showOnlyCurrentDisplaySpaces: Bool { spaceConfig["show-only-current-display-spaces"]?.boolValue ?? false }
+    private var displayMode: SpacesDisplayMode {
+        SpacesDisplayMode(rawValue: spaceConfig["display-mode"]?.stringValue ?? SpacesDisplayMode.classic.rawValue) ?? .classic
+    }
+    private var visualStyle: SpacesVisualStyle {
+        SpacesVisualStyle(rawValue: spaceConfig["visual-style"]?.stringValue ?? SpacesVisualStyle.standard.rawValue) ?? .standard
+    }
+    private var showOutline: Bool { spaceConfig["show-outline"]?.boolValue ?? false }
+
+    private var providerFilteredSpaces: [AnySpace] {
+        guard showOnlyCurrentDisplaySpaces else { return viewModel.spaces }
+
+        let localSpaces = viewModel.spaces.filter { $0.monitorID == monitorID }
+        return localSpaces.isEmpty ? viewModel.spaces : localSpaces
+    }
 
     private var visibleSpaces: [AnySpace] {
-        guard !showInactiveSpaces else { return viewModel.spaces }
-        return viewModel.spaces.filter(\.isFocused)
+        guard !showInactiveSpaces else { return providerFilteredSpaces }
+        let filtered = providerFilteredSpaces.filter(\.isFocused)
+        return filtered.isEmpty ? providerFilteredSpaces.filter(\.isVisible) : filtered
+    }
+
+    private var focusedSpace: AnySpace? {
+        providerFilteredSpaces.first(where: \.isFocused)
+            ?? providerFilteredSpaces.first(where: \.isVisible)
+            ?? visibleSpaces.first
     }
 
     var body: some View {
         HStack(spacing: foregroundHeight < 30 ? 0 : 8) {
-            ForEach(visibleSpaces) { space in
-                SpaceView(space: space)
+            switch displayMode {
+            case .classic:
+                ForEach(visibleSpaces) { space in
+                    SpaceView(space: space, visualStyle: visualStyle, showOutline: showOutline)
+                }
+            case .focusedStrip:
+                CompactSpacesSelector(
+                    spaces: visibleSpaces,
+                    focusedSpaceID: focusedSpace?.id,
+                    visualStyle: visualStyle,
+                    showOutline: showOutline
+                )
+
+                if let focusedSpace, !focusedSpace.windows.isEmpty {
+                    CompactFocusedWindowsStrip(
+                        space: focusedSpace,
+                        visualStyle: visualStyle,
+                        showOutline: showOutline
+                    )
+                }
             }
         }
         .experimentalConfiguration(horizontalPadding: 5, cornerRadius: 10)
         .animation(.smooth(duration: 0.3), value: viewModel.spaces)
         .foregroundStyle(Color.foreground)
         .environmentObject(viewModel)
+    }
+}
+
+private struct CompactSpacesSelector: View {
+    @EnvironmentObject var viewModel: SpacesViewModel
+    @ObservedObject private var configManager = ConfigManager.shared
+
+    let spaces: [AnySpace]
+    let focusedSpaceID: String?
+    let visualStyle: SpacesVisualStyle
+    let showOutline: Bool
+
+    private var foregroundHeight: CGFloat {
+        configManager.config.experimental.foreground.resolveHeight()
+    }
+
+    private var itemSpacing: CGFloat {
+        foregroundHeight < 30 ? 1 : 2
+    }
+
+    private var itemMinWidth: CGFloat {
+        foregroundHeight < 30 ? 10 : 12
+    }
+
+    private var itemHorizontalPadding: CGFloat {
+        foregroundHeight < 30 ? 2 : 4
+    }
+
+    private var itemVerticalPadding: CGFloat {
+        foregroundHeight < 30 ? 2 : 3
+    }
+
+    private var containerHorizontalPadding: CGFloat {
+        foregroundHeight < 30 ? 3 : 5
+    }
+
+    private var containerVerticalPadding: CGFloat {
+        foregroundHeight < 30 ? 0 : 1
+    }
+
+    var body: some View {
+        HStack(spacing: itemSpacing) {
+            ForEach(spaces) { space in
+                Text(space.id)
+                    .barikTextStyle(.headline)
+                    .frame(minWidth: itemMinWidth)
+                    .padding(.horizontal, itemHorizontalPadding)
+                    .padding(.vertical, itemVerticalPadding)
+                    .background(space.id == focusedSpaceID ? Color.active : Color.clear)
+                    .clipShape(itemShape)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        viewModel.switchToSpace(space, needWindowFocus: true)
+                    }
+            }
+        }
+        .padding(.horizontal, containerHorizontalPadding)
+        .padding(.vertical, containerVerticalPadding)
+        .background(Color.noActive)
+        .clipShape(containerShape)
+        .overlay {
+            if showOutline && foregroundHeight >= 30 {
+                containerShape.stroke(Color.noActive, lineWidth: 1)
+            }
+        }
+    }
+
+    private var itemShape: AnyShape {
+        if visualStyle == .rounded {
+            return AnyShape(Capsule())
+        }
+        return AnyShape(RoundedRectangle(cornerRadius: foregroundHeight < 30 ? 0 : 7, style: .continuous))
+    }
+
+    private var containerShape: AnyShape {
+        if visualStyle == .rounded {
+            return AnyShape(Capsule())
+        }
+        return AnyShape(RoundedRectangle(cornerRadius: foregroundHeight < 30 ? 0 : 8, style: .continuous))
+    }
+}
+
+private struct CompactFocusedWindowsStrip: View {
+    let space: AnySpace
+    let visualStyle: SpacesVisualStyle
+    let showOutline: Bool
+    @ObservedObject private var configManager = ConfigManager.shared
+
+    private var foregroundHeight: CGFloat {
+        configManager.config.experimental.foreground.resolveHeight()
+    }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(space.windows) { window in
+                CompactWindowIconView(window: window, space: space, visualStyle: visualStyle)
+            }
+        }
+        .padding(.horizontal, foregroundHeight < 30 ? 1 : 3)
+        .overlay {
+            if showOutline && foregroundHeight >= 30 {
+                shape.stroke(Color.noActive, lineWidth: 1)
+            }
+        }
+    }
+
+    private var shape: AnyShape {
+        if visualStyle == .rounded {
+            return AnyShape(Capsule())
+        }
+        return AnyShape(RoundedRectangle(cornerRadius: foregroundHeight < 30 ? 0 : 8, style: .continuous))
     }
 }
 
@@ -81,6 +234,8 @@ private struct SpaceView: View {
     var showDeleteButton: Bool { spaceConfig["show-delete-button"]?.boolValue ?? true }
 
     let space: AnySpace
+    let visualStyle: SpacesVisualStyle
+    let showOutline: Bool
 
     @State var isHovered = false
 
@@ -97,22 +252,21 @@ private struct SpaceView: View {
             }
             HStack(spacing: 2) {
                 ForEach(space.windows) { window in
-                    WindowView(window: window, space: space)
+                    WindowView(window: window, space: space, visualStyle: visualStyle)
                 }
             }
             Spacer().frame(width: 10)
         }
         .frame(height: 30)
         .background(
-            foregroundHeight < 30 ?
-            (isFocused
-             ? Color.noActive
-             : Color.clear) :
-                (isFocused
-                 ? Color.active
-                 : isHovered ? Color.noActive : Color.noActive)
+            backgroundColor(isFocused: isFocused)
         )
-        .clipShape(RoundedRectangle(cornerRadius: foregroundHeight < 30 ? 0 : 8, style: .continuous))
+        .clipShape(spaceShape)
+        .overlay {
+            if showOutline && foregroundHeight >= 30 {
+                spaceShape.stroke(Color.noActive, lineWidth: 1)
+            }
+        }
         .shadow(color: .shadow, radius: foregroundHeight < 30 ? 0 : 2)
         .transition(.blurReplace)
         .overlay(alignment: .topTrailing) {
@@ -148,6 +302,25 @@ private struct SpaceView: View {
             && space.supportsDeletion
             && viewModel.canDeleteSpace(space)
     }
+
+    private var spaceShape: AnyShape {
+        if visualStyle == .rounded {
+            return AnyShape(Capsule())
+        }
+        return AnyShape(RoundedRectangle(cornerRadius: foregroundHeight < 30 ? 0 : 8, style: .continuous))
+    }
+
+    private func backgroundColor(isFocused: Bool) -> Color {
+        if foregroundHeight < 30 {
+            return isFocused ? Color.noActive : Color.clear
+        }
+
+        if visualStyle == .rounded {
+            return isFocused ? Color.active : Color.noActive.opacity(isHovered ? 1 : 0.92)
+        }
+
+        return isFocused ? Color.active : Color.noActive
+    }
 }
 
 /// This view shows a window and its icon.
@@ -176,6 +349,7 @@ private struct WindowView: View {
 
     let window: AnyWindow
     let space: AnySpace
+    let visualStyle: SpacesVisualStyle
 
     @State var isHovered = false
     @State private var iconFrame: CGRect = .zero
@@ -254,6 +428,78 @@ private struct WindowView: View {
     }
 }
 
+private struct CompactWindowIconView: View {
+    @EnvironmentObject var configProvider: ConfigProvider
+    @EnvironmentObject var viewModel: SpacesViewModel
+
+    var config: ConfigData { configProvider.config }
+    var windowConfig: ConfigData { config["window"]?.dictionaryValue ?? [:] }
+    var showHiddenWindows: Bool { windowConfig["show-hidden"]?.boolValue ?? false }
+    var showHoverTooltip: Bool { windowConfig["show-hover-tooltip"]?.boolValue ?? false }
+    var hoverTooltipTemplate: String {
+        windowConfig["hover-tooltip"]?.stringValue ?? "{app} ({pid})"
+    }
+    var iconDesaturationPercent: Double {
+        let rawValue = windowConfig["icon-desaturation"]?.intValue ?? 0
+        return Double(min(max(rawValue, 0), 100))
+    }
+
+    let window: AnyWindow
+    let space: AnySpace
+    let visualStyle: SpacesVisualStyle
+
+    @State private var isHovered = false
+    @State private var iconFrame: CGRect = .zero
+
+    var body: some View {
+        let size: CGFloat = 21
+
+        ZStack {
+            if let icon = window.appIcon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: size, height: size)
+                    .shadow(color: .iconShadow, radius: 2)
+            } else {
+                Image(systemName: "questionmark.circle")
+                    .resizable()
+                    .frame(width: size, height: size)
+            }
+        }
+        .background(ScreenRectReader(screenRect: $iconFrame))
+        .overlay(alignment: .topTrailing) {
+            if showHiddenWindows && window.isHidden {
+                HiddenWindowBadge()
+                    .offset(x: 2, y: -2)
+            }
+        }
+        .saturation(iconSaturation)
+        .opacity(iconOpacity)
+        .padding(.all, 2)
+        .background(isHovered || window.isFocused ? .selected : .clear)
+        .clipShape(iconShape)
+        .frame(height: 30)
+        .contentShape(Rectangle())
+        .animation(.smooth, value: isHovered)
+        .onTapGesture {
+            viewModel.switchToSpace(space)
+            usleep(100_000)
+            viewModel.switchToWindow(window)
+        }
+        .onHover { value in
+            isHovered = value
+            if value {
+                HoverCardPanelController.shared.show(
+                    anchorRect: iconFrame,
+                    text: hoverTooltipText
+                )
+            } else {
+                HoverCardPanelController.shared.hide()
+            }
+        }
+    }
+}
+
 private extension WindowView {
     func iconOpacity(spaceIsFocused: Bool) -> Double {
         var opacity = spaceIsFocused && !window.isFocused ? 0.5 : 1
@@ -287,6 +533,56 @@ private extension WindowView {
             .replacingOccurrences(of: "  ", with: " ")
             .replacingOccurrences(of: "()", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var iconShape: AnyShape {
+        if visualStyle == .rounded {
+            return AnyShape(Capsule())
+        }
+        return AnyShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private extension CompactWindowIconView {
+    var iconOpacity: Double {
+        var opacity = window.isFocused ? 1 : 0.82
+        if window.isHidden {
+            opacity *= 0.72
+        }
+        return opacity
+    }
+
+    var iconSaturation: Double {
+        let normalizedDesaturation = iconDesaturationPercent / 100.0
+        return max(0, 1.0 - pow(normalizedDesaturation, 2))
+    }
+
+    var hoverTooltipText: String {
+        guard showHoverTooltip else { return "" }
+
+        let replacements: [String: String] = [
+            "{app}": window.appName ?? "",
+            "{title}": window.title,
+            "{pid}": window.pid.map(String.init) ?? "",
+            "{id}": String(window.id),
+            "{state}": window.isHidden ? "hidden" : "visible",
+        ]
+
+        let text = replacements.reduce(into: hoverTooltipTemplate) { partial, entry in
+            partial = partial.replacingOccurrences(of: entry.key, with: entry.value)
+        }
+
+        return text
+            .replacingOccurrences(of: "  ", with: " ")
+            .replacingOccurrences(of: "()", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var iconShape: AnyShape {
+        if visualStyle == .rounded {
+            return AnyShape(Capsule())
+        }
+        return AnyShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

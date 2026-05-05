@@ -3,6 +3,7 @@ import CoreGraphics
 
 struct MonitorDescriptor: Identifiable {
     let id: String
+    let displayUUID: String?
     let name: String
     let frame: CGRect
     let safeAreaInsets: NSEdgeInsets
@@ -21,12 +22,21 @@ struct MonitorDescriptor: Identifiable {
 extension NSScreen {
     var monitorDescriptor: MonitorDescriptor {
         let screenNumberKey = NSDeviceDescriptionKey("NSScreenNumber")
-        let screenNumber =
-            (deviceDescription[screenNumberKey] as? NSNumber)?.stringValue
-            ?? "unknown"
+        let screenIDNumber = deviceDescription[screenNumberKey] as? NSNumber
+        let screenNumber = screenIDNumber?.stringValue ?? "unknown"
+        let displayUUID: String?
+        if let screenIDNumber,
+           let resolvedUUID = CGDisplayCreateUUIDFromDisplayID(
+                CGDirectDisplayID(screenIDNumber.uint32Value)
+           )?.takeRetainedValue() {
+            displayUUID = CFUUIDCreateString(nil, resolvedUUID) as String
+        } else {
+            displayUUID = nil
+        }
 
         return MonitorDescriptor(
             id: screenNumber,
+            displayUUID: displayUUID,
             name: localizedName,
             frame: frame,
             safeAreaInsets: safeAreaInsets,

@@ -2084,11 +2084,43 @@ private struct TimeSettingsView: View {
 }
 
 private struct SpacesSettingsView: View {
+    private enum SpacesDisplayModeOption: String, CaseIterable {
+        case classic
+        case focusedStrip = "focused-strip"
+
+        var title: String {
+            switch self {
+            case .classic:
+                settingsLocalized("settings.spaces.field.display_mode.option.classic")
+            case .focusedStrip:
+                settingsLocalized("settings.spaces.field.display_mode.option.focused_strip")
+            }
+        }
+    }
+
+    private enum SpacesVisualStyleOption: String, CaseIterable {
+        case standard
+        case rounded
+
+        var title: String {
+            switch self {
+            case .standard:
+                settingsLocalized("settings.spaces.field.visual_style.option.standard")
+            case .rounded:
+                settingsLocalized("settings.spaces.field.visual_style.option.rounded")
+            }
+        }
+    }
+
     @ObservedObject private var configManager = ConfigManager.shared
     @ObservedObject private var settingsStore = SettingsStore.shared
     @ObservedObject private var spacesViewModel = SpacesViewModel.shared
 
     @State private var showSpaceKey = true
+    @State private var displayMode = SpacesDisplayModeOption.classic
+    @State private var visualStyle = SpacesVisualStyleOption.standard
+    @State private var showOutline = false
+    @State private var showOnlyCurrentDisplaySpaces = false
     @State private var showInactiveSpaces = true
     @State private var showEmptySpaces = true
     @State private var showDeleteButton = true
@@ -2128,6 +2160,58 @@ private struct SpacesSettingsView: View {
                     isOn: bindingForBool(
                         $showSpaceKey,
                         field: .init(tablePath: spacesTable, key: "space.show-key")
+                    )
+                )
+
+                SegmentedPickerRow(
+                    title: settingsLocalized("settings.spaces.field.display_mode.title"),
+                    description: settingsLocalized("settings.spaces.field.display_mode.description"),
+                    selection: Binding(
+                        get: { displayMode },
+                        set: { newValue in
+                            displayMode = newValue
+                            markPendingStringWrite(newValue.rawValue, for: .init(tablePath: spacesTable, key: "space.display-mode"))
+                            Task { @MainActor in
+                                settingsStore.setString(newValue.rawValue, for: .init(tablePath: spacesTable, key: "space.display-mode"))
+                            }
+                        }
+                    ),
+                    options: SpacesDisplayModeOption.allCases,
+                    titleForOption: { $0.title }
+                )
+
+                SegmentedPickerRow(
+                    title: settingsLocalized("settings.spaces.field.visual_style.title"),
+                    description: settingsLocalized("settings.spaces.field.visual_style.description"),
+                    selection: Binding(
+                        get: { visualStyle },
+                        set: { newValue in
+                            visualStyle = newValue
+                            markPendingStringWrite(newValue.rawValue, for: .init(tablePath: spacesTable, key: "space.visual-style"))
+                            Task { @MainActor in
+                                settingsStore.setString(newValue.rawValue, for: .init(tablePath: spacesTable, key: "space.visual-style"))
+                            }
+                        }
+                    ),
+                    options: SpacesVisualStyleOption.allCases,
+                    titleForOption: { $0.title }
+                )
+
+                ToggleRow(
+                    title: settingsLocalized("settings.spaces.field.show_outline.title"),
+                    description: settingsLocalized("settings.spaces.field.show_outline.description"),
+                    isOn: bindingForBool(
+                        $showOutline,
+                        field: .init(tablePath: spacesTable, key: "space.show-outline")
+                    )
+                )
+
+                ToggleRow(
+                    title: settingsLocalized("settings.spaces.field.show_only_current_display_spaces.title"),
+                    description: settingsLocalized("settings.spaces.field.show_only_current_display_spaces.description"),
+                    isOn: bindingForBool(
+                        $showOnlyCurrentDisplaySpaces,
+                        field: .init(tablePath: spacesTable, key: "space.show-only-current-display-spaces")
                     )
                 )
 
@@ -2287,6 +2371,10 @@ private struct SpacesSettingsView: View {
         isApplyingConfigSnapshot = true
 
         let showSpaceKeyField = SettingsFieldKey(tablePath: spacesTable, key: "space.show-key")
+        let displayModeField = SettingsFieldKey(tablePath: spacesTable, key: "space.display-mode")
+        let visualStyleField = SettingsFieldKey(tablePath: spacesTable, key: "space.visual-style")
+        let showOutlineField = SettingsFieldKey(tablePath: spacesTable, key: "space.show-outline")
+        let showOnlyCurrentDisplaySpacesField = SettingsFieldKey(tablePath: spacesTable, key: "space.show-only-current-display-spaces")
         let showInactiveSpacesField = SettingsFieldKey(tablePath: spacesTable, key: "space.show-inactive")
         let showEmptySpacesField = SettingsFieldKey(tablePath: spacesTable, key: "space.show-empty")
         let showDeleteButtonField = SettingsFieldKey(tablePath: spacesTable, key: "space.show-delete-button")
@@ -2299,6 +2387,30 @@ private struct SpacesSettingsView: View {
         let alwaysDisplayAppNamesField = SettingsFieldKey(tablePath: spacesTable, key: "window.title.always-display-app-name-for")
 
         showSpaceKey = resolvedBoolValue(for: showSpaceKeyField, incoming: settingsStore.boolValue(showSpaceKeyField, fallback: true), current: showSpaceKey)
+        displayMode = SpacesDisplayModeOption(
+            rawValue: resolvedStringValue(
+                for: displayModeField,
+                incoming: settingsStore.stringValue(displayModeField, fallback: SpacesDisplayModeOption.classic.rawValue),
+                current: displayMode.rawValue
+            )
+        ) ?? .classic
+        visualStyle = SpacesVisualStyleOption(
+            rawValue: resolvedStringValue(
+                for: visualStyleField,
+                incoming: settingsStore.stringValue(visualStyleField, fallback: SpacesVisualStyleOption.standard.rawValue),
+                current: visualStyle.rawValue
+            )
+        ) ?? .standard
+        showOutline = resolvedBoolValue(
+            for: showOutlineField,
+            incoming: settingsStore.boolValue(showOutlineField, fallback: false),
+            current: showOutline
+        )
+        showOnlyCurrentDisplaySpaces = resolvedBoolValue(
+            for: showOnlyCurrentDisplaySpacesField,
+            incoming: settingsStore.boolValue(showOnlyCurrentDisplaySpacesField, fallback: false),
+            current: showOnlyCurrentDisplaySpaces
+        )
         showInactiveSpaces = resolvedBoolValue(for: showInactiveSpacesField, incoming: settingsStore.boolValue(showInactiveSpacesField, fallback: true), current: showInactiveSpaces)
         showEmptySpaces = resolvedBoolValue(for: showEmptySpacesField, incoming: settingsStore.boolValue(showEmptySpacesField, fallback: true), current: showEmptySpaces)
         showDeleteButton = resolvedBoolValue(for: showDeleteButtonField, incoming: settingsStore.boolValue(showDeleteButtonField, fallback: true), current: showDeleteButton)
@@ -2449,12 +2561,20 @@ private struct SpacesSettingsView: View {
     private func resetSpaceDefaults() {
         isApplyingConfigSnapshot = true
         showSpaceKey = true
+        displayMode = .classic
+        visualStyle = .standard
+        showOutline = false
+        showOnlyCurrentDisplaySpaces = false
         showInactiveSpaces = true
         showEmptySpaces = true
         showDeleteButton = true
         isApplyingConfigSnapshot = false
 
         settingsStore.setBool(true, for: .init(tablePath: spacesTable, key: "space.show-key"))
+        settingsStore.setString("classic", for: .init(tablePath: spacesTable, key: "space.display-mode"))
+        settingsStore.setString("standard", for: .init(tablePath: spacesTable, key: "space.visual-style"))
+        settingsStore.setBool(false, for: .init(tablePath: spacesTable, key: "space.show-outline"))
+        settingsStore.setBool(false, for: .init(tablePath: spacesTable, key: "space.show-only-current-display-spaces"))
         settingsStore.setBool(true, for: .init(tablePath: spacesTable, key: "space.show-inactive"))
         settingsStore.setBool(true, for: .init(tablePath: spacesTable, key: "space.show-empty"))
         settingsStore.setBool(true, for: .init(tablePath: spacesTable, key: "space.show-delete-button"))

@@ -137,7 +137,7 @@ struct MenuBarView: View {
 
         switch item.id {
         case "default.spaces":
-            SpacesWidget().environmentObject(config)
+            SpacesWidget(monitorID: monitor.id).environmentObject(config)
 
         case "default.network":
             NetworkWidget().environmentObject(config)

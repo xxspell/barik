@@ -27,6 +27,7 @@ struct MenuBarPopupView<Content: View>: View {
         widgetRect: CGRect = .zero,
         monitor: MonitorDescriptor = MonitorDescriptor(
             id: "preview",
+            displayUUID: nil,
             name: "Preview",
             frame: .zero,
             safeAreaInsets: .init(),

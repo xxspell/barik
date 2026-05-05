@@ -89,10 +89,34 @@ struct YabaiSpace: SpaceModel {
     typealias WindowType = YabaiWindow
     let id: Int
     var isFocused: Bool
+    let displayId: Int
+    let isVisible: Bool
+    var monitorID: String? = nil
     var windows: [YabaiWindow] = []
 
     enum CodingKeys: String, CodingKey {
         case id = "index"
         case isFocused = "has-focus"
+        case displayId = "display"
+        case isVisible = "is-visible"
     }
+}
+
+struct YabaiDisplay: Decodable {
+    let id: Int
+    let uuid: String?
+    let frame: YabaiDisplayFrame
+
+    enum CodingKeys: String, CodingKey {
+        case id = "index"
+        case uuid
+        case frame
+    }
+}
+
+struct YabaiDisplayFrame: Decodable {
+    let x: Double
+    let y: Double
+    let w: Double
+    let h: Double
 }

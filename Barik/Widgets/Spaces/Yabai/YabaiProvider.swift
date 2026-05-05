@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import AppKit
 
 class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider, DeletableSpacesProvider {
     typealias SpaceType = YabaiSpace
@@ -54,6 +55,44 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider, DeletableSp
         } catch {
             logger.error("Decode yabai spaces error: \(error.localizedDescription)")
             return nil
+        }
+    }
+
+    private func fetchDisplays() -> [YabaiDisplay]? {
+        guard
+            let data = runYabaiCommand(arguments: ["-m", "query", "--displays"])
+        else {
+            return nil
+        }
+        let decoder = JSONDecoder()
+        do {
+            return try decoder.decode([YabaiDisplay].self, from: data)
+        } catch {
+            logger.error("Decode yabai displays error: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func monitorMappingByDisplayID(displays: [YabaiDisplay]) -> [Int: String] {
+        let monitors = NSScreen.screens.map(\.monitorDescriptor)
+
+        return displays.reduce(into: [Int: String]()) { result, display in
+            let matchedMonitorByUUID = display.uuid.flatMap { uuid in
+                monitors.first { monitor in
+                    monitor.displayUUID?.caseInsensitiveCompare(uuid) == .orderedSame
+                }
+            }
+
+            let matchedMonitor = matchedMonitorByUUID ?? monitors.first { monitor in
+                abs(monitor.frame.minX - display.frame.x) < 1
+                    && abs(monitor.frame.minY - display.frame.y) < 1
+                    && abs(monitor.frame.width - display.frame.w) < 1
+                    && abs(monitor.frame.height - display.frame.h) < 1
+            }
+
+            if let matchedMonitor {
+                result[display.id] = matchedMonitor.id
+            }
         }
     }
 
@@ -124,6 +163,8 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider, DeletableSp
         guard let spaces = fetchSpaces(), let windows = fetchWindows() else {
             return nil
         }
+        let displays = fetchDisplays() ?? []
+        let displayMonitorMap = monitorMappingByDisplayID(displays: displays)
 
         updateWindowCaches(with: windows)
         let mergedWindows = mergeWindows(liveWindows: windows)
@@ -150,7 +191,8 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider, DeletableSp
         }
         logger.debug("getSpacesWithWindows() — filteredWindows=\(filteredWindows.count)")
         var spaceDict: [Int: YabaiSpace] = [:]
-        for space in spaces {
+        for var space in spaces {
+            space.monitorID = displayMonitorMap[space.displayId]
             if spaceDict.updateValue(space, forKey: space.id) != nil {
                 logger.error(
                     "getSpacesWithWindows() — duplicate yabai space id=\(space.id, privacy: .public); keeping latest value"

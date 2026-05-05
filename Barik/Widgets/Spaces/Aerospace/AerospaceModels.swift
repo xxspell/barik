@@ -44,6 +44,8 @@ struct AeroSpace: SpaceModel {
     let workspace: String
     var id: String { workspace }
     var isFocused: Bool = false
+    var isVisible: Bool = false
+    var monitorID: String? = nil
     var windows: [AeroWindow] = []
 
     enum CodingKeys: String, CodingKey {
@@ -55,10 +57,12 @@ struct AeroSpace: SpaceModel {
         workspace = try container.decode(String.self, forKey: .workspace)
     }
 
-    init(workspace: String, isFocused: Bool = false, windows: [AeroWindow] = [])
+    init(workspace: String, isFocused: Bool = false, isVisible: Bool = false, monitorID: String? = nil, windows: [AeroWindow] = [])
     {
         self.workspace = workspace
         self.isFocused = isFocused
+        self.isVisible = isVisible
+        self.monitorID = monitorID
         self.windows = windows
     }
 }

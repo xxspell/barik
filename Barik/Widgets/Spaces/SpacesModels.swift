@@ -1,5 +1,15 @@
 import AppKit
 
+enum SpacesDisplayMode: String, CaseIterable {
+    case classic
+    case focusedStrip = "focused-strip"
+}
+
+enum SpacesVisualStyle: String, CaseIterable {
+    case standard
+    case rounded
+}
+
 protocol SpaceModel: Identifiable, Equatable, Codable {
     associatedtype WindowType: WindowModel
     var isFocused: Bool { get set }
@@ -61,19 +71,27 @@ struct AnyWindow: Identifiable, Equatable {
 struct AnySpace: Identifiable, Equatable {
     let id: String
     let isFocused: Bool
+    let isVisible: Bool
     let windows: [AnyWindow]
     let supportsDeletion: Bool
+    let monitorID: String?
 
     init<S: SpaceModel>(_ space: S) {
         if let aero = space as? AeroSpace {
             self.id = aero.workspace
             self.supportsDeletion = false
+            self.isVisible = aero.isVisible
+            self.monitorID = aero.monitorID
         } else if let yabai = space as? YabaiSpace {
             self.id = String(yabai.id)
             self.supportsDeletion = true
+            self.isVisible = yabai.isVisible
+            self.monitorID = yabai.monitorID
         } else {
             self.id = "0"
             self.supportsDeletion = false
+            self.isVisible = false
+            self.monitorID = nil
         }
         self.isFocused = space.isFocused
         self.windows = space.windows.map { AnyWindow($0) }
@@ -81,6 +99,8 @@ struct AnySpace: Identifiable, Equatable {
 
     static func == (lhs: AnySpace, rhs: AnySpace) -> Bool {
         return lhs.id == rhs.id && lhs.isFocused == rhs.isFocused
+            && lhs.isVisible == rhs.isVisible
+            && lhs.monitorID == rhs.monitorID
             && lhs.windows == rhs.windows
     }
 }
