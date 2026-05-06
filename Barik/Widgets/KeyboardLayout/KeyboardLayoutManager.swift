@@ -23,7 +23,13 @@ final class KeyboardLayoutManager: ObservableObject {
         category: "KeyboardLayoutManager"
     )
     private var sourceChangeObserver: NSObjectProtocol?
-    private var pendingRefreshWorkItem: DispatchWorkItem?
+    private var pendingRefreshWorkItems: [DispatchWorkItem] = []
+    private let notificationRefreshDelays: [DispatchTimeInterval] = [
+        .milliseconds(0),
+        .milliseconds(45),
+        .milliseconds(140),
+        .milliseconds(280),
+    ]
 
     private init() {
         logger.debug("KeyboardLayoutManager init")
@@ -32,7 +38,9 @@ final class KeyboardLayoutManager: ObservableObject {
     }
 
     deinit {
-        pendingRefreshWorkItem?.cancel()
+        MainActor.assumeIsolated {
+            cancelPendingRefreshes()
+        }
         if let sourceChangeObserver {
             DistributedNotificationCenter.default().removeObserver(
                 sourceChangeObserver)
@@ -42,15 +50,26 @@ final class KeyboardLayoutManager: ObservableObject {
     func refresh() {
         let currentSource = Self.currentSelectedSource()
         let sources = Self.fetchSelectableSources(selectedID: currentSource?.id)
-
-        availableSources = sources
-        self.currentSource =
+        let resolvedCurrentSource =
             currentSource
             ?? sources.first(where: { $0.isSelected })
             ?? sources.first
-        logger.debug(
-            "refresh() — sources=\(sources.count, privacy: .public) current=\(self.currentSource?.localizedName ?? "nil", privacy: .public)"
-        )
+
+        let sourcesChanged = availableSources != sources
+        let currentChanged = self.currentSource != resolvedCurrentSource
+
+        if sourcesChanged {
+            availableSources = sources
+        }
+        if currentChanged {
+            self.currentSource = resolvedCurrentSource
+        }
+
+        if sourcesChanged || currentChanged {
+            logger.debug(
+                "refresh() — sources=\(sources.count, privacy: .public) current=\(resolvedCurrentSource?.localizedName ?? "nil", privacy: .public)"
+            )
+        }
     }
 
     func selectInputSource(id: String) {
@@ -69,8 +88,13 @@ final class KeyboardLayoutManager: ObservableObject {
             return
         }
 
+        let selectedModel = Self.inputSourceModel(for: source, isSelected: true)
+        if let selectedModel {
+            applyOptimisticSelection(selectedModel)
+        }
+
         logger.info("selectInputSource() — switched to id=\(id, privacy: .public)")
-        refresh()
+        scheduleRefreshAfterNotification()
     }
 
     private func observeInputSourceChanges() {
@@ -93,18 +117,38 @@ final class KeyboardLayoutManager: ObservableObject {
     }
 
     private func scheduleRefreshAfterNotification() {
-        pendingRefreshWorkItem?.cancel()
+        cancelPendingRefreshes()
 
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.logger.debug("Processing coalesced input source refresh")
-            self?.refresh()
+        for delay in notificationRefreshDelays {
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.logger.debug("Processing keyboard input source refresh")
+                self?.refresh()
+            }
+
+            pendingRefreshWorkItems.append(workItem)
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + delay,
+                execute: workItem
+            )
         }
+    }
 
-        pendingRefreshWorkItem = workItem
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + .milliseconds(120),
-            execute: workItem
-        )
+    private func cancelPendingRefreshes() {
+        pendingRefreshWorkItems.forEach { $0.cancel() }
+        pendingRefreshWorkItems.removeAll()
+    }
+
+    private func applyOptimisticSelection(_ selectedModel: KeyboardInputSource) {
+        currentSource = selectedModel
+        availableSources = availableSources.map { source in
+            KeyboardInputSource(
+                id: source.id,
+                localizedName: source.localizedName,
+                shortLabel: source.shortLabel,
+                languages: source.languages,
+                isSelected: source.id == selectedModel.id
+            )
+        }
     }
 
     private static func fetchSelectableSources(selectedID: String?) -> [KeyboardInputSource] {
