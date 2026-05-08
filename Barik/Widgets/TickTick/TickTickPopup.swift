@@ -40,6 +40,17 @@ struct TickTickPopup: View {
     @State private var highlightedTaskID: String?
     @State private var highlightedHabitID: String?
 
+    private var popupWidth: CGFloat {
+        switch viewMode {
+        case .tasks:
+            return 540
+        case .matrix:
+            return 860
+        case .habits:
+            return 560
+        }
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             VStack(spacing: 0) {
@@ -88,7 +99,7 @@ struct TickTickPopup: View {
                 handlePopupFocusIfNeeded(using: proxy)
             }
         }
-        .frame(width: 480)
+        .frame(width: popupWidth)
         .background(Color(red: 0.09, green: 0.09, blue: 0.11))
     }
 
@@ -265,7 +276,7 @@ struct TickTickPopup: View {
                         .barikPopupFont(size: 11)
                         .foregroundStyle(.white)
                         .textFieldStyle(.plain)
-                        .frame(width: 90)
+                        .frame(width: 130)
                     if !searchText.isEmpty {
                         Button(action: { searchText = "" }) {
                             Image(systemName: "xmark.circle.fill")
@@ -587,11 +598,11 @@ struct TickTickPopup: View {
     }
 
     private func isUrgent(_ task: TickTickTask) -> Bool {
-        // TickTick matrix urgency is not derived from due dates reliably.
-        // Until we decode the actual quadrant/source field from the private API,
-        // showing due-date-based urgency places tasks into the wrong quadrants.
-        _ = task
-        return false
+        guard let dueDate = task.dueDate else { return false }
+        // Match TickTick's matrix behavior used in the user's setup:
+        // overdue items stay in the non-urgent quadrants, while only
+        // tasks due today are treated as urgent.
+        return Calendar.current.isDateInToday(dueDate)
     }
 
     private func isImportant(_ task: TickTickTask) -> Bool {
