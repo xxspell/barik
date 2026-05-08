@@ -45,6 +45,7 @@ struct PomodoroPopup: View {
     @EnvironmentObject var configProvider: ConfigProvider
     @ObservedObject private var manager = PomodoroManager.shared
     @ObservedObject private var tickTickManager = TickTickManager.shared
+    @ObservedObject private var configManager = ConfigManager.shared
 
     @State private var selectedTab: PomodoroPopupTab = .timer
     @State private var loginUsername: String = ""
@@ -60,6 +61,31 @@ struct PomodoroPopup: View {
         case .idle:
             return Color(red: 1.0, green: 0.42, blue: 0.33)
         }
+    }
+
+    private var usesCustomPopupFont: Bool {
+        let foreground = configManager.config.experimental.foreground
+        return foreground.applyFontToPopups && !(foreground.fontFamily?.isEmpty ?? true)
+    }
+
+    private var popupWidth: CGFloat {
+        usesCustomPopupFont ? 486 : 440
+    }
+
+    private var chromeWeight: Font.Weight {
+        usesCustomPopupFont ? .medium : .semibold
+    }
+
+    private var secondaryWeight: Font.Weight {
+        usesCustomPopupFont ? .regular : .medium
+    }
+
+    private var controlCornerRadius: CGFloat {
+        usesCustomPopupFont ? 12 : 10
+    }
+
+    private var compactButtonSize: CGFloat {
+        usesCustomPopupFont ? 32 : 30
     }
 
     var body: some View {
@@ -82,10 +108,10 @@ struct PomodoroPopup: View {
                         statsContent
                     }
                 }
-                .padding(18)
+                .padding(usesCustomPopupFont ? 20 : 18)
             }
         }
-        .frame(width: 440)
+        .frame(width: popupWidth)
         .background(Color(red: 0.09, green: 0.09, blue: 0.11))
         .onAppear {
             manager.popupPresented()
@@ -98,7 +124,7 @@ struct PomodoroPopup: View {
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: usesCustomPopupFont ? 14 : 12) {
             ZStack {
                 Circle()
                     .fill(accentColor.opacity(0.15))
@@ -114,77 +140,81 @@ struct PomodoroPopup: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(String(localized: "pomodoro.title"))
-                    .barikPopupFont(size: 16, weight: .semibold)
+                    .barikPopupFont(size: 16, weight: chromeWeight)
                     .foregroundStyle(.white)
 
                 Text(manager.phase.title)
-                    .barikPopupFont(size: 11, weight: .medium)
+                    .barikPopupFont(size: 11, weight: secondaryWeight)
                     .foregroundStyle(.white.opacity(0.58))
+                    .lineLimit(1)
             }
 
             Spacer()
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text(manager.effectiveIntegrationMode == .ticktick ? String(localized: "pomodoro.sync.ticktick") : String(localized: "pomodoro.sync.local_timer"))
-                    .barikPopupFont(size: 11, weight: .semibold)
+                    .barikPopupFont(size: 11, weight: chromeWeight)
                     .foregroundStyle(.white.opacity(0.9))
+                    .multilineTextAlignment(.trailing)
 
                 Text(manager.effectiveIntegrationMode == .ticktick ? String(localized: "pomodoro.sync.private_api") : String(localized: "pomodoro.sync.works_offline"))
-                    .barikPopupFont(size: 10, weight: .medium)
+                    .barikPopupFont(size: 10, weight: secondaryWeight)
                     .foregroundStyle(.white.opacity(0.45))
+                    .multilineTextAlignment(.trailing)
             }
+            .frame(minWidth: usesCustomPopupFont ? 126 : 110, alignment: .trailing)
 
             Button {
                 manager.refreshManually()
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .barikPopupFont(size: 12, weight: .semibold)
+                    .barikPopupFont(size: 12, weight: chromeWeight)
                     .foregroundStyle(.white.opacity(0.78))
-                    .frame(width: 30, height: 30)
+                    .frame(width: compactButtonSize, height: compactButtonSize)
                     .background(Color.white.opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: controlCornerRadius, style: .continuous))
             }
             .buttonStyle(.plain)
 
             RoutedSettingsLink(section: .pomodoro) {
                 Image(systemName: "gearshape.fill")
-                    .barikPopupFont(size: 12, weight: .semibold)
+                    .barikPopupFont(size: 12, weight: chromeWeight)
                     .foregroundStyle(.white.opacity(0.78))
-                    .frame(width: 30, height: 30)
+                    .frame(width: compactButtonSize, height: compactButtonSize)
                     .background(Color.white.opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: controlCornerRadius, style: .continuous))
             }
             .buttonStyle(.plain)
         }
-        .padding(18)
+        .padding(usesCustomPopupFont ? 20 : 18)
     }
 
     private var tabs: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: usesCustomPopupFont ? 10 : 8) {
             ForEach(PomodoroPopupTab.allCases, id: \.rawValue) { tab in
                 Button {
                     selectedTab = tab
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: usesCustomPopupFont ? 7 : 6) {
                         Image(systemName: tab.icon)
-                            .barikPopupFont(size: 11, weight: .semibold)
+                            .barikPopupFont(size: 11, weight: chromeWeight)
                         Text(tab.title)
-                            .barikPopupFont(size: 11, weight: .semibold)
+                            .barikPopupFont(size: 11, weight: chromeWeight)
                     }
                     .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.45))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, usesCustomPopupFont ? 14 : 12)
+                    .padding(.vertical, usesCustomPopupFont ? 9 : 8)
                     .frame(maxWidth: .infinity)
                     .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        RoundedRectangle(cornerRadius: controlCornerRadius, style: .continuous)
                             .fill(selectedTab == tab ? Color.white.opacity(0.1) : Color.clear)
                     )
-                    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: controlCornerRadius, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, usesCustomPopupFont ? 20 : 18)
         .padding(.vertical, 12)
     }
 
@@ -241,13 +271,13 @@ struct PomodoroPopup: View {
                         }
 
                         Text(tickTickManager.isLoading ? String(localized: "pomodoro.signin.signing_in") : String(localized: "pomodoro.signin.sign_in"))
-                            .barikPopupFont(size: 12, weight: .semibold)
+                            .barikPopupFont(size: 12, weight: chromeWeight)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                     .background(accentColor.opacity(0.92))
                     .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: controlCornerRadius, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .disabled(loginUsername.isEmpty || loginPassword.isEmpty || tickTickManager.isLoading)
@@ -307,7 +337,7 @@ struct PomodoroPopup: View {
                         .foregroundStyle(.white)
 
                     Text(manager.phase.title)
-                        .barikPopupFont(size: 12, weight: .medium)
+                        .barikPopupFont(size: 12, weight: secondaryWeight)
                         .foregroundStyle(.white.opacity(0.6))
                 }
             }
@@ -340,7 +370,7 @@ struct PomodoroPopup: View {
     private var durationControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(String(localized: "pomodoro.durations.title"))
-                .barikPopupFont(size: 12, weight: .semibold)
+                .barikPopupFont(size: 12, weight: chromeWeight)
                 .foregroundStyle(.white.opacity(0.82))
 
             HStack(spacing: 10) {
@@ -370,7 +400,7 @@ struct PomodoroPopup: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(String(localized: "pomodoro.task_context.title"))
-                    .barikPopupFont(size: 12, weight: .semibold)
+                    .barikPopupFont(size: 12, weight: chromeWeight)
                     .foregroundStyle(.white.opacity(0.82))
 
                 Spacer()
@@ -384,7 +414,7 @@ struct PomodoroPopup: View {
                             Image(systemName: "xmark.circle.fill")
                             Text(String(localized: "pomodoro.action.clear"))
                         }
-                        .barikPopupFont(size: 10, weight: .semibold)
+                        .barikPopupFont(size: 10, weight: chromeWeight)
                         .foregroundStyle(.white.opacity(0.75))
                     }
                     .buttonStyle(.plain)
@@ -395,16 +425,16 @@ struct PomodoroPopup: View {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
-                        .barikPopupFont(size: 11, weight: .semibold)
+                        .barikPopupFont(size: 11, weight: chromeWeight)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(manager.selectedTaskTitle)
-                            .barikPopupFont(size: 11, weight: .semibold)
+                            .barikPopupFont(size: 11, weight: chromeWeight)
                             .foregroundStyle(.white)
                             .lineLimit(1)
 
                         Text(manager.selectedTaskID == nil ? String(localized: "pomodoro.task_context.text_context") : String(localized: "pomodoro.task_context.bound_to_ticktick"))
-                            .barikPopupFont(size: 10, weight: .medium)
+                            .barikPopupFont(size: 10, weight: secondaryWeight)
                             .foregroundStyle(.white.opacity(0.45))
                     }
 
@@ -426,12 +456,12 @@ struct PomodoroPopup: View {
                         Spacer()
                         Image(systemName: isTaskPickerExpanded ? "chevron.up" : "chevron.down")
                     }
-                    .barikPopupFont(size: 11, weight: .semibold)
+                    .barikPopupFont(size: 11, weight: chromeWeight)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .background(Color.white.opacity(0.07))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: controlCornerRadius, style: .continuous))
                 }
                 .buttonStyle(.plain)
 
@@ -456,7 +486,7 @@ struct PomodoroPopup: View {
 
                     if taskSuggestions.isEmpty {
                         Text(String(localized: "pomodoro.task_picker.empty"))
-                            .barikPopupFont(size: 11, weight: .medium)
+                            .barikPopupFont(size: 11, weight: secondaryWeight)
                             .foregroundStyle(.white.opacity(0.35))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 4)
@@ -471,12 +501,12 @@ struct PomodoroPopup: View {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text(task.title)
-                                                .barikPopupFont(size: 11, weight: .semibold)
+                                                .barikPopupFont(size: 11, weight: chromeWeight)
                                                 .foregroundStyle(.white)
                                                 .lineLimit(1)
 
                                             Text(projectName(for: task))
-                                                .barikPopupFont(size: 10, weight: .medium)
+                                                .barikPopupFont(size: 10, weight: secondaryWeight)
                                                 .foregroundStyle(.white.opacity(0.45))
                                                 .lineLimit(1)
                                         }
@@ -507,13 +537,13 @@ struct PomodoroPopup: View {
     private var noteCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(String(localized: "pomodoro.note.title"))
-                .barikPopupFont(size: 12, weight: .semibold)
+                .barikPopupFont(size: 12, weight: chromeWeight)
                 .foregroundStyle(.white.opacity(0.82))
 
             ZStack(alignment: .topLeading) {
                 if manager.noteDraft.isEmpty {
                     Text(String(localized: "pomodoro.note.placeholder"))
-                        .barikPopupFont(size: 11, weight: .medium)
+                        .barikPopupFont(size: 11, weight: secondaryWeight)
                         .foregroundStyle(.white.opacity(0.25))
                         .padding(.top, 8)
                         .padding(.leading, 5)
@@ -538,7 +568,7 @@ struct PomodoroPopup: View {
     private var actionsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(String(localized: "pomodoro.actions.title"))
-                .barikPopupFont(size: 12, weight: .semibold)
+                .barikPopupFont(size: 12, weight: chromeWeight)
                 .foregroundStyle(.white.opacity(0.82))
 
             switch manager.phase {
@@ -581,12 +611,12 @@ struct PomodoroPopup: View {
                 VStack(alignment: .leading, spacing: 10) {
                     if let overtimeLabel = manager.suggestedOvertimeLabel {
                         Text(String(format: String(localized: "pomodoro.overtime.description"), overtimeLabel))
-                            .barikPopupFont(size: 11, weight: .medium)
+                            .barikPopupFont(size: 11, weight: secondaryWeight)
                             .foregroundStyle(.white.opacity(0.62))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Text(String(localized: "pomodoro.overtime.waiting_description"))
-                            .barikPopupFont(size: 11, weight: .medium)
+                            .barikPopupFont(size: 11, weight: secondaryWeight)
                             .foregroundStyle(.white.opacity(0.62))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -728,7 +758,7 @@ struct PomodoroPopup: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .barikPopupFont(size: 11, weight: .semibold)
+                .barikPopupFont(size: 11, weight: chromeWeight)
                 .foregroundStyle(.white.opacity(0.56))
 
             HStack(spacing: 8) {
@@ -774,7 +804,7 @@ struct PomodoroPopup: View {
                 Image(systemName: icon)
                 Text(title)
             }
-            .barikPopupFont(size: 12, weight: .semibold)
+            .barikPopupFont(size: 12, weight: chromeWeight)
             .foregroundStyle(foreground)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
@@ -786,7 +816,7 @@ struct PomodoroPopup: View {
 
     private func statusPill(title: String, color: Color) -> some View {
         Text(title)
-            .barikPopupFont(size: 10, weight: .semibold)
+            .barikPopupFont(size: 10, weight: chromeWeight)
             .foregroundStyle(color)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)

@@ -214,7 +214,7 @@ final class PomodoroManager: ObservableObject {
     var remainingLabel: String {
         if phase == .waitingForBreak {
             let overtime = overtimeSeconds
-            return overtime > 0 ? "+\(Self.minutesLabel(from: overtime))" : String(localized: "pomodoro.phase.idle")
+            return overtime > 0 ? Self.overtimeLabel(from: overtime) : String(localized: "pomodoro.phase.idle")
         }
         let totalSeconds = max(Int(remainingTime.rounded()), 0)
         let minutes = totalSeconds / 60
@@ -228,7 +228,7 @@ final class PomodoroManager: ObservableObject {
     var widgetLabel: String? {
         guard phase != .idle else { return nil }
         if phase == .waitingForBreak {
-            return overtimeSeconds > 0 ? "+\(Self.minutesLabel(from: overtimeSeconds))" : String(localized: "pomodoro.phase.idle")
+            return overtimeSeconds > 0 ? Self.overtimeLabel(from: overtimeSeconds) : String(localized: "pomodoro.phase.idle")
         }
         return remainingLabel
     }
@@ -244,7 +244,7 @@ final class PomodoroManager: ObservableObject {
 
     var suggestedOvertimeLabel: String? {
         guard canApplyOvertime else { return nil }
-        return Self.minutesLabel(from: overtimeSeconds)
+        return Self.overtimeLabel(from: overtimeSeconds)
     }
 
     var nextBreakDurationLabel: String {
@@ -1089,6 +1089,11 @@ final class PomodoroManager: ObservableObject {
     private static func minutesLabel(from seconds: Int) -> String {
         let roundedMinutes = max(Int(ceil(Double(seconds) / 60.0)), 1)
         return "\(roundedMinutes)m"
+    }
+
+    private static func overtimeLabel(from seconds: Int) -> String {
+        guard seconds >= 60 else { return "+\(seconds)s" }
+        return "+\(minutesLabel(from: seconds))"
     }
 }
 

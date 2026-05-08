@@ -32,7 +32,7 @@ struct PomodoroWidget: View {
     private let timerIconSize: CGFloat = 21
     private let tomatoIconSize: CGFloat = 21
     private let tomatoSpacing: CGFloat = 8
-    private let timerLabelWidth: CGFloat = 40
+    private let timerLabelWidth: CGFloat = 36
 
     private var liveConfig: ConfigData {
         configManager.globalWidgetConfig(for: "default.pomodoro")
@@ -78,7 +78,7 @@ struct PomodoroWidget: View {
     }
 
     private var timerDisplay: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             Image("PomodoroIcon")
                 .resizable()
                 .renderingMode(.template)
@@ -90,11 +90,11 @@ struct PomodoroWidget: View {
                 .barikFont(size: 12, weight: .semibold, design: .rounded)
                 .foregroundStyle(.foregroundOutside)
                 .opacity(manager.widgetLabel == nil ? 0 : 1)
-                .frame(width: manager.widgetLabel == nil ? 0 : timerLabelWidth, alignment: .center)
+                .frame(width: manager.widgetLabel == nil ? 0 : timerLabelWidth, alignment: .leading)
                 .clipped()
                 .lineLimit(1)
         }
-        .frame(width: manager.widgetLabel == nil ? timerIconSize : timerIconSize + 6 + timerLabelWidth, alignment: .leading)
+        .frame(width: manager.widgetLabel == nil ? timerIconSize : timerIconSize + 4 + timerLabelWidth, alignment: .leading)
     }
 
     private var todayPomodorosDisplay: some View {
