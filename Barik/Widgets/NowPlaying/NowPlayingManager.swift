@@ -82,6 +82,56 @@ final class NowPlayingManager: ObservableObject {
         startMediaRemoteStreaming()
     }
 
+    private func stabilizedSong(_ candidate: NowPlayingSong) -> NowPlayingSong {
+        guard let existing = nowPlaying else { return candidate }
+        guard existing.appName == candidate.appName,
+              existing.title == candidate.title,
+              existing.artist == candidate.artist,
+              existing.state == candidate.state else {
+            return candidate
+        }
+
+        return NowPlayingSong(
+            appName: candidate.appName,
+            state: candidate.state,
+            stateTimestamp: existing.stateTimestamp,
+            title: candidate.title,
+            artist: candidate.artist,
+            albumArtURL: candidate.albumArtURL,
+            albumArtImage: candidate.albumArtImage,
+            position: candidate.position,
+            duration: candidate.duration,
+            positionTimestamp: candidate.positionTimestamp
+        )
+    }
+
+    private func songsMatchForDisplay(_ lhs: NowPlayingSong?, _ rhs: NowPlayingSong?) -> Bool {
+        switch (lhs, rhs) {
+        case (nil, nil):
+            return true
+        case let (left?, right?):
+            return left.appName == right.appName &&
+                left.state == right.state &&
+                left.stateTimestamp == right.stateTimestamp &&
+                left.title == right.title &&
+                left.artist == right.artist &&
+                left.albumArtURL == right.albumArtURL &&
+                left.albumArtImage === right.albumArtImage &&
+                left.position == right.position &&
+                left.duration == right.duration &&
+                left.positionTimestamp == right.positionTimestamp
+        default:
+            return false
+        }
+    }
+
+    @MainActor
+    private func publishNowPlaying(_ candidate: NowPlayingSong?) {
+        let stabilized = candidate.map(stabilizedSong(_:))
+        guard !songsMatchForDisplay(nowPlaying, stabilized) else { return }
+        nowPlaying = stabilized
+    }
+
     /// Starts the MediaRemote Adapter stream to listen for now playing updates
     private func startMediaRemoteStreaming() {
         stopMediaRemoteStreaming()
@@ -279,7 +329,7 @@ final class NowPlayingManager: ObservableObject {
                         // No title and not playing - clear the now playing info
                         DispatchQueue.main.async { [weak self] in
                             self?.logger.debug("NowPlaying cleared because title is empty and playback is stopped")
-                            self?.nowPlaying = nil
+                            self?.publishNowPlaying(nil)
                         }
                         continue
                     } else if !isPlaying && !title.isEmpty {
@@ -343,7 +393,7 @@ final class NowPlayingManager: ObservableObject {
                                 )
 
                                 self?.logger.debug("NowPlaying artwork update via MediaRemote Adapter: \(updatedSong.title) by \(updatedSong.artist) [\(updatedSong.state.rawValue)] from \(updatedSong.appName), albumArtURL: \(albumArtURL != nil ? "available" : "none"), albumArtImage: \(albumArtImage != nil ? "available" : "none")")
-                                self?.nowPlaying = updatedSong
+                                self?.publishNowPlaying(updatedSong)
                                 return // Exit early since we're just updating artwork
                             }
                         }
@@ -390,22 +440,11 @@ final class NowPlayingManager: ObservableObject {
                                 finalAlbumArtURL = existingSong.albumArtURL
                             }
 
-                            let stateTimestamp: Date
-                            if let existingSong = self?.nowPlaying,
-                               existingSong.appName == bundleId,
-                               existingSong.title == actualTitle,
-                               existingSong.artist == actualArtist,
-                               existingSong.state == state {
-                                stateTimestamp = existingSong.stateTimestamp
-                            } else {
-                                stateTimestamp = Date()
-                            }
-
                             // Create the song object
                             let song = NowPlayingSong(
                                 appName: bundleId,
                                 state: state,
-                                stateTimestamp: stateTimestamp,
+                                stateTimestamp: Date(),
                                 title: actualTitle,
                                 artist: actualArtist,
                                 albumArtURL: nil, // No more temporary files
@@ -418,7 +457,7 @@ final class NowPlayingManager: ObservableObject {
                             // Log for debugging
                             self?.logger.debug("NowPlaying update via MediaRemote Adapter: \(song.title) by \(song.artist) [\(song.state.rawValue)] from \(song.appName), albumArtImage: \(finalAlbumArtImage != nil ? "available" : "none")")
 
-                            self?.nowPlaying = song
+                            self?.publishNowPlaying(song)
                         }
 
                         // Debug: Print all available keys in payload
@@ -493,7 +532,7 @@ final class NowPlayingManager: ObservableObject {
 
         DispatchQueue.main.async { [weak self] in
             self?.logger.debug("NowPlaying update via Music notification: \(song.title) by \(song.artist) [\(song.state.rawValue)] from \(song.appName)")
-            self?.nowPlaying = song
+            self?.publishNowPlaying(song)
         }
     }
 
@@ -522,7 +561,7 @@ final class NowPlayingManager: ObservableObject {
 
         DispatchQueue.main.async { [weak self] in
             self?.logger.debug("NowPlaying update via Spotify notification: \(song.title) by \(song.artist) [\(song.state.rawValue)] from \(song.appName)")
-            self?.nowPlaying = song
+            self?.publishNowPlaying(song)
         }
     }
 

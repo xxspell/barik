@@ -10,6 +10,7 @@ private enum NowPlayingWidgetLayout {
 
 struct NowPlayingWidget: View {
     @EnvironmentObject var configProvider: ConfigProvider
+    @ObservedObject private var configManager = ConfigManager.shared
     @ObservedObject var playingManager = NowPlayingManager.shared
 
     @State private var widgetFrame: CGRect = .zero
@@ -17,15 +18,19 @@ struct NowPlayingWidget: View {
     @State private var pauseHideWorkItem: DispatchWorkItem?
     @State private var pauseVisibilityRevision = 0
 
-    private var showAlbumArt: Bool { configProvider.config["show-album-art"]?.boolValue ?? true }
-    private var showArtist: Bool { configProvider.config["show-artist"]?.boolValue ?? true }
-    private var showPauseIndicator: Bool { configProvider.config["show-pause-indicator"]?.boolValue ?? true }
-    private var backgroundFillEnabled: Bool { configProvider.config["background-fill-enabled"]?.boolValue ?? false }
-    private var backgroundFillSource: String { configProvider.config["background-fill-source"]?.stringValue ?? "accent" }
-    private var backgroundFillColorHex: String { configProvider.config["background-fill-color"]?.stringValue ?? "#4A90E2" }
-    private var hideAfterPausedMinutes: Int { configProvider.config["hide-after-paused-minutes"]?.intValue ?? 10 }
-    private var maxCharactersPerLine: Int { max(configProvider.config["max-characters-per-line"]?.intValue ?? 25, 1) }
-    private var scrollLongText: Bool { configProvider.config["scroll-long-text"]?.boolValue ?? false }
+    private var liveConfig: ConfigData {
+        configManager.globalWidgetConfig(for: "default.nowplaying")
+    }
+
+    private var showAlbumArt: Bool { liveConfig["show-album-art"]?.boolValue ?? true }
+    private var showArtist: Bool { liveConfig["show-artist"]?.boolValue ?? true }
+    private var showPauseIndicator: Bool { liveConfig["show-pause-indicator"]?.boolValue ?? true }
+    private var backgroundFillEnabled: Bool { liveConfig["background-fill-enabled"]?.boolValue ?? false }
+    private var backgroundFillSource: String { liveConfig["background-fill-source"]?.stringValue ?? "accent" }
+    private var backgroundFillColorHex: String { liveConfig["background-fill-color"]?.stringValue ?? "#4A90E2" }
+    private var hideAfterPausedMinutes: Int { liveConfig["hide-after-paused-minutes"]?.intValue ?? 10 }
+    private var maxCharactersPerLine: Int { max(liveConfig["max-characters-per-line"]?.intValue ?? 25, 1) }
+    private var scrollLongText: Bool { liveConfig["scroll-long-text"]?.boolValue ?? false }
 
     private var visibleSong: NowPlayingSong? {
         guard let song = playingManager.nowPlaying else { return nil }
@@ -40,6 +45,7 @@ struct NowPlayingWidget: View {
     }
 
     var body: some View {
+        let _ = pauseVisibilityRevision
         ZStack(alignment: .trailing) {
             if let song = visibleSong {
                 // Hidden view for measuring the intrinsic width.
@@ -87,6 +93,9 @@ struct NowPlayingWidget: View {
         .captureScreenRect(into: $widgetFrame)
         .onAppear(perform: schedulePauseVisibilityRefresh)
         .onChange(of: pauseRefreshKey) { _, _ in
+            schedulePauseVisibilityRefresh()
+        }
+        .onReceive(configManager.$config) { _ in
             schedulePauseVisibilityRefresh()
         }
         .onDisappear {
