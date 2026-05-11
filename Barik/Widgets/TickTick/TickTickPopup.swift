@@ -442,6 +442,7 @@ struct TickTickPopup: View {
                         ForEach(visibleTasks) { task in
                             TaskRow(
                                 task: task,
+                                expandedTaskId: expandedTaskId,
                                 isExpanded: expandedTaskId == task.id,
                                 isHighlighted: highlightedTaskID == task.id,
                                 projectName: selectedProjectId == nil ? projectName(for: task) : nil,
@@ -450,8 +451,19 @@ struct TickTickPopup: View {
                                         expandedTaskId = expandedTaskId == task.id ? nil : task.id
                                     }
                                 },
+                                onToggleTask: { taskId in
+                                    withAnimation(.spring(response: 0.22, dampingFraction: 0.8)) {
+                                        expandedTaskId = expandedTaskId == taskId ? nil : taskId
+                                    }
+                                },
                                 onComplete: { manager.scheduleTaskCompletion(task) },
-                                onDelete:   { Task { await manager.deleteTask(task) } }
+                                onDelete:   { Task { await manager.deleteTask(task) } },
+                                onCompleteSubtask: { subtask in
+                                    Task { await manager.completeTask(subtask) }
+                                },
+                                onDeleteSubtask: { subtask in
+                                    Task { await manager.deleteTask(subtask) }
+                                }
                             )
                             .id(taskScrollID(task.id))
                         }
@@ -1165,12 +1177,16 @@ private struct HabitWeekRing: View {
 
 private struct TaskRow: View {
     let task: TickTickTask
+    let expandedTaskId: String?
     let isExpanded: Bool
     let isHighlighted: Bool
     let projectName: String?
     let onTap: () -> Void
+    let onToggleTask: (String) -> Void
     let onComplete: () -> Void
     let onDelete: () -> Void
+    let onCompleteSubtask: (TickTickTask) -> Void
+    let onDeleteSubtask: (TickTickTask) -> Void
 
     @State private var isHovered = false
     @State private var completeHovered = false
@@ -1179,6 +1195,10 @@ private struct TaskRow: View {
     private var isOverdue: Bool {
         guard let due = task.dueDate else { return false }
         return due < Date()
+    }
+
+    private var isExpandable: Bool {
+        !task.items.isEmpty || !task.subtasks.isEmpty || !(task.content ?? "").isEmpty
     }
 
     var body: some View {
@@ -1236,6 +1256,11 @@ private struct TaskRow: View {
                         }
                     }
                 }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    guard isExpandable else { return }
+                    onTap()
+                }
 
                 Spacer()
 
@@ -1257,7 +1282,7 @@ private struct TaskRow: View {
                 }
 
                 // Expand chevron
-                if !task.items.isEmpty || !task.subtasks.isEmpty || !(task.content ?? "").isEmpty {
+                if isExpandable {
                     Button(action: onTap) {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .barikPopupFont(size: 9)
@@ -1306,23 +1331,14 @@ private struct TaskRow: View {
                     if !task.subtasks.isEmpty {
                         VStack(alignment: .leading, spacing: 3) {
                             ForEach(task.subtasks) { sub in
-                                HStack(spacing: 7) {
-                                    Image(systemName: sub.isCompleted ? "checkmark.circle.fill" : "circle")
-                                        .barikPopupFont(size: 12)
-                                        .foregroundStyle(sub.isCompleted ? .green.opacity(0.6) : .white.opacity(0.25))
-                                    Text(sub.title)
-                                        .barikPopupFont(size: 11)
-                                        .foregroundStyle(sub.isCompleted ? .white.opacity(0.25) : .white.opacity(0.7))
-                                        .strikethrough(sub.isCompleted)
-                                        .lineLimit(2)
-                                    Spacer()
-                                    if sub.priority != .none { priorityDot(sub.priority) }
-                                    if let due = sub.dueDate {
-                                        Text(formatDue(due))
-                                            .barikPopupFont(size: 9)
-                                            .foregroundStyle(.white.opacity(0.2))
-                                    }
-                                }
+                                SubtaskTreeRow(
+                                    task: sub,
+                                    level: 0,
+                                    expandedTaskId: expandedTaskId,
+                                    onToggle: onToggleTask,
+                                    onComplete: onCompleteSubtask,
+                                    onDelete: onDeleteSubtask
+                                )
                             }
                         }
                         .padding(.leading, 26)
@@ -1367,6 +1383,177 @@ private struct TaskRow: View {
         if cal.isDateInYesterday(date) { return NSLocalizedString("Yesterday", comment: "") }
         let f = DateFormatter(); f.setLocalizedDateFormatFromTemplate("MMMd")
         return f.string(from: date)
+    }
+}
+
+private struct SubtaskTreeRow: View {
+    let task: TickTickTask
+    let level: Int
+    let expandedTaskId: String?
+    let onToggle: (String) -> Void
+    let onComplete: (TickTickTask) -> Void
+    let onDelete: (TickTickTask) -> Void
+
+    @State private var isHovered = false
+    @State private var completeHovered = false
+    @State private var deleteHovered = false
+
+    private var isExpanded: Bool { expandedTaskId == task.id }
+    private var isExpandable: Bool {
+        !task.items.isEmpty || !task.subtasks.isEmpty || !(task.content ?? "").isEmpty
+    }
+    private var indent: CGFloat { CGFloat(level) * 14 }
+    private var isOverdue: Bool {
+        guard let due = task.dueDate else { return false }
+        return due < Date()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .top, spacing: 7) {
+                Button(action: { onComplete(task) }) {
+                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .barikPopupFont(size: 12)
+                        .foregroundStyle(
+                            task.isCompleted
+                                ? .green.opacity(0.62)
+                                : (completeHovered ? .green.opacity(0.75) : .white.opacity(0.25))
+                        )
+                }
+                .buttonStyle(.plain)
+                .onHover { hovered in
+                    completeHovered = hovered
+                    hovered ? NSCursor.pointingHand.push() : NSCursor.pop()
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .center, spacing: 6) {
+                        Text(task.title)
+                            .barikPopupFont(size: 11)
+                            .foregroundStyle(task.isCompleted ? .white.opacity(0.25) : .white.opacity(0.72))
+                            .strikethrough(task.isCompleted)
+                            .lineLimit(isExpanded ? nil : 2)
+                        if task.priority != .none {
+                            Circle()
+                                .fill(Color(hex: task.priority.color) ?? .orange)
+                                .frame(width: 4, height: 4)
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        if let due = task.dueDate {
+                            Label(subtaskDueText(due), systemImage: "calendar")
+                                .barikPopupFont(size: 9)
+                                .foregroundStyle(isOverdue ? .red.opacity(0.72) : .white.opacity(0.24))
+                        }
+                        if !task.items.isEmpty {
+                            let done = task.items.filter { $0.isCompleted }.count
+                            Label("\(done)/\(task.items.count)", systemImage: "checklist")
+                                .barikPopupFont(size: 9)
+                                .foregroundStyle(.white.opacity(0.24))
+                        }
+                        if !task.subtasks.isEmpty {
+                            let done = task.subtasks.filter { $0.isCompleted }.count
+                            Label("\(done)/\(task.subtasks.count)", systemImage: "list.bullet.indent")
+                                .barikPopupFont(size: 9)
+                                .foregroundStyle(.white.opacity(0.24))
+                        }
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    guard isExpandable else { return }
+                    onToggle(task.id)
+                }
+
+                Spacer(minLength: 0)
+
+                if isHovered {
+                    Button(action: { onDelete(task) }) {
+                        Image(systemName: "trash")
+                            .barikPopupFont(size: 10)
+                            .foregroundStyle(deleteHovered ? .red : .white.opacity(0.22))
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hovered in
+                        deleteHovered = hovered
+                        hovered ? NSCursor.pointingHand.push() : NSCursor.pop()
+                    }
+                }
+
+                if isExpandable {
+                    Button(action: { onToggle(task.id) }) {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .barikPopupFont(size: 8)
+                            .foregroundStyle(.white.opacity(0.24))
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hovered in hovered ? NSCursor.pointingHand.push() : NSCursor.pop() }
+                }
+            }
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
+            .onHover { hovered in
+                withAnimation(.easeInOut(duration: 0.12)) {
+                    isHovered = hovered
+                }
+            }
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 5) {
+                    if let content = task.content, !content.isEmpty {
+                        Text(content)
+                            .barikPopupFont(size: 10)
+                            .foregroundStyle(.white.opacity(0.42))
+                            .lineLimit(4)
+                    }
+
+                    if !task.items.isEmpty {
+                        VStack(alignment: .leading, spacing: 3) {
+                            ForEach(task.items) { item in
+                                HStack(spacing: 6) {
+                                    Image(systemName: item.isCompleted ? "checkmark.square.fill" : "square")
+                                        .barikPopupFont(size: 10)
+                                        .foregroundStyle(item.isCompleted ? .green.opacity(0.58) : .white.opacity(0.24))
+                                    Text(item.title)
+                                        .barikPopupFont(size: 10)
+                                        .foregroundStyle(item.isCompleted ? .white.opacity(0.24) : .white.opacity(0.62))
+                                        .strikethrough(item.isCompleted)
+                                        .lineLimit(2)
+                                }
+                            }
+                        }
+                    }
+
+                    if !task.subtasks.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(task.subtasks) { subtask in
+                                SubtaskTreeRow(
+                                    task: subtask,
+                                    level: level + 1,
+                                    expandedTaskId: expandedTaskId,
+                                    onToggle: onToggle,
+                                    onComplete: onComplete,
+                                    onDelete: onDelete
+                                )
+                            }
+                        }
+                    }
+                }
+                .padding(.leading, 19)
+            }
+        }
+        .padding(.leading, indent)
+    }
+
+    private func subtaskDueText(_ date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return NSLocalizedString("Today", comment: "") }
+        if cal.isDateInTomorrow(date) { return NSLocalizedString("Tomorrow", comment: "") }
+        if date < Date() { return NSLocalizedString("Overdue", comment: "") }
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("MMMd")
+        return formatter.string(from: date)
     }
 }
 

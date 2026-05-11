@@ -844,10 +844,14 @@ final class TickTickManager: ObservableObject {
         logger.info("fetchPrivateBatch() — \(projects.count) projects")
 
         let allRawTasks = (batch.syncTaskBean?.update ?? []) + (batch.syncTaskBean?.add ?? [])
-        let pendingRaw = allRawTasks.filter { ($0.status ?? 0) == 0 }
-        logger.info("fetchPrivateBatch() — \(allRawTasks.count) total tasks, \(pendingRaw.count) pending")
+        let activeAndCompletedRaw = allRawTasks.filter {
+            let status = $0.status ?? 0
+            return status == 0 || status == 2
+        }
+        let pendingCount = activeAndCompletedRaw.filter { ($0.status ?? 0) == 0 }.count
+        logger.info("fetchPrivateBatch() — \(allRawTasks.count) total tasks, \(pendingCount) pending, \(activeAndCompletedRaw.count) active-or-completed")
 
-        let tasks = pendingRaw.compactMap { mapTask($0) }
+        let tasks = activeAndCompletedRaw.compactMap { mapTask($0) }
         return (projects, tasks)
     }
 
@@ -871,14 +875,15 @@ final class TickTickManager: ObservableObject {
         let projects = rawProjects.filter { !($0.closed ?? false) && ($0.kind ?? "TASK") == "TASK" }
             .map { TickTickProject(id: $0.id, name: $0.name, color: $0.color) }
 
-        // Fetch all pending tasks via filter
+        // Fetch active tasks plus completed subtasks so finished children can
+        // stay visible under an unfinished parent in the popup.
         guard let filterURL = URL(string: "\(openAPIBase)/task/filter") else { throw TickTickError.noToken }
         var filterReq = URLRequest(url: filterURL)
         filterReq.httpMethod = "POST"
         filterReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         filterReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
         filterReq.timeoutInterval = 10
-        filterReq.httpBody = try? JSONSerialization.data(withJSONObject: ["status": [0]])
+        filterReq.httpBody = try? JSONSerialization.data(withJSONObject: ["status": [0, 2]])
 
         let (filterData, filterResp) = try await URLSession.shared.data(for: filterReq)
         guard let http2 = filterResp as? HTTPURLResponse else { throw TickTickError.apiError(-1) }
@@ -1431,19 +1436,26 @@ final class TickTickManager: ObservableObject {
     }
 
     private func buildHierarchy(_ flat: [TickTickTask]) -> [TickTickTask] {
-        var result: [TickTickTask] = []
-        for var task in flat {
-            guard task.parentId == nil else { continue }
-            task.subtasks = flat.filter { $0.parentId == task.id && !$0.title.isEmpty }
-            result.append(task)
+        var childrenByParent: [String: [TickTickTask]] = [:]
+        var rootTasks: [TickTickTask] = []
+
+        for task in flat where !task.title.isEmpty && (task.deleted ?? 0) == 0 {
+            if let parentId = task.parentId, !parentId.isEmpty {
+                childrenByParent[parentId, default: []].append(task)
+            } else if !task.isCompleted {
+                rootTasks.append(task)
+            }
         }
-        logger.debug("buildHierarchy() — \(flat.count) flat → \(result.count) top-level")
-        return result
+
+        let hierarchy = rootTasks.map { buildTaskTree(from: $0, childrenByParent: childrenByParent) }
+        logger.debug("buildHierarchy() — \(flat.count) flat → \(hierarchy.count) top-level")
+        return hierarchy
     }
 
     private func removeLocally(_ task: TickTickTask) {
         if var arr = tasksByProject[task.projectId] {
             arr.removeAll { $0.id == task.id }
+            arr = arr.compactMap { removeNestedTask(task.id, from: $0) }
             tasksByProject[task.projectId] = arr
         }
         recalc()
@@ -1465,9 +1477,8 @@ final class TickTickManager: ObservableObject {
     }
 
     private func updateLocalTask(_ task: TickTickTask) {
-        if var arr = tasksByProject[task.projectId],
-           let idx = arr.firstIndex(where: { $0.id == task.id }) {
-            arr[idx] = task
+        if var arr = tasksByProject[task.projectId] {
+            arr = arr.map { updateNestedTask(task, in: $0) }
             tasksByProject[task.projectId] = arr
             recalc()
         }
@@ -1475,13 +1486,17 @@ final class TickTickManager: ObservableObject {
 
     private func taskById(_ id: String) -> TickTickTask? {
         for arr in tasksByProject.values {
-            if let task = arr.first(where: { $0.id == id }) { return task }
+            for task in arr {
+                if let match = findTask(id: id, in: task) {
+                    return match
+                }
+            }
         }
         return nil
     }
 
     private func recalc() {
-        totalPendingCount = tasksByProject.values.flatMap { $0 }.filter { !$0.isCompleted }.count
+        totalPendingCount = flattenAllTasks().filter { !$0.isCompleted }.count
         rebuildRotatingBarCandidates(resetIndex: false)
     }
 
@@ -1592,8 +1607,7 @@ final class TickTickManager: ObservableObject {
     }
 
     private func buildRotatingTaskItems() -> [TickTickRotatingBarItem] {
-        let pendingTasks = tasksByProject.values
-            .flatMap { $0 }
+        let pendingTasks = flattenAllTasks()
             .filter { !$0.isCompleted && ($0.deleted ?? 0) == 0 }
             .sorted(by: compareRotatingTasks)
 
@@ -2432,7 +2446,7 @@ final class TickTickManager: ObservableObject {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        let allTasks = tasksByProject.values.flatMap { $0 }
+        let allTasks = flattenAllTasks()
         if let exact = allTasks.first(where: { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             return exact
         }
@@ -2443,6 +2457,51 @@ final class TickTickManager: ObservableObject {
         }
 
         return nil
+    }
+
+    private func buildTaskTree(from task: TickTickTask, childrenByParent: [String: [TickTickTask]]) -> TickTickTask {
+        var result = task
+        let children = childrenByParent[task.id] ?? []
+        result.subtasks = children.map { buildTaskTree(from: $0, childrenByParent: childrenByParent) }
+        return result
+    }
+
+    private func removeNestedTask(_ taskId: String, from task: TickTickTask) -> TickTickTask? {
+        guard task.id != taskId else { return nil }
+        var updated = task
+        updated.subtasks = task.subtasks.compactMap { removeNestedTask(taskId, from: $0) }
+        return updated
+    }
+
+    private func updateNestedTask(_ updatedTask: TickTickTask, in task: TickTickTask) -> TickTickTask {
+        guard task.id != updatedTask.id else {
+            return updatedTask
+        }
+        var updated = task
+        updated.subtasks = task.subtasks.map { updateNestedTask(updatedTask, in: $0) }
+        return updated
+    }
+
+    private func findTask(id: String, in task: TickTickTask) -> TickTickTask? {
+        if task.id == id {
+            return task
+        }
+        for subtask in task.subtasks {
+            if let match = findTask(id: id, in: subtask) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    private func flattenAllTasks() -> [TickTickTask] {
+        tasksByProject.values.flatMap { tasks in
+            tasks.flatMap(flattenTaskTree)
+        }
+    }
+
+    private func flattenTaskTree(_ task: TickTickTask) -> [TickTickTask] {
+        [task] + task.subtasks.flatMap(flattenTaskTree)
     }
 
     private func projectNameForPomodoroTask(_ task: TickTickTask) -> String? {
