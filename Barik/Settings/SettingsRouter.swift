@@ -9,6 +9,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case displays
     case spaces
     case time
+    case gotify
     case weather
     case network
     case nowPlaying
@@ -37,6 +38,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return String(localized: "settings.section.spaces")
         case .time:
             return String(localized: "settings.section.time")
+        case .gotify:
+            return "Gotify"
         case .weather:
             return String(localized: "settings.section.weather")
         case .network:
@@ -78,6 +81,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return "square.3.layers.3d"
         case .time:
             return "clock"
+        case .gotify:
+            return "bell.badge"
         case .weather:
             return "cloud.sun"
         case .network:

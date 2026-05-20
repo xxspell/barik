@@ -293,6 +293,19 @@ final class ConfigManager: ObservableObject {
             # Uses Unicode date format patterns.
             # Default: "E d MMM"
 
+            # Optional Gotify integration.
+            #
+            # [widgets.default.gotify]
+            # enabled = true
+            # base-url = "http://127.0.0.1:9229"
+            # history-limit = 20
+            # show-in-calendar-popup = true
+            #
+            # Sign in from the dedicated Gotify settings section or from the
+            # Gotify tab inside the calendar popup. Credentials are stored in
+            # Keychain, while the client token is refreshed and restored
+            # automatically in the app.
+
             [widgets.default.screen-recording-stop]
             show-label = true
 

@@ -36,6 +36,8 @@ private struct SettingsDetailView: View {
                 SpacesSettingsView()
             case .time:
                 TimeSettingsView()
+            case .gotify:
+                GotifySettingsView()
             case .weather:
                 WeatherSettingsView()
             case .network:
@@ -2080,6 +2082,362 @@ private struct TimeSettingsView: View {
         case .settings:
             return settingsLocalized("settings.option.settings")
         }
+    }
+}
+
+private struct GotifySettingsView: View {
+    @ObservedObject private var configManager = ConfigManager.shared
+    @ObservedObject private var settingsStore = SettingsStore.shared
+    @ObservedObject private var gotifyManager = GotifyManager.shared
+
+    @State private var gotifyEnabled = false
+    @State private var showInCalendarPopup = true
+    @State private var gotifyBaseURL = ""
+    @State private var gotifyHistoryLimit = 20
+    @State private var username = ""
+    @State private var password = ""
+    @State private var isApplyingConfigSnapshot = false
+    @State private var pendingStringWrites: [String: String] = [:]
+    @State private var pendingBoolWrites: [String: Bool] = [:]
+    @State private var gotifyBaseURLTask: Task<Void, Never>?
+
+    private let gotifyTable = "widgets.default.gotify"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            SettingsHeaderView(
+                title: "Gotify",
+                description: "Configure the Gotify integration, sign in securely, and choose where notifications should appear inside Barik."
+            )
+
+            SettingsCardView(
+                "Connection",
+                actionTitle: settingsLocalized("settings.action.reset"),
+                action: resetGotifyDefaults
+            ) {
+                ToggleRow(
+                    title: "Enable Gotify integration",
+                    description: "Keep a client session, fetch recent notifications, and listen for live updates over the Gotify websocket stream.",
+                    isOn: Binding(
+                        get: { gotifyEnabled },
+                        set: { newValue in
+                            gotifyEnabled = newValue
+                            markPendingBoolWrite(
+                                newValue,
+                                for: .init(tablePath: gotifyTable, key: "enabled")
+                            )
+                            Task { @MainActor in
+                                settingsStore.setBool(
+                                    newValue,
+                                    for: .init(tablePath: gotifyTable, key: "enabled")
+                                )
+                            }
+                        }
+                    )
+                )
+
+                DebouncedTextSettingRow(
+                    title: settingsLocalized("settings.field.base_url.title"),
+                    description: "The Gotify server URL, for example http://192.168.1.110:9229.",
+                    text: $gotifyBaseURL
+                )
+                .onChange(of: gotifyBaseURL) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    scheduleGotifyBaseURLWrite(newValue)
+                }
+
+                SliderSettingRow(
+                    title: "History limit",
+                    description: "How many recent notifications to keep in Barik after each refresh.",
+                    value: Binding(
+                        get: { Double(gotifyHistoryLimit) },
+                        set: { newValue in
+                            gotifyHistoryLimit = Int(newValue.rounded())
+                            Task { @MainActor in
+                                settingsStore.setInt(
+                                    gotifyHistoryLimit,
+                                    for: .init(tablePath: gotifyTable, key: "history-limit")
+                                )
+                            }
+                        }
+                    ),
+                    range: 5...100,
+                    step: 1,
+                    valueFormat: { "\(Int($0.rounded()))" }
+                )
+            }
+
+            SettingsCardView(
+                "Placement",
+                actionTitle: settingsLocalized("settings.action.reset"),
+                action: resetGotifyPlacementDefaults
+            ) {
+                ToggleRow(
+                    title: "Show in calendar popup",
+                    description: "Add a Gotify tab to the calendar popup. You can keep the integration enabled even if you hide this tab for now.",
+                    isOn: Binding(
+                        get: { showInCalendarPopup },
+                        set: { newValue in
+                            showInCalendarPopup = newValue
+                            markPendingBoolWrite(
+                                newValue,
+                                for: .init(tablePath: gotifyTable, key: "show-in-calendar-popup")
+                            )
+                            Task { @MainActor in
+                                settingsStore.setBool(
+                                    newValue,
+                                    for: .init(tablePath: gotifyTable, key: "show-in-calendar-popup")
+                                )
+                            }
+                        }
+                    )
+                )
+            }
+
+            SettingsCardView("Account") {
+                VStack(alignment: .leading, spacing: 10) {
+                    if !gotifyEnabled {
+                        Text("Enable the Gotify integration first.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else if !gotifyManager.isAuthenticated {
+                        TextField("Username", text: $username)
+                            .textFieldStyle(.roundedBorder)
+
+                        SecureField("Password", text: $password)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { submitGotifyLogin() }
+
+                        HStack(spacing: 10) {
+                            Button(action: submitGotifyLogin) {
+                                if gotifyManager.isLoading {
+                                    HStack(spacing: 8) {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                        Text("Connecting…")
+                                    }
+                                } else {
+                                    Text("Connect")
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(
+                                gotifyBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    || username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    || password.isEmpty
+                                    || gotifyManager.isLoading
+                            )
+                        }
+
+                        Text("Credentials are stored in Keychain. Barik refreshes the client token automatically.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(gotifyManager.currentUser?.name ?? "Gotify")
+                                        .font(.headline)
+                                    Text(gotifyManager.isConnected ? "Live stream connected" : "Using fallback refresh")
+                                        .font(.subheadline)
+                                        .foregroundStyle(gotifyManager.isConnected ? .green : .secondary)
+                                }
+                                Spacer()
+                            }
+
+                            HStack(spacing: 10) {
+                                Button("Open Web UI", action: gotifyManager.openWebUI)
+                                    .buttonStyle(.bordered)
+                                Button("Refresh") {
+                                    Task { await gotifyManager.refreshNow() }
+                                }
+                                .buttonStyle(.bordered)
+                                Button("Sign Out", role: .destructive, action: gotifyManager.signOut)
+                                    .buttonStyle(.bordered)
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsCardView(settingsLocalized("settings.card.status")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(gotifyStatusTitle)
+                        .font(.headline)
+                    Text(gotifyStatusDescription)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(24)
+        .onAppear(perform: loadFromConfig)
+        .onReceive(configManager.$config) { config in
+            settingsStore.refresh(with: config)
+            loadFromConfig()
+        }
+        .onDisappear {
+            gotifyBaseURLTask?.cancel()
+        }
+    }
+
+    private func loadFromConfig() {
+        isApplyingConfigSnapshot = true
+
+        let gotifyEnabledField = SettingsFieldKey(tablePath: gotifyTable, key: "enabled")
+        let gotifyBaseURLField = SettingsFieldKey(tablePath: gotifyTable, key: "base-url")
+        let gotifyHistoryField = SettingsFieldKey(tablePath: gotifyTable, key: "history-limit")
+        let calendarPopupField = SettingsFieldKey(tablePath: gotifyTable, key: "show-in-calendar-popup")
+
+        gotifyEnabled = resolvedBoolValue(
+            for: gotifyEnabledField,
+            incoming: settingsStore.boolValue(gotifyEnabledField, fallback: false),
+            current: gotifyEnabled
+        )
+        gotifyBaseURL = resolvedStringValue(
+            for: gotifyBaseURLField,
+            incoming: settingsStore.stringValue(gotifyBaseURLField),
+            current: gotifyBaseURL
+        )
+        gotifyHistoryLimit = settingsStore.intValue(gotifyHistoryField, fallback: 20)
+        showInCalendarPopup = resolvedBoolValue(
+            for: calendarPopupField,
+            incoming: settingsStore.boolValue(calendarPopupField, fallback: true),
+            current: showInCalendarPopup
+        )
+
+        isApplyingConfigSnapshot = false
+    }
+
+    private func scheduleGotifyBaseURLWrite(_ value: String) {
+        gotifyBaseURLTask?.cancel()
+        let field = SettingsFieldKey(tablePath: gotifyTable, key: "base-url")
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        markPendingStringWrite(trimmedValue, for: field)
+
+        gotifyBaseURLTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            if trimmedValue.isEmpty {
+                ConfigManager.shared.removeConfigValue(tablePath: gotifyTable, key: "base-url")
+            } else {
+                settingsStore.setString(trimmedValue, for: field)
+            }
+        }
+    }
+
+    private func resetGotifyDefaults() {
+        gotifyBaseURLTask?.cancel()
+
+        isApplyingConfigSnapshot = true
+        gotifyEnabled = false
+        gotifyBaseURL = ""
+        gotifyHistoryLimit = 20
+        showInCalendarPopup = true
+        isApplyingConfigSnapshot = false
+
+        pendingBoolWrites.removeValue(forKey: fieldIdentifier(.init(tablePath: gotifyTable, key: "enabled")))
+        pendingBoolWrites.removeValue(forKey: fieldIdentifier(.init(tablePath: gotifyTable, key: "show-in-calendar-popup")))
+        pendingStringWrites.removeValue(forKey: fieldIdentifier(.init(tablePath: gotifyTable, key: "base-url")))
+
+        settingsStore.setBool(false, for: .init(tablePath: gotifyTable, key: "enabled"))
+        settingsStore.setBool(true, for: .init(tablePath: gotifyTable, key: "show-in-calendar-popup"))
+        ConfigManager.shared.removeConfigValue(tablePath: gotifyTable, key: "base-url")
+        settingsStore.setInt(20, for: .init(tablePath: gotifyTable, key: "history-limit"))
+    }
+
+    private func resetGotifyPlacementDefaults() {
+        isApplyingConfigSnapshot = true
+        showInCalendarPopup = true
+        isApplyingConfigSnapshot = false
+
+        pendingBoolWrites.removeValue(forKey: fieldIdentifier(.init(tablePath: gotifyTable, key: "show-in-calendar-popup")))
+        settingsStore.setBool(true, for: .init(tablePath: gotifyTable, key: "show-in-calendar-popup"))
+    }
+
+    private func resolvedStringValue(
+        for field: SettingsFieldKey,
+        incoming: String,
+        current: String
+    ) -> String {
+        let fieldID = fieldIdentifier(field)
+        if let pendingValue = pendingStringWrites[fieldID] {
+            if incoming == pendingValue {
+                pendingStringWrites.removeValue(forKey: fieldID)
+                return incoming
+            }
+            return current
+        }
+        return incoming
+    }
+
+    private func resolvedBoolValue(
+        for field: SettingsFieldKey,
+        incoming: Bool,
+        current: Bool
+    ) -> Bool {
+        let fieldID = fieldIdentifier(field)
+        if let pendingValue = pendingBoolWrites[fieldID] {
+            if incoming == pendingValue {
+                pendingBoolWrites.removeValue(forKey: fieldID)
+                return incoming
+            }
+            return current
+        }
+        return incoming
+    }
+
+    private func markPendingStringWrite(_ value: String, for field: SettingsFieldKey) {
+        pendingStringWrites[fieldIdentifier(field)] = value
+    }
+
+    private func markPendingBoolWrite(_ value: Bool, for field: SettingsFieldKey) {
+        pendingBoolWrites[fieldIdentifier(field)] = value
+    }
+
+    private func fieldIdentifier(_ field: SettingsFieldKey) -> String {
+        "\(field.tablePath).\(field.key)"
+    }
+
+    private func submitGotifyLogin() {
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedUsername.isEmpty, !password.isEmpty else { return }
+        Task {
+            await gotifyManager.signIn(username: trimmedUsername, password: password)
+            if gotifyManager.isAuthenticated {
+                password = ""
+            }
+        }
+    }
+
+    private var gotifyStatusTitle: String {
+        if !gotifyEnabled {
+            return "Gotify is disabled"
+        }
+        if gotifyManager.isAuthenticated {
+            return gotifyManager.isConnected ? "Gotify live stream connected" : "Gotify connected"
+        }
+        if gotifyBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Gotify needs a base URL"
+        }
+        return "Gotify is ready for sign in"
+    }
+
+    private var gotifyStatusDescription: String {
+        if !gotifyEnabled {
+            return "Turn the integration on here when you want Barik to connect to Gotify."
+        }
+        if let error = gotifyManager.errorMessage, !error.isEmpty {
+            return error
+        }
+        if gotifyManager.isAuthenticated {
+            if showInCalendarPopup {
+                return "Open the calendar popup and switch to the Gotify tab to inspect recent notifications."
+            }
+            return "Gotify is connected. The calendar popup tab is currently hidden in Placement settings."
+        }
+        return "Set the base URL here, then sign in from this section. Credentials stay in Keychain."
     }
 }
 

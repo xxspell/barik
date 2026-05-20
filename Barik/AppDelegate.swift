@@ -2,13 +2,15 @@ import SwiftUI
 import AppKit
 import OSLog
 import Combine
+import UserNotifications
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private var backgroundPanels: [NSPanel] = []
     private var menuBarPanels: [NSPanel] = []
     private var configCancellable: AnyCancellable?
     private let tickTickWallpaperManager = TickTickWallpaperManager.shared
+    private let gotifyManager = GotifyManager.shared
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "barik",
         category: "AppDelegate"
@@ -30,15 +32,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         MenuBarPopup.setup()
+        UNUserNotificationCenter.current().delegate = self
         setupPanels()
         tickTickWallpaperManager.startUpdating(
             config: ConfigManager.shared.globalWidgetConfig(for: "default.ticktick")
+        )
+        gotifyManager.startUpdating(
+            config: ConfigManager.shared.globalWidgetConfig(for: "default.gotify")
         )
         configCancellable = ConfigManager.shared.$config
             .receive(on: RunLoop.main)
             .sink { [weak self] config in
                 let widgetConfig = config.rootToml.widgets.config(for: "default.ticktick") ?? [:]
                 self?.tickTickWallpaperManager.startUpdating(config: widgetConfig)
+                let gotifyConfig = config.rootToml.widgets.config(for: "default.gotify") ?? [:]
+                self?.gotifyManager.startUpdating(config: gotifyConfig)
             }
 
         NotificationCenter.default.addObserver(
@@ -134,5 +142,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         
         alert.runModal()
         NSApplication.shared.terminate(nil)
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound])
     }
 }

@@ -69,6 +69,7 @@ struct CalendarBoxPopup: View {
 struct CalendarVerticalPopup: View {
     let calendarManager: CalendarManager
     @ObservedObject private var tickTick = TickTickManager.shared
+    @ObservedObject private var gotify = GotifyManager.shared
     @State private var selectedDay: Int? = Calendar.current.component(.day, from: Date())
 
     init(_ calendarManager: CalendarManager) {
@@ -122,7 +123,7 @@ struct CalendarVerticalPopup: View {
                     currentMonth: currentMonth
                 )
             }
-            .frame(width: 255)
+            .frame(width: gotify.showsTab ? 320 : 255)
             .padding(.top, 20)
         }
         .padding(.horizontal, 20)
@@ -136,6 +137,7 @@ struct CalendarVerticalPopup: View {
 struct CalendarHorizontalPopup: View {
     let calendarManager: CalendarManager
     @ObservedObject private var tickTick = TickTickManager.shared
+    @ObservedObject private var gotify = GotifyManager.shared
 
     init(_ calendarManager: CalendarManager) {
         self.calendarManager = calendarManager
@@ -195,7 +197,7 @@ struct CalendarHorizontalPopup: View {
                     )
                 }
             }
-            .frame(width: 255)
+            .frame(width: gotify.showsTab ? 320 : 255)
             .padding(.leading, 30)
         }
         .padding(.horizontal, 30)
@@ -409,6 +411,7 @@ private struct CombinedDayAgendaView: View {
     let currentYear: Int
     let currentMonth: Int
     @ObservedObject private var tickTick = TickTickManager.shared
+    @ObservedObject private var gotify = GotifyManager.shared
     @State private var filter: AgendaFilter = .all
 
     private var displayDate: Date {
@@ -440,7 +443,9 @@ private struct CombinedDayAgendaView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             filterTabs
-            if filteredItems.isEmpty {
+            if filter == .gotify {
+                GotifyMessagesView(manager: gotify)
+            } else if filteredItems.isEmpty {
                 Text(NSLocalizedString("EMPTY_EVENTS", comment: ""))
                     .frame(maxWidth: .infinity, alignment: .center)
                     .barikPopupTextStyle(.callout)
@@ -526,6 +531,8 @@ private struct CombinedDayAgendaView: View {
                 if case .task = item.kind { return true }
                 return false
             }
+        case .gotify:
+            return []
         }
     }
 
@@ -546,6 +553,9 @@ private struct CombinedDayAgendaView: View {
             filterTab(title: localized("Calendar"), isSelected: filter == .calendar) { filter = .calendar }
             if tickTick.isAuthenticated {
                 filterTab(title: localized("TickTick Filter"), isSelected: filter == .ticktick) { filter = .ticktick }
+            }
+            if gotify.showsTab {
+                filterTab(title: "Gotify", isSelected: filter == .gotify) { filter = .gotify }
             }
             Spacer()
         }
@@ -569,6 +579,7 @@ private struct CombinedDayAgendaView: View {
         case all
         case calendar
         case ticktick
+        case gotify
     }
 
     fileprivate struct AgendaItem: Identifiable {
@@ -701,6 +712,293 @@ private struct CombinedTaskRow: View {
         let f = DateFormatter()
         f.setLocalizedDateFormatFromTemplate("j:mm")
         return f.string(from: date)
+    }
+}
+
+private struct GotifyMessagesView: View {
+    @ObservedObject var manager: GotifyManager
+    @State private var username = ""
+    @State private var password = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !manager.isEnabled {
+                disabledView
+            } else if !manager.isConfigured {
+                unconfiguredView
+            } else if !manager.isAuthenticated {
+                loginView
+            } else {
+                connectedView
+            }
+        }
+        .animation(.easeInOut(duration: 0.16), value: manager.isAuthenticated)
+        .onAppear {
+            manager.ensureLiveConnection()
+        }
+    }
+
+    private var disabledView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Gotify is disabled")
+                .barikPopupTextStyle(.headline)
+            Text("Enable Gotify in Gotify settings to show recent notifications here.")
+                .barikPopupTextStyle(.caption)
+                .foregroundStyle(.white.opacity(0.45))
+
+            RoutedSettingsLink(section: .gotify) {
+                Label("Open Gotify settings", systemImage: "gearshape")
+                    .barikPopupFont(size: 11, weight: .medium)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(7)
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private var unconfiguredView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Set a Gotify URL")
+                .barikPopupTextStyle(.headline)
+            Text("Configure the Gotify base URL in Gotify settings, then come back here to sign in.")
+                .barikPopupTextStyle(.caption)
+                .foregroundStyle(.white.opacity(0.45))
+
+            RoutedSettingsLink(section: .gotify) {
+                Label("Open Gotify settings", systemImage: "gearshape")
+                    .barikPopupFont(size: 11, weight: .medium)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(7)
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private var loginView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Gotify Sign In")
+                        .barikPopupTextStyle(.headline)
+                    if let baseURL = manager.webURLString {
+                        Text(baseURL)
+                            .barikPopupTextStyle(.caption2)
+                            .foregroundStyle(.white.opacity(0.35))
+                            .lineLimit(1)
+                    }
+                }
+                Spacer()
+            }
+
+            if let error = manager.errorMessage, !error.isEmpty {
+                Text(error)
+                    .barikPopupTextStyle(.caption)
+                    .foregroundStyle(.red.opacity(0.85))
+            }
+
+            VStack(spacing: 6) {
+                TextField("Username", text: $username)
+                    .barikPopupFont(size: 12)
+                    .textFieldStyle(.roundedBorder)
+
+                SecureField("Password", text: $password)
+                    .barikPopupFont(size: 12)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { submitLogin() }
+            }
+
+            HStack(spacing: 8) {
+                Button(action: submitLogin) {
+                    if manager.isLoading {
+                        HStack(spacing: 6) {
+                            ProgressView().scaleEffect(0.7).tint(.white)
+                            Text("Connecting…")
+                                .barikPopupFont(size: 11, weight: .medium)
+                                .lineLimit(1)
+                        }
+                    } else {
+                        Text("Connect")
+                            .barikPopupFont(size: 11, weight: .medium)
+                            .lineLimit(1)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .fixedSize(horizontal: true, vertical: false)
+                .disabled(username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty || manager.isLoading)
+
+                RoutedSettingsLink(section: .gotify) {
+                    Text("Settings")
+                        .barikPopupFont(size: 11, weight: .medium)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.08))
+                        .cornerRadius(7)
+                }
+            }
+
+            Text("Credentials are stored in Keychain. Live updates arrive through the Gotify websocket stream.")
+                .barikPopupTextStyle(.caption2)
+                .foregroundStyle(.white.opacity(0.32))
+        }
+        .padding(.top, 4)
+    }
+
+    private var connectedView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(manager.liveStatusColor)
+                            .frame(width: 8, height: 8)
+                        Text(manager.currentUser?.name ?? "Gotify")
+                            .barikPopupTextStyle(.headline)
+                    }
+                    Text(manager.liveStatusText)
+                        .barikPopupTextStyle(.caption2)
+                        .foregroundStyle(manager.liveStatusColor.opacity(0.85))
+                    Text(manager.notificationStatusText)
+                        .barikPopupTextStyle(.caption2)
+                        .foregroundStyle(manager.notificationsAuthorized ? .white.opacity(0.35) : .orange.opacity(0.8))
+                }
+                Spacer()
+            }
+
+            HStack(spacing: 6) {
+                actionChip(title: "Open", systemImage: "safari", action: manager.openWebUI)
+                actionChip(title: "Refresh", systemImage: "arrow.clockwise") {
+                    Task { await manager.refreshNow() }
+                }
+                actionChip(title: "Sign Out", systemImage: "rectangle.portrait.and.arrow.right", action: manager.signOut)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let error = manager.errorMessage, !error.isEmpty {
+                Text(error)
+                    .barikPopupTextStyle(.caption)
+                    .foregroundStyle(.orange.opacity(0.8))
+            }
+
+            if manager.messages.isEmpty {
+                Text("No notifications yet")
+                    .barikPopupTextStyle(.callout)
+                    .foregroundStyle(.white.opacity(0.35))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 10)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 6) {
+                        ForEach(manager.messages) { message in
+                            GotifyMessageRow(message: message, appName: manager.appName(for: message.appid))
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .frame(maxHeight: 270)
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private func actionChip(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .barikPopupFont(size: 10, weight: .medium)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color.white.opacity(0.08))
+                .cornerRadius(7)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered in hovered ? NSCursor.pointingHand.push() : NSCursor.pop() }
+    }
+
+    private func submitLogin() {
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedUsername.isEmpty, !password.isEmpty else { return }
+        Task { await manager.signIn(username: trimmedUsername, password: password) }
+    }
+}
+
+private struct GotifyMessageRow: View {
+    let message: GotifyMessage
+    let appName: String
+
+    var body: some View {
+        let accent = priorityColor(for: message.priority)
+        HStack(alignment: .top, spacing: 6) {
+            RoundedRectangle(cornerRadius: 999)
+                .fill(accent)
+                .frame(width: 3, height: 34)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .top, spacing: 6) {
+                    Text(message.title.isEmpty ? appName : message.title)
+                        .barikPopupTextStyle(.headline)
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
+                    Text(relativeDateText)
+                        .barikPopupTextStyle(.caption2)
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+
+                HStack(spacing: 6) {
+                    Text(appName)
+                        .barikPopupTextStyle(.caption2)
+                        .foregroundStyle(accent.opacity(0.9))
+                    Text("P\(message.priority)")
+                        .barikPopupTextStyle(.caption2)
+                        .foregroundStyle(.white.opacity(0.28))
+                }
+
+                if !trimmedBody.isEmpty {
+                    Text(trimmedBody)
+                        .barikPopupTextStyle(.caption)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .lineLimit(3)
+                }
+            }
+        }
+        .padding(6)
+        .padding(.trailing, 4)
+        .background(accent.opacity(0.12))
+        .cornerRadius(7)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var trimmedBody: String {
+        message.message.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var relativeDateText: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: message.date, relativeTo: Date())
+    }
+
+    private func priorityColor(for priority: Int) -> Color {
+        switch priority {
+        case 8...:
+            return .red
+        case 5...7:
+            return .orange
+        case 3...4:
+            return Color(red: 0.3, green: 0.7, blue: 1.0)
+        default:
+            return .white.opacity(0.55)
+        }
     }
 }
 
