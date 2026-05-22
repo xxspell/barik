@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.12.0
+
+### Added
+- Add TickTick wallpaper sync for macOS desktops, including automatic refreshes, wallpaper restore support, and deduplication of repeated rendered assets
+- Add settings controls for the TickTick wallpaper integration so the service URL, profile, style, token, interval, apply-now action, and restore behavior can be managed from the GUI
+- Add configurable foreground font selection with installed-font search, popup font opt-in, and supporting appearance guidance in Settings
+- Add compact multi-display Spaces layouts with a focused strip mode, visual style controls, outline support, and per-monitor space filtering
+- Add compact Now Playing controls for pause-based auto hide, text overflow handling, and subtle left-to-right playback progress fill with accent or custom colors
+- Add Gotify integration with secure sign-in, recent notifications in the calendar popup, native macOS notifications, and realtime websocket updates with fallback refresh support
+
+### Fixed
+- Fix TickTick popup task trees so nested subtasks stay visible and interactive after completion instead of disappearing from unfinished parents
+- Fix TickTick matrix urgency classification to match the native app more closely by keeping overdue tasks in their original non-urgent quadrants
+- Fix keyboard layout updates so the widget follows macOS input source changes more reliably without falling back to continuous polling
+- Fix config rewrites when a parent TOML table is missing but one of its descendant tables already exists, preventing invalid duplicate table output
+- Fix Spaces crashes caused by duplicate space identifiers returned by window manager providers
+- Fix repeated TickTick wallpaper refreshes by reusing ETags and treating unchanged wallpaper responses as a no-op
+- Fix Now Playing pause auto-hide so the widget disappears after the configured timeout without waiting for unrelated UI updates
+- Fix Pomodoro popup typography and overtime formatting for custom fonts and long-running sessions
+
+### Performance
+- Reduce menu bar update storms by batching System Monitor publications, preferring event-first Spaces refreshes with conservative fallback polling, and simplifying Now Playing measurement and visibility updates
+
+### Changed
+- Improve Gotify connection resilience with automatic websocket handshake fallback and clearer live-status reporting in the popup and settings
+- Improve popup access and dismissal behavior while wiring custom foreground fonts through widgets and popups more safely
+- Improve Spaces readability on dense multi-monitor setups with tighter compact metrics and clearer visual separation between the selector block and active space windows
+
 ## 0.11.0
 
 ### Added
