@@ -447,6 +447,10 @@ final class PomodoroManager: ObservableObject {
         let clamped = clampDuration(minutes)
         logger.info("setFocusDuration() \(clamped)")
         focusDurationMinutes = clamped
+        SettingsStore.shared.setInt(
+            clamped,
+            for: SettingsFieldKey(tablePath: "widgets.default.pomodoro", key: "focus-duration")
+        )
         if phase == .idle {
             plannedDuration = TimeInterval(clamped * 60)
             remainingTime = plannedDuration
@@ -458,6 +462,10 @@ final class PomodoroManager: ObservableObject {
     func setShortBreakDuration(minutes: Int) {
         shortBreakDurationMinutes = max(minutes, 1)
         logger.info("setShortBreakDuration() \(self.shortBreakDurationMinutes)")
+        SettingsStore.shared.setInt(
+            shortBreakDurationMinutes,
+            for: SettingsFieldKey(tablePath: "widgets.default.pomodoro", key: "short-break-duration")
+        )
         persistPreferencesToTickTickIfNeeded()
         saveCache()
     }
