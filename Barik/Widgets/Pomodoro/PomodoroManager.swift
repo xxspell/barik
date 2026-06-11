@@ -717,6 +717,8 @@ final class PomodoroManager: ObservableObject {
                 self?.refreshClock()
             }
         }
+        refreshTimer?.tolerance = 0.1
+        RunLoop.main.add(refreshTimer!, forMode: .common)
     }
 
     private func refreshClock() {
