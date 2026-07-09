@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.1
+
+### Fixed
+- Fix TickTick task loading by tolerating missing private API focus summary fields and logging decoder failures with JSON context so partial responses no longer break the widget
+- Fix TickTick note handling so private API note records are hidden from the task list while regular tasks, checklists, and unknown kinds continue to render as tasks
+- Fix Pomodoro overtime label so it keeps updating after the timer crosses zero instead of freezing on the final positive value
+- Fix Pomodoro popup duration changes so edits made from the popup persist across sessions instead of reverting on next launch
+
 ## 0.12.0
 
 ### Added
