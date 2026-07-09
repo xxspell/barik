@@ -73,6 +73,45 @@ struct TickTickTaskFocusSummary: Codable, Equatable {
     var focuses: [[TickTickFocusValue]]
     var stopwatchDuration: Int
     var userId: Int
+
+    enum CodingKeys: String, CodingKey {
+        case estimatedDuration
+        case estimatedPomo
+        case pomoCount
+        case pomoDuration
+        case focuses
+        case stopwatchDuration
+        case userId
+    }
+
+    init(
+        estimatedDuration: Int,
+        estimatedPomo: Int,
+        pomoCount: Int,
+        pomoDuration: Int,
+        focuses: [[TickTickFocusValue]],
+        stopwatchDuration: Int,
+        userId: Int
+    ) {
+        self.estimatedDuration = estimatedDuration
+        self.estimatedPomo = estimatedPomo
+        self.pomoCount = pomoCount
+        self.pomoDuration = pomoDuration
+        self.focuses = focuses
+        self.stopwatchDuration = stopwatchDuration
+        self.userId = userId
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        estimatedDuration = try container.decodeIfPresent(Int.self, forKey: .estimatedDuration) ?? 0
+        estimatedPomo = try container.decodeIfPresent(Int.self, forKey: .estimatedPomo) ?? 0
+        pomoCount = try container.decodeIfPresent(Int.self, forKey: .pomoCount) ?? 0
+        pomoDuration = try container.decodeIfPresent(Int.self, forKey: .pomoDuration) ?? 0
+        focuses = try container.decodeIfPresent([[TickTickFocusValue]].self, forKey: .focuses) ?? []
+        stopwatchDuration = try container.decodeIfPresent(Int.self, forKey: .stopwatchDuration) ?? 0
+        userId = try container.decodeIfPresent(Int.self, forKey: .userId) ?? 0
+    }
 }
 
 enum TickTickFocusValue: Codable, Equatable {
@@ -835,7 +874,7 @@ final class TickTickManager: ObservableObject {
         logger.debug("fetchPrivateBatch() — raw response: \(self.truncatedRawString(data))")
         try checkStatus(http.statusCode)
 
-        let batch = try JSONDecoder().decode(BatchCheckResponse.self, from: data)
+        let batch = try decodePrivateBatch(data)
         updatePrivateUserIdIfNeeded(from: batch)
 
         let rawProjects = (batch.projectProfiles ?? [])
@@ -844,15 +883,105 @@ final class TickTickManager: ObservableObject {
         logger.info("fetchPrivateBatch() — \(projects.count) projects")
 
         let allRawTasks = (batch.syncTaskBean?.update ?? []) + (batch.syncTaskBean?.add ?? [])
-        let activeAndCompletedRaw = allRawTasks.filter {
+        let displayableRawTasks = allRawTasks.filter { !isTickTickNote($0) }
+        let hiddenNoteCount = allRawTasks.count - displayableRawTasks.count
+        let activeAndCompletedRaw = displayableRawTasks.filter {
             let status = $0.status ?? 0
             return status == 0 || status == 2
         }
         let pendingCount = activeAndCompletedRaw.filter { ($0.status ?? 0) == 0 }.count
-        logger.info("fetchPrivateBatch() — \(allRawTasks.count) total tasks, \(pendingCount) pending, \(activeAndCompletedRaw.count) active-or-completed")
+        logger.info("fetchPrivateBatch() — \(allRawTasks.count) total records, \(hiddenNoteCount) notes hidden, \(pendingCount) pending, \(activeAndCompletedRaw.count) active-or-completed tasks")
 
         let tasks = activeAndCompletedRaw.compactMap { mapTask($0) }
         return (projects, tasks)
+    }
+
+    private func decodePrivateBatch(_ data: Data) throws -> BatchCheckResponse {
+        do {
+            return try JSONDecoder().decode(BatchCheckResponse.self, from: data)
+        } catch let error as DecodingError {
+            logPrivateBatchDecodingError(error, data: data)
+            throw error
+        }
+    }
+
+    private func logPrivateBatchDecodingError(_ error: DecodingError, data: Data) {
+        let details = privateBatchDecodingErrorDetails(error)
+        logger.error(
+            "fetchPrivateBatch() — decode failed type=\(details.kind, privacy: .public) path=\(details.path, privacy: .public) message=\(details.message, privacy: .public)"
+        )
+
+        if let json = try? JSONSerialization.jsonObject(with: data),
+           let context = jsonContext(at: details.codingPath, in: json) {
+            logger.error("fetchPrivateBatch() — failing JSON context: \(self.truncatedRawJSONObject(context), privacy: .public)")
+        } else {
+            logger.error("fetchPrivateBatch() — no JSON context found for path=\(details.path, privacy: .public)")
+        }
+    }
+
+    private func privateBatchDecodingErrorDetails(_ error: DecodingError) -> (kind: String, codingPath: [CodingKey], path: String, message: String) {
+        let kind: String
+        let codingPath: [CodingKey]
+        let message: String
+
+        switch error {
+        case let .keyNotFound(key, context):
+            kind = "keyNotFound(\(key.stringValue))"
+            codingPath = context.codingPath + [key]
+            message = context.debugDescription
+        case let .valueNotFound(type, context):
+            kind = "valueNotFound(\(String(describing: type)))"
+            codingPath = context.codingPath
+            message = context.debugDescription
+        case let .typeMismatch(type, context):
+            kind = "typeMismatch(\(String(describing: type)))"
+            codingPath = context.codingPath
+            message = context.debugDescription
+        case let .dataCorrupted(context):
+            kind = "dataCorrupted"
+            codingPath = context.codingPath
+            message = context.debugDescription
+        @unknown default:
+            kind = "unknown"
+            codingPath = []
+            message = String(describing: error)
+        }
+
+        return (kind, codingPath, codingPathDescription(codingPath), message)
+    }
+
+    private func codingPathDescription(_ path: [CodingKey]) -> String {
+        guard !path.isEmpty else { return "<root>" }
+        return path.map { key in
+            if let index = key.intValue {
+                return "[\(index)]"
+            }
+            return key.stringValue
+        }.joined(separator: ".")
+    }
+
+    private func jsonContext(at codingPath: [CodingKey], in root: Any) -> Any? {
+        guard !codingPath.isEmpty else { return root }
+
+        // The parent object is more useful than a missing/null/primitive field value.
+        if let parent = jsonValue(at: Array(codingPath.dropLast()), in: root) {
+            return parent
+        }
+        return jsonValue(at: codingPath, in: root)
+    }
+
+    private func jsonValue(at codingPath: [CodingKey], in root: Any) -> Any? {
+        var current: Any = root
+        for key in codingPath {
+            if let index = key.intValue {
+                guard let array = current as? [Any], array.indices.contains(index) else { return nil }
+                current = array[index]
+            } else {
+                guard let object = current as? [String: Any], let next = object[key.stringValue] else { return nil }
+                current = next
+            }
+        }
+        return current
     }
 
     // MARK: - OpenAPI data fetch
@@ -1402,7 +1531,12 @@ final class TickTickManager: ObservableObject {
 
     // MARK: - Helpers
 
+    private func isTickTickNote(_ task: RawTask) -> Bool {
+        task.kind?.trimmingCharacters(in: .whitespacesAndNewlines) == "NOTE"
+    }
+
     private func mapTask(_ t: RawTask) -> TickTickTask? {
+        guard !isTickTickNote(t) else { return nil }
         guard !t.title.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         return TickTickTask(
             id: t.id,
