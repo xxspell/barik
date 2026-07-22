@@ -144,6 +144,10 @@ final class PomodoroManager: ObservableObject {
     @Published private(set) var history: [PomodoroHistoryEntry] = []
     @Published private(set) var statistics: PomodoroDisplayStatistics = .zero
     @Published private(set) var tickTickPreferences: TickTickPomodoroPreferences?
+    /// True while the currently displayed session was adopted from the official TickTick app
+    /// rather than started through Barik — the popup should show it read-only in that case,
+    /// since pausing/stopping it here wouldn't actually control the real TickTick session.
+    @Published private(set) var isControlledByTickTickApp = false
 
     @Published var focusDurationMinutes: Int = 25
     @Published var shortBreakDurationMinutes: Int = 5
@@ -164,6 +168,7 @@ final class PomodoroManager: ObservableObject {
     private var hasStarted = false
     private var showSeconds = false
     private var preferredMode: PomodoroIntegrationMode = .local
+    private var nativeMirrorEnabled = false
     private var playSoundOnFocusEnd = true
     private var playSoundOnBreakEnd = true
     private var focusFinishedSoundName: String?
@@ -287,6 +292,7 @@ final class PomodoroManager: ObservableObject {
         repeatBreakFinishedSoundUntilPopupOpened = config["repeat-break-finished-sound-until-popup-opened"]?.boolValue ?? false
         breakFinishedSoundRepeatInterval = max(Double(config["break-finished-sound-repeat-interval-seconds"]?.intValue ?? 12), 3)
         historyWindowDays = max(config["history-window-days"]?.intValue ?? 180, 7)
+        nativeMirrorEnabled = config["native-mirror"]?.boolValue ?? false
 
         logger.debug(
             "updateConfiguration() mode=\(self.preferredMode.rawValue, privacy: .public) focus=\(self.focusDurationMinutes) shortBreak=\(self.shortBreakDurationMinutes) longBreak=\(self.longBreakDurationMinutes)"
@@ -542,6 +548,7 @@ final class PomodoroManager: ObservableObject {
         accumulatedPauseDuration = 0
         plannedDuration = duration
         remainingTime = duration
+        isControlledByTickTickApp = false
         self.phase = phase
         logger.info("beginSession() phase=\(phase.rawValue, privacy: .public) duration=\(Int(duration))")
         startRefreshTimer()
@@ -693,6 +700,7 @@ final class PomodoroManager: ObservableObject {
         remainingTime = plannedDuration
         currentSessionStart = nil
         currentSessionEnd = nil
+        isControlledByTickTickApp = false
         pausedAt = nil
         waitingForBreakStartedAt = nil
         accumulatedPauseDuration = 0
@@ -722,6 +730,14 @@ final class PomodoroManager: ObservableObject {
     }
 
     private func refreshClock() {
+        if isControlledByTickTickApp {
+            syncWithTickTickApp()
+            return
+        }
+        if phase == .idle {
+            adoptLocalTickTickSessionIfNeeded()
+            return
+        }
         if phase == .waitingForBreak {
             objectWillChange.send()
             return
@@ -734,6 +750,40 @@ final class PomodoroManager: ObservableObject {
         if newRemaining <= 0 {
             handleTimerFinished()
         }
+    }
+
+    /// Adopts a Pomodoro session started from the official TickTick app (not through Barik) by
+    /// reading TickTick's own local preferences — the same source of truth TickTick itself uses,
+    /// no network round-trip or Accessibility permission involved.
+    private func adoptLocalTickTickSessionIfNeeded() {
+        guard nativeMirrorEnabled else { return }
+        guard let snapshot = TickTickLocalPomodoroState.currentSnapshot(), !snapshot.isPaused else { return }
+
+        currentSessionStart = snapshot.start
+        currentSessionEnd = Date().addingTimeInterval(snapshot.remaining)
+        accumulatedPauseDuration = 0
+        plannedDuration = snapshot.totalDuration
+        remainingTime = snapshot.remaining
+        phase = .focus
+        isControlledByTickTickApp = true
+        logger.info("adoptLocalTickTickSessionIfNeeded() adopted local session remaining=\(Int(snapshot.remaining))")
+        startRefreshTimer()
+        saveCache()
+    }
+
+    /// While mirroring a session adopted from TickTick, re-check its live state on every tick
+    /// instead of ticking a local clock down independently — TickTick can pause, resume, cancel,
+    /// or finish it at any moment, and Barik must reflect that rather than pretend to control it.
+    private func syncWithTickTickApp() {
+        guard let snapshot = TickTickLocalPomodoroState.currentSnapshot() else {
+            logger.info("syncWithTickTickApp() TickTick session ended, resetting to idle")
+            resetToIdle(keepSelection: true)
+            return
+        }
+
+        plannedDuration = snapshot.totalDuration
+        remainingTime = snapshot.remaining
+        phase = snapshot.isPaused ? .focusPaused : .focus
     }
 
     private func reconcileEffectiveIntegrationMode() {

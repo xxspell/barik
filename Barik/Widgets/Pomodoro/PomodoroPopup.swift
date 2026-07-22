@@ -578,17 +578,30 @@ struct PomodoroPopup: View {
                 }
 
             case .focus, .focusPaused:
-                HStack(spacing: 10) {
-                    actionButton(
-                        title: manager.isPaused ? String(localized: "pomodoro.action.resume") : String(localized: "pomodoro.action.pause"),
-                        icon: manager.isPaused ? "play.fill" : "pause.fill",
-                        fill: manager.isPaused ? .green : .yellow
-                    ) {
-                        manager.togglePause()
-                    }
+                if manager.isControlledByTickTickApp {
+                    Text(String(localized: "pomodoro.actions.controlled_by_ticktick"))
+                        .barikPopupFont(size: 11, weight: secondaryWeight)
+                        .foregroundStyle(.white.opacity(0.62))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 11)
+                        .padding(.horizontal, 12)
+                        .background(Color.white.opacity(0.06))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    HStack(spacing: 10) {
+                        actionButton(
+                            title: manager.isPaused ? String(localized: "pomodoro.action.resume") : String(localized: "pomodoro.action.pause"),
+                            icon: manager.isPaused ? "play.fill" : "pause.fill",
+                            fill: manager.isPaused ? .green : .yellow
+                        ) {
+                            manager.togglePause()
+                        }
 
-                    actionButton(title: String(localized: "pomodoro.action.stop"), icon: "stop.fill", fill: .white.opacity(0.12), foreground: .white) {
-                        manager.cancelCurrentTimer()
+                        actionButton(title: String(localized: "pomodoro.action.stop"), icon: "stop.fill", fill: .white.opacity(0.12), foreground: .white) {
+                            manager.cancelCurrentTimer()
+                        }
                     }
                 }
 

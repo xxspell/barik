@@ -4679,6 +4679,23 @@
         }
       }
     },
+    "pomodoro.actions.controlled_by_ticktick": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Started from the TickTick app — pause, stop, and resume it there. Barik just mirrors it."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сессия запущена из приложения TickTick — паузу, остановку и возобновление нужно делать там. Barik её только отображает."
+          }
+        }
+      }
+    },
     "pomodoro.actions.title": {
       "localizations": {
         "en": {
@@ -9584,6 +9601,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Длинный перерыв каждые"
+          }
+        }
+      }
+    },
+    "settings.pomodoro.field.native_mirror.description": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "While idle, pick up a Pomodoro session started from the TickTick app instead of Barik, and show it counting down in this widget."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока нет активной сессии, подхватывать Pomodoro-сессию, запущенную из приложения TickTick, а не из Barik, и показывать её обратный отсчёт в этом виджете."
+          }
+        }
+      }
+    },
+    "settings.pomodoro.field.native_mirror.title": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirror TickTick's Native Timer"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отражать нативный таймер TickTick"
           }
         }
       }

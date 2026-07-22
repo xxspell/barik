@@ -4439,6 +4439,7 @@ private struct PomodoroSettingsView: View {
     @State private var integrationMode = PomodoroIntegrationMode.local
     @State private var displayMode = PomodoroDisplayModeSelection.timer
     @State private var showSeconds = false
+    @State private var nativeMirrorEnabled = false
     @State private var focusDuration = 25.0
     @State private var shortBreakDuration = 5.0
     @State private var longBreakDuration = 15.0
@@ -4510,6 +4511,21 @@ private struct PomodoroSettingsView: View {
                             setBoolValue(
                                 newValue,
                                 for: .init(tablePath: pomodoroTable, key: "show-seconds")
+                            )
+                        }
+                    )
+                )
+
+                ToggleRow(
+                    title: settingsLocalized("settings.pomodoro.field.native_mirror.title"),
+                    description: settingsLocalized("settings.pomodoro.field.native_mirror.description"),
+                    isOn: Binding(
+                        get: { nativeMirrorEnabled },
+                        set: { newValue in
+                            nativeMirrorEnabled = newValue
+                            setBoolValue(
+                                newValue,
+                                for: .init(tablePath: pomodoroTable, key: "native-mirror")
                             )
                         }
                     )
@@ -4691,6 +4707,7 @@ private struct PomodoroSettingsView: View {
         let modeField = SettingsFieldKey(tablePath: pomodoroTable, key: "mode")
         let displayModeField = SettingsFieldKey(tablePath: pomodoroTable, key: "display-mode")
         let showSecondsField = SettingsFieldKey(tablePath: pomodoroTable, key: "show-seconds")
+        let nativeMirrorField = SettingsFieldKey(tablePath: pomodoroTable, key: "native-mirror")
         let focusDurationField = SettingsFieldKey(tablePath: pomodoroTable, key: "focus-duration")
         let shortBreakField = SettingsFieldKey(tablePath: pomodoroTable, key: "short-break-duration")
         let longBreakField = SettingsFieldKey(tablePath: pomodoroTable, key: "long-break-duration")
@@ -4720,6 +4737,11 @@ private struct PomodoroSettingsView: View {
             for: showSecondsField,
             incoming: settingsStore.boolValue(showSecondsField, fallback: false),
             current: showSeconds
+        )
+        nativeMirrorEnabled = resolvedBoolValue(
+            for: nativeMirrorField,
+            incoming: settingsStore.boolValue(nativeMirrorField, fallback: false),
+            current: nativeMirrorEnabled
         )
         focusDuration = Double(
             resolvedIntValue(
@@ -4780,15 +4802,18 @@ private struct PomodoroSettingsView: View {
         integrationMode = .local
         displayMode = .timer
         showSeconds = false
+        nativeMirrorEnabled = false
         isApplyingConfigSnapshot = false
 
         pendingStringWrites.removeValue(forKey: fieldIdentifier(.init(tablePath: pomodoroTable, key: "mode")))
         pendingStringWrites.removeValue(forKey: fieldIdentifier(.init(tablePath: pomodoroTable, key: "display-mode")))
         pendingBoolWrites.removeValue(forKey: fieldIdentifier(.init(tablePath: pomodoroTable, key: "show-seconds")))
+        pendingBoolWrites.removeValue(forKey: fieldIdentifier(.init(tablePath: pomodoroTable, key: "native-mirror")))
 
         settingsStore.setString("local", for: .init(tablePath: pomodoroTable, key: "mode"))
         settingsStore.setString("timer", for: .init(tablePath: pomodoroTable, key: "display-mode"))
         settingsStore.setBool(false, for: .init(tablePath: pomodoroTable, key: "show-seconds"))
+        settingsStore.setBool(false, for: .init(tablePath: pomodoroTable, key: "native-mirror"))
     }
 
     private func resetDurationDefaults() {
