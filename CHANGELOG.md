@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.2
+
+### Added
+- Add optional mirroring of Pomodoro sessions started from the official TickTick app, adopting their live countdown into Barik's timer and popup in real time via a new "Mirror TickTick's Native Timer" settings toggle
+
 ## 0.12.1
 
 ### Fixed
