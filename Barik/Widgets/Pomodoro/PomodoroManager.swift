@@ -694,7 +694,7 @@ final class PomodoroManager: ObservableObject {
     }
 
     private func resetToIdle(keepSelection: Bool) {
-        refreshTimer?.invalidate()
+        startRefreshTimer()
         phase = .idle
         plannedDuration = TimeInterval(focusDurationMinutes * 60)
         remainingTime = plannedDuration

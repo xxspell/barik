@@ -59,7 +59,8 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider, DeletableSp
             let spaces = try decoder.decode([YabaiSpace].self, from: data)
             return spaces
         } catch {
-            logger.error("Decode yabai spaces error: \(error.localizedDescription)")
+            let raw = String(data: data, encoding: .utf8) ?? "<non-utf8 \(data.count) bytes>"
+            logger.error("Decode yabai spaces error: \(String(describing: error), privacy: .public) raw=\(raw, privacy: .public)")
             return nil
         }
     }
