@@ -49,8 +49,16 @@ enum TickTickLocalPomodoroState {
             return nil
         }
 
+        // The timeline's own `pomodoroDuration` entry is only rewritten when TickTick fully
+        // rewrites the timeline (on pause/resume). Extending the running session's duration via
+        // TickTick's own "+" control updates `fallbackDurationKey` immediately but leaves the
+        // timeline entry stale until the next pause/resume — confirmed empirically. Since "+"
+        // only ever increases the duration, taking the max of both keeps the live value correct
+        // without waiting for a pause/resume to catch up.
         let sessionDuration = timeline.lazy.compactMap { $0["pomodoroDuration"] as? Double }.first
-        guard let duration = sessionDuration ?? (value(for: fallbackDurationKey) as? Double), duration > 0 else {
+        let fallbackDuration = value(for: fallbackDurationKey) as? Double
+        let duration = max(sessionDuration ?? 0, fallbackDuration ?? 0)
+        guard duration > 0 else {
             return nil
         }
 
