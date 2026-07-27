@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.3
+
+### Fixed
+- Fix Pomodoro so mirrored TickTick sessions pick up a duration change made mid-run (e.g. adding minutes from TickTick's own controls) immediately instead of waiting for a pause/resume
+- Fix Pomodoro so the refresh timer keeps running after returning to idle, so a new TickTick session can still be detected and mirrored
+
 ## 0.12.2
 
 ### Added
