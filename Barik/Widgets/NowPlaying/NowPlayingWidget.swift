@@ -45,6 +45,55 @@ struct NowPlayingWidget: View {
     }
 
     var body: some View {
+        BarikStyle.current.isTUI ? AnyView(tuiBody) : AnyView(defaultBody)
+    }
+
+    private var tuiBody: some View {
+        let style = BarikStyle.current
+        return Group {
+            if let song = visibleSong {
+                HStack(spacing: 5) {
+                    Image(systemName: song.state == .paused ? "pause.fill" : "music.note")
+                        .barikFont(size: 10)
+                    Text(tuiText(for: song))
+                        .barikFont(size: 12, weight: .regular)
+                        .lineLimit(1)
+                }
+                .foregroundStyle(style.dim)
+                .experimentalConfiguration(cornerRadius: 15)
+                .frame(maxHeight: .infinity)
+                .background(.black.opacity(0.001))
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    MenuBarPopup.show(rect: widgetFrame, id: "nowplaying") {
+                        NowPlayingPopup(configProvider: configProvider)
+                    }
+                }
+            }
+        }
+        .captureScreenRect(into: $widgetFrame)
+        .onAppear(perform: schedulePauseVisibilityRefresh)
+        .onChange(of: pauseRefreshKey) { _, _ in
+            schedulePauseVisibilityRefresh()
+        }
+        .onReceive(configManager.$config) { _ in
+            schedulePauseVisibilityRefresh()
+        }
+        .onDisappear {
+            pauseHideWorkItem?.cancel()
+            pauseHideWorkItem = nil
+        }
+    }
+
+    private func tuiText(for song: NowPlayingSong) -> String {
+        let base = (showArtist && !song.artist.isEmpty) ? "\(song.title) — \(song.artist)" : song.title
+        let maxLen = maxCharactersPerLine
+        guard base.count > maxLen, maxLen > 2 else { return base }
+        return String(base.prefix(maxLen - 2)) + ".."
+    }
+
+    @ViewBuilder
+    private var defaultBody: some View {
         let _ = pauseVisibilityRevision
         ZStack(alignment: .trailing) {
             if let song = visibleSong {

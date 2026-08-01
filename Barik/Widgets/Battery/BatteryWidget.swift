@@ -15,6 +15,48 @@ struct BatteryWidget: View {
     @State private var rect: CGRect = CGRect()
 
     var body: some View {
+        BarikStyle.current.isTUI ? AnyView(tuiBody) : AnyView(defaultBody)
+    }
+
+    private var tuiBody: some View {
+        let style = BarikStyle.current
+        return HStack(spacing: 3) {
+            Text(tuiGauge)
+                .barikFont(size: 11)
+            if showPercentage {
+                Text("\(level)%")
+                    .barikFont(size: 12, weight: .semibold)
+            }
+            if isCharging && level != 100 {
+                Image(systemName: "bolt.fill")
+                    .barikFont(size: 9)
+            }
+        }
+        .foregroundStyle(tuiColor(style: style))
+        .experimentalConfiguration(cornerRadius: 15)
+        .frame(maxHeight: .infinity)
+        .background(.black.opacity(0.001))
+        .captureScreenRect(into: $rect)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            MenuBarPopup.show(rect: rect, id: "battery") { BatteryPopup() }
+        }
+    }
+
+    private var tuiGauge: String {
+        let cells = 4
+        let filled = max(0, min(cells, Int((Double(level) / 100.0 * Double(cells)).rounded())))
+        return String(repeating: "▰", count: filled) + String(repeating: "▱", count: cells - filled)
+    }
+
+    private func tuiColor(style: BarikStyle) -> Color {
+        if isCharging || level <= warningLevel {
+            return style.accent
+        }
+        return style.foreground
+    }
+
+    private var defaultBody: some View {
         ZStack {
             ZStack(alignment: .leading) {
                 BatteryBodyView(mask: false)

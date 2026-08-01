@@ -12,6 +12,22 @@ struct MenuBarView: View {
         configManager.config.experimental.foreground.notchHorizontalPadding
     }
 
+    /// Widgets with a dedicated TUI branch that manage their own palette.
+    /// They opt out of the monochrome net so the accent survives.
+    private static let tuiHandTunedWidgetIDs: Set<String> = [
+        "default.spaces",
+        "default.network",
+        "default.battery",
+        "default.time",
+        "default.nowplaying",
+        "default.system-monitor",
+        "default.cpuram",
+    ]
+
+    private var widgetSpacing: CGFloat {
+        BarikStyle.current.isTUI ? 8 : configManager.config.experimental.foreground.spacing
+    }
+
     var body: some View {
         let theme: ColorScheme? =
             switch configManager.config.rootToml.theme {
@@ -99,10 +115,13 @@ struct MenuBarView: View {
         _ items: [TomlWidgetItem],
         alignment: HorizontalAlignment = .leading
     ) -> some View {
-        HStack(spacing: configManager.config.experimental.foreground.spacing) {
+        HStack(spacing: widgetSpacing) {
             ForEach(0..<items.count, id: \.self) { index in
                 let item = items[index]
                 buildView(for: item)
+                    .modifier(TUIMonochromeNet(
+                        handTuned: MenuBarView.tuiHandTunedWidgetIDs.contains(item.id)
+                    ))
             }
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
@@ -197,9 +216,10 @@ struct MenuBarView: View {
             Spacer().frame(minWidth: 50, maxWidth: .infinity)
 
         case "divider":
+            let style = BarikStyle.current
             Rectangle()
-                .fill(Color.active)
-                .frame(width: 2, height: 15)
+                .fill(style.isTUI ? style.dim : Color.active)
+                .frame(width: style.isTUI ? 1 : 2, height: style.isTUI ? 12 : 15)
                 .clipShape(Capsule())
             
         case "default.ticktick":
@@ -229,5 +249,19 @@ struct MenuBarView: View {
     private func requestScreenRecordingAccessibilityPermissionIfNeeded(for itemIDs: [String]) {
         guard itemIDs.contains("default.screen-recording-stop") else { return }
         screenRecordingManager.requestAccessibilityPermissionIfNeeded()
+    }
+}
+
+/// In TUI, desaturates any widget that does not render its own controlled
+/// monochrome+accent palette, so the whole bar reads monochrome and cohesive.
+private struct TUIMonochromeNet: ViewModifier {
+    let handTuned: Bool
+
+    func body(content: Content) -> some View {
+        if BarikStyle.current.isTUI && !handTuned {
+            content.saturation(0).contrast(1.05)
+        } else {
+            content
+        }
     }
 }

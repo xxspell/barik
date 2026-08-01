@@ -77,8 +77,10 @@ private struct BarikFontModifier: ViewModifier {
     }
 
     private var resolvedFont: Font {
+        let effectiveDesign = configManager.config.style == "tui" ? .monospaced : design
+
         guard shouldUseCustomFont else {
-            return .system(size: size, weight: weight, design: design)
+            return .system(size: size, weight: weight, design: effectiveDesign)
         }
 
         return .custom(resolvedFamily, size: size).weight(weight)

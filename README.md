@@ -104,6 +104,7 @@ When you launch **barik** for the first time, it will create a `~/.barik-config.
 # aerospace.path = ...
 
 theme = "system" # system, light, dark
+# style = "tui"          # "default" (default) | "tui" — narrow monochrome look
 
 [widgets]
 displayed = [ # widgets on menu bar
@@ -268,7 +269,38 @@ spacing = 15              # spacing between widgets
 [experimental.foreground.widgets-background] # settings for widgets background
 displayed = false                            # wrap widgets in their own background
 blur = 3                                     # background type: from 1 to 6 for blur intensity
+
+# [tui]                    # only used when style = "tui"
+# accent = "#7dd3fc"       # accent color for the active / important element
+# dim = 0.5                # opacity of secondary (dim) text
+# separator = ""           # "" = whitespace, "·" = dot separator (reserved)
+# chip = true              # soft rounded background under each widget
+# chip-opacity = 0.06      # how visible the chip fill is
 ```
+
+## TUI Style
+
+Barik supports a second, switchable visual style alongside the default "glass" look: `style = "tui"`. It's a narrow, monochrome, "almost-TUI" appearance with a monospaced font, a single configurable accent color, and subtle chips under widgets. The default look is unchanged when `style` is unset or `"default"`.
+
+```toml
+style = "tui"
+
+[tui]
+accent = "#7dd3fc"     # accent color for the active / important element
+dim = 0.5              # opacity of secondary (dim) text
+separator = ""         # "" = whitespace, "·" = dot separator (reserved)
+chip = true            # soft rounded background under each widget
+chip-opacity = 0.06    # how visible the chip fill is
+```
+
+- `accent`: hex color used for the active/important element in each widget (e.g. the current space, a low battery, an active download).
+- `dim`: opacity applied to secondary/less important text.
+- `separator`: reserved for a future dot-separator layout; currently whitespace is used regardless of this value.
+- `chip` / `chip-opacity`: toggle and tune the soft rounded background rendered behind each widget.
+
+Bar height and font are still read from `[experimental.foreground]`: in TUI, the default height is smaller (34 instead of 55), and the font falls back to monospaced unless a custom `font-family` is set — a custom `font-family` always wins.
+
+Core widgets (spaces, time, battery, network, now playing, system-monitor) are hand-tuned for the TUI look. Every other widget automatically inherits a coherent monochrome, monospaced, chipped appearance.
 
 ## Usage Widgets
 

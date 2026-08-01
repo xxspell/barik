@@ -3,15 +3,19 @@ import SwiftUI
 
 struct RootToml: Decodable {
     var theme: String?
+    var style: String?
     var yabai: YabaiConfig?
     var aerospace: AerospaceConfig?
     var experimental: ExperimentalConfig?
+    var tui: TuiStyleConfig?
     var widgets: WidgetsSection
 
     init() {
         self.theme = nil
+        self.style = nil
         self.yabai = nil
         self.aerospace = nil
+        self.tui = nil
         self.widgets = WidgetsSection(displayed: [], others: [:])
     }
 }
@@ -26,7 +30,15 @@ struct Config {
     var theme: String {
         rootToml.theme ?? "light"
     }
-    
+
+    var style: String {
+        (rootToml.style ?? "default").lowercased()
+    }
+
+    var tui: TuiStyleConfig {
+        rootToml.tui ?? TuiStyleConfig()
+    }
+
     var yabai: YabaiConfig {
         rootToml.yabai ?? YabaiConfig()
     }
@@ -37,6 +49,36 @@ struct Config {
     
     var experimental: ExperimentalConfig {
         rootToml.experimental ?? ExperimentalConfig()
+    }
+}
+
+struct TuiStyleConfig: Decodable {
+    let accent: String
+    let dim: Double
+    let separator: String
+    let chip: Bool
+    let chipOpacity: Double
+
+    init() {
+        self.accent = "#7dd3fc"
+        self.dim = 0.5
+        self.separator = ""
+        self.chip = true
+        self.chipOpacity = 0.06
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        accent = try container.decodeIfPresent(String.self, forKey: .accent) ?? "#7dd3fc"
+        dim = try container.decodeIfPresent(Double.self, forKey: .dim) ?? 0.5
+        separator = try container.decodeIfPresent(String.self, forKey: .separator) ?? ""
+        chip = try container.decodeIfPresent(Bool.self, forKey: .chip) ?? true
+        chipOpacity = try container.decodeIfPresent(Double.self, forKey: .chipOpacity) ?? 0.06
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case accent, dim, separator, chip
+        case chipOpacity = "chip-opacity"
     }
 }
 
@@ -344,6 +386,9 @@ struct ForegroundConfig: Decodable {
     func resolveHeight() -> CGFloat {
         switch height {
         case .barikDefault:
+            if ConfigManager.shared.config.style == "tui" {
+                return BarikStyle.tuiDefaultHeight
+            }
             return CGFloat(Constants.menuBarHeight)
         case .menuBar:
             return NSApplication.shared.mainMenu.map({ CGFloat($0.menuBarHeight) }) ?? 0

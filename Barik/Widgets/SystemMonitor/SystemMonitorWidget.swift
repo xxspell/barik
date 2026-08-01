@@ -132,6 +132,72 @@ struct SystemMonitorWidget: View {
     @State private var rect: CGRect = .zero
 
     var body: some View {
+        BarikStyle.current.isTUI ? AnyView(tuiBody) : AnyView(defaultBody)
+    }
+
+    private var tuiBody: some View {
+        let style = BarikStyle.current
+        return HStack(spacing: 8) {
+            ForEach(metrics, id: \.rawValue) { metric in
+                tuiMetric(metric, style: style)
+            }
+        }
+        .barikFont(size: 12, weight: .regular, design: .monospaced)
+        .experimentalConfiguration(cornerRadius: 15)
+        .frame(maxHeight: .infinity)
+        .background(.black.opacity(0.001))
+        .captureScreenRect(into: $rect)
+        .contentShape(Rectangle())
+        .animation(sizeChangeAnimation, value: animatedWidthSignature)
+        .onTapGesture {
+            MenuBarPopup.show(rect: rect, id: "system-monitor") {
+                SystemMonitorPopup()
+                    .environmentObject(configProvider)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func tuiMetric(_ metric: SystemMonitorMetric, style: BarikStyle) -> some View {
+        switch metric {
+        case .cpu:
+            tuiMetricLabel("CPU", "\(Int(systemMonitor.cpuLoad))%",
+                           over: Int(systemMonitor.cpuLoad) >= cpuWarningLevel, style: style)
+        case .ram:
+            tuiMetricLabel("RAM", "\(Int(systemMonitor.ramUsage))%",
+                           over: Int(systemMonitor.ramUsage) >= ramWarningLevel, style: style)
+        case .disk:
+            tuiMetricLabel("DSK", "\(Int(systemMonitor.diskUsage))%",
+                           over: Int(systemMonitor.diskUsage) >= diskWarningLevel, style: style)
+        case .gpu:
+            if let gpu = systemMonitor.gpuLoad {
+                tuiMetricLabel("GPU", "\(Int(gpu))%",
+                               over: Int(gpu) >= gpuWarningLevel, style: style)
+            } else {
+                tuiMetricLabel("GPU", "--", over: false, style: style)
+            }
+        case .temperature:
+            if let temp = systemMonitor.cpuTemperature {
+                tuiMetricLabel("TMP", "\(Int(temp.rounded()))°",
+                               over: Int(temp) >= temperatureWarningLevel, style: style)
+            } else {
+                tuiMetricLabel("TMP", "--", over: false, style: style)
+            }
+        case .network:
+            tuiMetricLabel("NET",
+                           formatSpeed(max(systemMonitor.uploadSpeed, systemMonitor.downloadSpeed)),
+                           over: false, style: style)
+        }
+    }
+
+    private func tuiMetricLabel(_ label: String, _ value: String, over: Bool, style: BarikStyle) -> some View {
+        HStack(spacing: 3) {
+            Text(label).foregroundStyle(style.dim)
+            Text(value).foregroundStyle(over ? style.accent : style.foreground)
+        }
+    }
+
+    private var defaultBody: some View {
         HStack(spacing: 6) {
             if showIcon {
                 Image(systemName: "cpu")

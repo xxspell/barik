@@ -29,9 +29,15 @@ struct TimeWidget: View {
         .autoconnect()
 
     var body: some View {
-        widgetContent
-        .foregroundStyle(.foregroundOutside)
-        .shadow(color: .foregroundShadowOutside, radius: 3)
+        Group {
+            if BarikStyle.current.isTUI {
+                tuiContent
+            } else {
+                widgetContent
+                    .foregroundStyle(.foregroundOutside)
+                    .shadow(color: .foregroundShadowOutside, radius: 3)
+            }
+        }
         .onReceive(timer) { date in
             currentTime = date
         }
@@ -46,6 +52,22 @@ struct TimeWidget: View {
                 CalendarPopup(
                     calendarManager: calendarManager,
                     configProvider: configProvider)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var tuiContent: some View {
+        let style = BarikStyle.current
+        HStack(spacing: 6) {
+            Text(formattedTime(pattern: format, from: currentTime))
+                .barikFont(size: 12, weight: .semibold)
+                .foregroundStyle(style.foreground)
+            if let event = calendarManager.nextEvent, calendarShowEvents {
+                Text(eventText(for: event))
+                    .barikFont(size: 12, weight: .regular)
+                    .foregroundStyle(style.dim)
+                    .lineLimit(1)
             }
         }
     }

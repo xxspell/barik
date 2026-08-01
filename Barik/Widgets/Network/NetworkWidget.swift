@@ -10,6 +10,10 @@ struct NetworkWidget: View {
     private var showEthernet: Bool { configProvider.config["show-ethernet"]?.boolValue ?? true }
 
     var body: some View {
+        BarikStyle.current.isTUI ? AnyView(tuiBody) : AnyView(defaultBody)
+    }
+
+    private var defaultBody: some View {
         HStack(spacing: 15) {
             if showWiFi && viewModel.wifiState != .notSupported {
                 wifiIcon
@@ -28,6 +32,65 @@ struct NetworkWidget: View {
             MenuBarPopup.show(rect: rect, id: "network") {
                 NetworkPopup().environmentObject(configProvider)
             }
+        }
+    }
+
+    private var tuiBody: some View {
+        let style = BarikStyle.current
+        return HStack(spacing: 8) {
+            if showWiFi && viewModel.wifiState != .notSupported {
+                Image(systemName: tuiWifiSymbol)
+                    .foregroundStyle(tuiWifiColor(style: style))
+            }
+            if showEthernet && viewModel.ethernetState != .notSupported {
+                Image(systemName: tuiEthernetSymbol)
+                    .foregroundStyle(tuiEthernetColor(style: style))
+            }
+        }
+        .barikFont(size: 13)
+        .captureScreenRect(into: $rect)
+        .contentShape(Rectangle())
+        .experimentalConfiguration(cornerRadius: 15)
+        .frame(maxHeight: .infinity)
+        .background(.black.opacity(0.001))
+        .onTapGesture {
+            MenuBarPopup.show(rect: rect, id: "network") {
+                NetworkPopup().environmentObject(configProvider)
+            }
+        }
+    }
+
+    private var tuiWifiSymbol: String {
+        if viewModel.ssid == "Not connected" { return "wifi.slash" }
+        switch viewModel.wifiState {
+        case .connected: return "wifi"
+        case .connecting, .connectedWithoutInternet: return "wifi.exclamationmark"
+        case .disconnected, .disabled, .notSupported: return "wifi.slash"
+        }
+    }
+
+    private func tuiWifiColor(style: BarikStyle) -> Color {
+        if viewModel.ssid == "Not connected" { return style.dim }
+        switch viewModel.wifiState {
+        case .connected: return style.foreground
+        case .connecting, .connectedWithoutInternet: return style.accent
+        case .disconnected, .disabled, .notSupported: return style.dim
+        }
+    }
+
+    private var tuiEthernetSymbol: String {
+        switch viewModel.ethernetState {
+        case .connected, .connectedWithoutInternet: return "network"
+        case .connecting, .disconnected: return "network.slash"
+        case .disabled, .notSupported: return "network.slash"
+        }
+    }
+
+    private func tuiEthernetColor(style: BarikStyle) -> Color {
+        switch viewModel.ethernetState {
+        case .connected: return style.foreground
+        case .connectedWithoutInternet, .connecting: return style.accent
+        case .disconnected, .disabled, .notSupported: return style.dim
         }
     }
 

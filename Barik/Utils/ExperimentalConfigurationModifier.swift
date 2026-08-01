@@ -8,6 +8,32 @@ private struct ExperimentalConfigurationModifier: ViewModifier {
     let cornerRadius: CGFloat
     
     func body(content: Content) -> some View {
+        let style = BarikStyle.current
+
+        if style.isTUI {
+            return AnyView(tuiBody(content: content, style: style))
+        }
+
+        return AnyView(defaultBody(content: content))
+    }
+
+    @ViewBuilder
+    private func tuiBody(content: Content, style: BarikStyle) -> some View {
+        if style.chipEnabled {
+            content
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: style.chipCornerRadius, style: .continuous)
+                        .fill(style.foreground.opacity(style.chipOpacity))
+                )
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private func defaultBody(content: Content) -> some View {
         Group {
             if !configManager.config.experimental.foreground.widgetsBackground.displayed {
                 content

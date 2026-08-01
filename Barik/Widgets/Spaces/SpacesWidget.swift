@@ -58,6 +58,10 @@ struct SpacesWidget: View {
     }
     private var showOutline: Bool { spaceConfig["show-outline"]?.boolValue ?? false }
 
+    private var windowConfig: ConfigData { config["window"]?.dictionaryValue ?? [:] }
+    private var showWindowTitle: Bool { windowConfig["show-title"]?.boolValue ?? true }
+    private var windowTitleMaxLength: Int { windowConfig["title"]?.dictionaryValue?["max-length"]?.intValue ?? 50 }
+
     private var providerFilteredSpaces: [AnySpace] {
         guard showOnlyCurrentDisplaySpaces else { return viewModel.spaces }
 
@@ -78,6 +82,42 @@ struct SpacesWidget: View {
     }
 
     var body: some View {
+        BarikStyle.current.isTUI ? AnyView(tuiBody) : AnyView(defaultBody)
+    }
+
+    private var tuiBody: some View {
+        let style = BarikStyle.current
+        return HStack(spacing: 6) {
+            ForEach(visibleSpaces) { space in
+                Text(space.id)
+                    .barikFont(size: 12, weight: space.isFocused ? .bold : .regular)
+                    .foregroundStyle(space.isFocused ? style.accent : style.dim)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        viewModel.switchToSpace(space, needWindowFocus: true)
+                    }
+            }
+
+            if showWindowTitle, let focused = focusedSpace,
+               let window = focused.windows.first(where: { $0.isFocused }) ?? focused.windows.first {
+                Text(tuiWindowTitle(for: window))
+                    .barikFont(size: 12, weight: .regular)
+                    .foregroundStyle(style.dim)
+                    .lineLimit(1)
+            }
+        }
+        .experimentalConfiguration(horizontalPadding: 5, cornerRadius: 10)
+        .animation(.smooth(duration: 0.3), value: viewModel.spaces)
+        .environmentObject(viewModel)
+    }
+
+    private func tuiWindowTitle(for window: AnyWindow) -> String {
+        let raw = (window.appName?.isEmpty == false ? window.appName! : window.title)
+        let maxLen = windowTitleMaxLength
+        return raw.count > maxLen ? String(raw.prefix(maxLen - 1)) + "…" : raw
+    }
+
+    private var defaultBody: some View {
         HStack(spacing: foregroundHeight < 30 ? 0 : 8) {
             switch displayMode {
             case .classic:
