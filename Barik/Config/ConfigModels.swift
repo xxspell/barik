@@ -58,6 +58,8 @@ struct TuiStyleConfig: Decodable {
     let separator: String
     let chip: Bool
     let chipOpacity: Double
+    let chipMaterial: String
+    let topPadding: Double
 
     init() {
         self.accent = "#7dd3fc"
@@ -65,6 +67,8 @@ struct TuiStyleConfig: Decodable {
         self.separator = ""
         self.chip = true
         self.chipOpacity = 0.06
+        self.chipMaterial = "glass"
+        self.topPadding = 0
     }
 
     init(from decoder: Decoder) throws {
@@ -74,11 +78,15 @@ struct TuiStyleConfig: Decodable {
         separator = try container.decodeIfPresent(String.self, forKey: .separator) ?? ""
         chip = try container.decodeIfPresent(Bool.self, forKey: .chip) ?? true
         chipOpacity = try container.decodeIfPresent(Double.self, forKey: .chipOpacity) ?? 0.06
+        chipMaterial = try container.decodeIfPresent(String.self, forKey: .chipMaterial) ?? "glass"
+        topPadding = try container.decodeIfPresent(Double.self, forKey: .topPadding) ?? 0
     }
 
     enum CodingKeys: String, CodingKey {
         case accent, dim, separator, chip
         case chipOpacity = "chip-opacity"
+        case chipMaterial = "chip-material"
+        case topPadding = "top-padding"
     }
 }
 

@@ -22,6 +22,7 @@ struct MenuBarView: View {
         "default.nowplaying",
         "default.system-monitor",
         "default.cpuram",
+        "default.screen-recording-stop",
     ]
 
     private var widgetSpacing: CGFloat {
@@ -51,6 +52,7 @@ struct MenuBarView: View {
         .foregroundStyle(Color.foregroundOutside)
         .frame(height: max(configManager.config.experimental.foreground.resolveHeight(), 1.0))
         .frame(maxWidth: .infinity)
+        .padding(.top, BarikStyle.current.isTUI ? BarikStyle.current.tuiTopPadding : 0)
         .padding(.horizontal, usesNotchAwareLayout ? 0 : horizontalPadding)
         .background(.black.opacity(0.001))
         .preferredColorScheme(theme)
@@ -252,16 +254,13 @@ struct MenuBarView: View {
     }
 }
 
-/// In TUI, desaturates any widget that does not render its own controlled
-/// monochrome+accent palette, so the whole bar reads monochrome and cohesive.
+/// Retired: `.saturation(0)` rasterizes the subtree and breaks the frosted-glass
+/// chip Material. Widgets are now made monochrome per-widget (on their content,
+/// not their chip), so this is a no-op kept only to avoid touching call sites.
 private struct TUIMonochromeNet: ViewModifier {
     let handTuned: Bool
 
     func body(content: Content) -> some View {
-        if BarikStyle.current.isTUI && !handTuned {
-            content.saturation(0).contrast(1.05)
-        } else {
-            content
-        }
+        content
     }
 }

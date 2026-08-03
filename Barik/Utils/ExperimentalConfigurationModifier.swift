@@ -21,14 +21,17 @@ private struct ExperimentalConfigurationModifier: ViewModifier {
     private func tuiBody(content: Content, style: BarikStyle) -> some View {
         if style.chipEnabled {
             content
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
+                .frame(height: BarikStyle.tuiChipHeight)
+                .padding(.horizontal, BarikStyle.tuiChipHPadding)
                 .background(
                     RoundedRectangle(cornerRadius: style.chipCornerRadius, style: .continuous)
-                        .fill(style.foreground.opacity(style.chipOpacity))
+                        .fill(style.chipGlass
+                            ? AnyShapeStyle(.ultraThinMaterial)
+                            : AnyShapeStyle(style.foreground.opacity(style.chipOpacity)))
                 )
         } else {
             content
+                .frame(height: BarikStyle.tuiChipHeight)
         }
     }
 

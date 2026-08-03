@@ -5,6 +5,10 @@ import SwiftUI
 /// construct and always reflects the live `ConfigManager.shared.config`.
 struct BarikStyle {
     static let tuiDefaultHeight: CGFloat = 34
+    /// Uniform content height of every widget chip in TUI, so all chips match.
+    static let tuiChipHeight: CGFloat = 22
+    /// Horizontal padding inside every widget chip in TUI.
+    static let tuiChipHPadding: CGFloat = 6
 
     let isTUI: Bool
     let accent: Color
@@ -12,6 +16,10 @@ struct BarikStyle {
     let separator: String
     let chipEnabled: Bool
     let chipOpacity: Double
+    /// When true, chips use a frosted-glass Material; otherwise a flat translucent fill.
+    let chipGlass: Bool
+    /// Extra space above the bar content in TUI (points), to push it down from the top edge.
+    let tuiTopPadding: CGFloat
 
     init(config: Config) {
         isTUI = config.style == "tui"
@@ -21,6 +29,8 @@ struct BarikStyle {
         separator = tui.separator
         chipEnabled = tui.chip
         chipOpacity = tui.chipOpacity
+        chipGlass = tui.chipMaterial.lowercased() != "flat"
+        tuiTopPadding = CGFloat(max(tui.topPadding, 0))
     }
 
     static var current: BarikStyle {
