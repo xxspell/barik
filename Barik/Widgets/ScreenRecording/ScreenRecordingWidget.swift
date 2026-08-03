@@ -33,10 +33,12 @@ struct ScreenRecordingWidget: View {
                                 .barikFont(size: 9, weight: .black, design: .rounded)
                         }
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(BarikStyle.current.isTUI ? .black : .white)
                     .padding(.horizontal, showLabel ? 8 : 6)
-                    .frame(height: 18)
-                    .background(.red.gradient)
+                    .frame(height: BarikStyle.current.isTUI ? 16 : 18)
+                    .background(BarikStyle.current.isTUI
+                        ? AnyShapeStyle(BarikStyle.current.accent)
+                        : AnyShapeStyle(Color.red.gradient))
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)

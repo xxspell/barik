@@ -97,7 +97,7 @@ struct HomebrewWidget: View {
 
     private func brewIcon(size: CGFloat, badgeMode: Bool = false) -> some View {
         Image(systemName: "shippingbox.fill")
-            .barikFont(size: size, weight: .medium)
+            .barikFont(size: BarikStyle.current.isTUI ? 14 : size, weight: .medium)
             .foregroundStyle(badgeMode ? Color.foregroundOutside : iconColor)
     }
 
@@ -115,11 +115,13 @@ struct HomebrewWidget: View {
     // MARK: - Colors
 
     private var iconColor: Color {
-        manager.outdatedCount > 0 ? .orange : .foregroundOutside
+        if BarikStyle.current.isTUI { return .foregroundOutside }
+        return manager.outdatedCount > 0 ? .orange : .foregroundOutside
     }
 
     private var countColor: Color {
-        manager.outdatedCount > 0 ? .orange : .foregroundOutside
+        if BarikStyle.current.isTUI { return .foregroundOutside }
+        return manager.outdatedCount > 0 ? .orange : .foregroundOutside
     }
 }
 

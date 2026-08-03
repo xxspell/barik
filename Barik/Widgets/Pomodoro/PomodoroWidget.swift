@@ -19,6 +19,14 @@ struct PomodoroWidget: View {
     }
 
     private var iconColor: Color {
+        if BarikStyle.current.isTUI {
+            switch manager.phase {
+            case .focus, .focusPaused, .waitingForBreak:
+                return BarikStyle.current.accent
+            default:
+                return .foregroundOutside
+            }
+        }
         switch manager.phase {
         case .focus, .focusPaused, .waitingForBreak:
             return Color(red: 1.0, green: 0.42, blue: 0.33)
@@ -29,8 +37,8 @@ struct PomodoroWidget: View {
         }
     }
 
-    private let timerIconSize: CGFloat = 21
-    private let tomatoIconSize: CGFloat = 21
+    private var timerIconSize: CGFloat { BarikStyle.current.isTUI ? 18 : 21 }
+    private var tomatoIconSize: CGFloat { BarikStyle.current.isTUI ? 18 : 21 }
     private let tomatoSpacing: CGFloat = 8
     private let timerLabelWidth: CGFloat = 36
 
@@ -48,7 +56,7 @@ struct PomodoroWidget: View {
             }
         }
         .padding(.horizontal, horizontalPadding)
-        .shadow(color: .foregroundShadowOutside, radius: 3)
+        .shadow(color: .foregroundShadowOutside, radius: BarikStyle.current.isTUI ? 0 : 3)
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .animation(.spring(response: 0.28, dampingFraction: 0.82), value: manager.widgetLabel == nil)

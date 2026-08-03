@@ -66,6 +66,11 @@ struct CLIProxyUsageWidget: View {
 
     private var ringColor: Color {
         let remainingFraction = normalizedProgress(quotaSummary.percentage)
+        let style = BarikStyle.current
+        if style.isTUI {
+            if remainingFraction <= warnThreshold { return style.accent }
+            return style.foreground
+        }
         if remainingFraction <= criticalThreshold { return .red }
         if remainingFraction <= warnThreshold { return .orange }
         return .white
@@ -88,7 +93,7 @@ struct CLIProxyUsageWidget: View {
             ring
             content
         })
-        let sized = AnyView(stack.frame(width: showRing ? 30 : nil, height: showRing ? 28 : nil))
+        let sized = AnyView(stack.frame(width: showRing ? (BarikStyle.current.isTUI ? 16 : 30) : nil, height: showRing ? (BarikStyle.current.isTUI ? 16 : 28) : nil))
         let styled = AnyView(
             sized
                 .foregroundStyle(.foregroundOutside)
@@ -150,7 +155,7 @@ struct CLIProxyUsageWidget: View {
     }
 
     private func widgetContentView() -> AnyView {
-        let iconSize: CGFloat = 15
+        let iconSize: CGFloat = (BarikStyle.current.isTUI && showRing) ? 14 : 15
 
         if showRing {
             return AnyView(ZStack(alignment: .bottomTrailing) {
@@ -194,16 +199,20 @@ struct CLIProxyUsageWidget: View {
             .scaledToFit()
             .frame(width: size, height: size)
 
+        let style = BarikStyle.current
+        let baseColor: Color = style.isTUI ? style.foreground.opacity(0.3) : .white.opacity(0.28)
+        let fillColor: Color = style.isTUI ? style.foreground : .white
+
         return ZStack {
             icon
-                .foregroundStyle(.white.opacity(0.28))
+                .foregroundStyle(baseColor)
 
             if fraction >= 1 {
                 icon
-                    .foregroundStyle(.white)
+                    .foregroundStyle(fillColor)
             } else if fraction > 0 {
                 icon
-                    .foregroundStyle(.white)
+                    .foregroundStyle(fillColor)
                     .mask(
                         Rectangle()
                             .frame(width: size, height: size * fraction)

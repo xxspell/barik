@@ -19,6 +19,7 @@ struct FocusWidget: View {
 
     private var activeMode: FocusMode? { focusManager.activeMode }
     private var foregroundColor: Color {
+        if BarikStyle.current.isTUI { return .foregroundOutside }
         guard tintWithFocusColor, let tintColor = activeMode?.tintColor else {
             return .foregroundOutside
         }
@@ -32,18 +33,26 @@ struct FocusWidget: View {
                     .barikFont(size: FocusWidgetLayout.iconSize, weight: .semibold)
                     .foregroundStyle(foregroundColor)
                     .frame(
-                        width: FocusWidgetLayout.badgeSize,
-                        height: FocusWidgetLayout.badgeSize
+                        width: BarikStyle.current.isTUI ? 20 : FocusWidgetLayout.badgeSize,
+                        height: BarikStyle.current.isTUI ? 20 : FocusWidgetLayout.badgeSize
                     )
                 .background(
-                    Circle()
-                        .fill(configManager.config.experimental.foreground.widgetsBackground.blur)
+                    Group {
+                        if !BarikStyle.current.isTUI {
+                            Circle()
+                                .fill(configManager.config.experimental.foreground.widgetsBackground.blur)
+                        }
+                    }
                 )
                 .overlay(
-                    Circle()
-                        .stroke(Color.noActive, lineWidth: 1)
+                    Group {
+                        if !BarikStyle.current.isTUI {
+                            Circle()
+                                .stroke(Color.noActive, lineWidth: 1)
+                        }
+                    }
                 )
-                .shadow(color: .foregroundShadowOutside, radius: 3)
+                .shadow(color: .foregroundShadowOutside, radius: BarikStyle.current.isTUI ? 0 : 3)
                 .background(widgetFrameReader)
                 .contentShape(Rectangle())
                 .experimentalConfiguration(cornerRadius: 15)

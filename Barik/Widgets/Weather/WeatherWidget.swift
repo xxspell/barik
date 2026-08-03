@@ -45,9 +45,11 @@ struct WeatherWidget: View {
             }
         }
         .barikTextStyle(.headline)
+        .imageScale(BarikStyle.current.isTUI ? .small : .medium)
         .foregroundStyle(.primary)
-        .shadow(radius: 3)
-        .cornerRadius(15)
+        .saturation(BarikStyle.current.isTUI ? 0 : 1)
+        .shadow(radius: BarikStyle.current.isTUI ? 0 : 3)
+        .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))
         .captureScreenRect(into: $widgetFrame)

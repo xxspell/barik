@@ -20,11 +20,11 @@ struct KeyboardLayoutWidget: View {
                     .foregroundStyle(.foregroundOutside)
             }
         }
-        .padding(.horizontal, showOutline ? (showText ? 8 : 2) : 0)
-        .padding(.vertical, showText ? 3 : 0)
+        .padding(.horizontal, BarikStyle.current.isTUI ? 0 : (showOutline ? (showText ? 8 : 2) : 0))
+        .padding(.vertical, showText && !BarikStyle.current.isTUI ? 3 : 0)
         .background(
             Group {
-                if showOutline {
+                if showOutline && !BarikStyle.current.isTUI {
                     Capsule()
                         .fill(Color.white.opacity(0.06))
                 }
@@ -32,7 +32,7 @@ struct KeyboardLayoutWidget: View {
         )
         .overlay(
             Group {
-                if showOutline {
+                if showOutline && !BarikStyle.current.isTUI {
                     Capsule()
                         .stroke(Color.noActive, lineWidth: 1)
                 }

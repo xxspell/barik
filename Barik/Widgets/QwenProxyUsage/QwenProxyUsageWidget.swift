@@ -51,6 +51,13 @@ struct QwenProxyUsageWidget: View {
     }
 
     private var ringColor: Color {
+        let style = BarikStyle.current
+        if style.isTUI {
+            let problem = ringLogic == "healthy"
+                ? ringFraction < warnThreshold
+                : ringFraction >= warnThreshold
+            return problem ? style.accent : style.foreground
+        }
         if ringLogic == "healthy" {
             // fraction = healthy/total — low is bad
             if ringFraction < criticalThreshold { return .red }
@@ -78,9 +85,9 @@ struct QwenProxyUsageWidget: View {
 
             widgetContent
         }
-        .frame(width: showRing ? 28 : nil, height: showRing ? 28 : nil)
+        .frame(width: showRing ? (BarikStyle.current.isTUI ? 16 : 28) : nil, height: showRing ? (BarikStyle.current.isTUI ? 16 : 28) : nil)
         .foregroundStyle(.foregroundOutside)
-        .shadow(color: .foregroundShadowOutside, radius: 3)
+        .shadow(color: .foregroundShadowOutside, radius: BarikStyle.current.isTUI ? 0 : 3)
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))
@@ -104,7 +111,7 @@ struct QwenProxyUsageWidget: View {
 
     @ViewBuilder
     private var widgetContent: some View {
-        let iconSize: CGFloat = 16
+        let iconSize: CGFloat = BarikStyle.current.isTUI ? (showRing ? 14 : 15) : 16
 
         if showRing {
             ZStack(alignment: .bottomTrailing) {
@@ -143,12 +150,16 @@ struct QwenProxyUsageWidget: View {
             ? max(0, min(1, Double(healthyCount) / Double(totalCount)))
             : 1.0
 
+        let style = BarikStyle.current
+        let baseColor: Color = style.isTUI ? style.foreground.opacity(0.3) : .white.opacity(0.28)
+        let fillColor: Color = style.isTUI ? style.foreground : .white
+
         return ZStack {
             Image("QwenIcon")
                 .resizable()
                 .renderingMode(.template)
                 .scaledToFit()
-                .foregroundStyle(.white.opacity(0.28))
+                .foregroundStyle(baseColor)
                 .frame(width: size, height: size)
 
             if fraction >= 1 {
@@ -156,14 +167,14 @@ struct QwenProxyUsageWidget: View {
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
-                    .foregroundStyle(.white)
+                    .foregroundStyle(fillColor)
                     .frame(width: size, height: size)
             } else if fraction > 0 {
                 Image("QwenIcon")
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
-                    .foregroundStyle(.white)
+                    .foregroundStyle(fillColor)
                     .frame(width: size, height: size)
                     .mask(
                         Rectangle()

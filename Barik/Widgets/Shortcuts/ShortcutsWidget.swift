@@ -10,7 +10,7 @@ struct ShortcutsWidget: View {
         ZStack {
             if manager.isRunningShortcut {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .barikFont(size: 15, weight: .semibold)
+                    .barikFont(size: BarikStyle.current.isTUI ? 13 : 15, weight: .semibold)
                     .foregroundStyle(.foregroundOutside)
                     .rotationEffect(.degrees(manager.isRunningShortcut ? 360 : 0))
                     .animation(
@@ -19,7 +19,7 @@ struct ShortcutsWidget: View {
                     )
             } else {
                 Image(systemName: "square.stack.3d.up.fill")
-                    .barikFont(size: 15, weight: .semibold)
+                    .barikFont(size: BarikStyle.current.isTUI ? 13 : 15, weight: .semibold)
                     .foregroundStyle(.foregroundOutside)
             }
         }

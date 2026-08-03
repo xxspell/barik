@@ -34,7 +34,7 @@ struct TickTickWidget: View {
     }
 
     private var iconSlotWidth: CGFloat {
-        shouldShowRotatingItem ? 19 : 28
+        shouldShowRotatingItem ? 19 : (BarikStyle.current.isTUI ? 22 : 28)
     }
 
     var body: some View {
@@ -47,7 +47,7 @@ struct TickTickWidget: View {
         }
         .padding(.horizontal, shouldShowRotatingItem ? 0 : 1)
         .foregroundStyle(.foregroundOutside)
-        .shadow(color: .foregroundShadowOutside, radius: 3)
+        .shadow(color: .foregroundShadowOutside, radius: BarikStyle.current.isTUI ? 0 : 3)
         .experimentalConfiguration(
             horizontalPadding: shouldShowRotatingItem ? 6 : 15,
             cornerRadius: 15
@@ -100,28 +100,37 @@ struct TickTickWidget: View {
     }
 
     private var iconWithBadge: some View {
-        ZStack(alignment: .topTrailing) {
-            Image("TickTickIcon")
-                .resizable()
-                .renderingMode(.template)
-                .scaledToFit()
-                .frame(width: 16, height: 16)
-                .foregroundStyle(.foregroundOutside)
-                .opacity(manager.isAuthenticated ? 1.0 : 0.6)
-                .offset(x: shouldShowRotatingItem ? -2 : 0)
+        let tui = BarikStyle.current.isTUI
+        return HStack(spacing: tui ? 4 : 0) {
+            ZStack(alignment: .topTrailing) {
+                Image("TickTickIcon")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: tui ? 14 : 16, height: tui ? 14 : 16)
+                    .foregroundStyle(.foregroundOutside)
+                    .opacity(manager.isAuthenticated ? 1.0 : 0.6)
+                    .offset(x: shouldShowRotatingItem ? -2 : 0)
 
-            if manager.isAuthenticated && manager.totalPendingCount > 0 {
+                if !tui && manager.isAuthenticated && manager.totalPendingCount > 0 {
+                    Text("\(min(manager.totalPendingCount, 99))")
+                        .barikFont(size: 8, weight: .bold)
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(Color.white)
+                        .clipShape(Capsule())
+                        .offset(x: shouldShowRotatingItem ? 2 : 6, y: -5)
+                }
+            }
+            .frame(width: tui ? 16 : iconSlotWidth, height: 20, alignment: .leading)
+
+            if tui && manager.isAuthenticated && manager.totalPendingCount > 0 {
                 Text("\(min(manager.totalPendingCount, 99))")
-                    .barikFont(size: 8, weight: .bold)
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 3)
-                    .padding(.vertical, 1)
-                    .background(Color.white)
-                    .clipShape(Capsule())
-                    .offset(x: shouldShowRotatingItem ? 2 : 6, y: -5)
+                    .barikFont(size: 12, weight: .semibold)
+                    .foregroundStyle(.foregroundOutside)
             }
         }
-        .frame(width: iconSlotWidth, height: 20, alignment: .leading)
     }
 
     private func accentColor(for item: TickTickRotatingBarItem) -> Color {

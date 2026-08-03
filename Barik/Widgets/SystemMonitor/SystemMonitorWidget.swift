@@ -161,40 +161,42 @@ struct SystemMonitorWidget: View {
     private func tuiMetric(_ metric: SystemMonitorMetric, style: BarikStyle) -> some View {
         switch metric {
         case .cpu:
-            tuiMetricLabel("CPU", "\(Int(systemMonitor.cpuLoad))%",
+            tuiMetricLabel("C", "\(Int(systemMonitor.cpuLoad))%",
                            over: Int(systemMonitor.cpuLoad) >= cpuWarningLevel, style: style)
         case .ram:
-            tuiMetricLabel("RAM", "\(Int(systemMonitor.ramUsage))%",
+            tuiMetricLabel("R", "\(Int(systemMonitor.ramUsage))%",
                            over: Int(systemMonitor.ramUsage) >= ramWarningLevel, style: style)
         case .disk:
-            tuiMetricLabel("DSK", "\(Int(systemMonitor.diskUsage))%",
+            tuiMetricLabel("D", "\(Int(systemMonitor.diskUsage))%",
                            over: Int(systemMonitor.diskUsage) >= diskWarningLevel, style: style)
         case .gpu:
             if let gpu = systemMonitor.gpuLoad {
-                tuiMetricLabel("GPU", "\(Int(gpu))%",
+                tuiMetricLabel("G", "\(Int(gpu))%",
                                over: Int(gpu) >= gpuWarningLevel, style: style)
             } else {
-                tuiMetricLabel("GPU", "--", over: false, style: style)
+                tuiMetricLabel("G", "--", over: false, style: style)
             }
         case .temperature:
             if let temp = systemMonitor.cpuTemperature {
-                tuiMetricLabel("TMP", "\(Int(temp.rounded()))°",
+                tuiMetricLabel("T", "\(Int(temp.rounded()))°",
                                over: Int(temp) >= temperatureWarningLevel, style: style)
             } else {
-                tuiMetricLabel("TMP", "--", over: false, style: style)
+                tuiMetricLabel("T", "--", over: false, style: style)
             }
         case .network:
-            tuiMetricLabel("NET",
+            tuiMetricLabel("N",
                            formatSpeed(max(systemMonitor.uploadSpeed, systemMonitor.downloadSpeed)),
                            over: false, style: style)
         }
     }
 
     private func tuiMetricLabel(_ label: String, _ value: String, over: Bool, style: BarikStyle) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 2) {
             Text(label).foregroundStyle(style.dim)
             Text(value).foregroundStyle(over ? style.accent : style.foreground)
         }
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var defaultBody: some View {
