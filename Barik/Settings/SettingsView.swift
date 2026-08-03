@@ -752,6 +752,38 @@ private struct DisplaysSettingsView: View {
     }
 }
 
+private enum AppearanceStyle: String, CaseIterable, Identifiable {
+    case `default`
+    case tui
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .default:
+            return "Default"
+        case .tui:
+            return "TUI"
+        }
+    }
+}
+
+private enum AppearanceChipMaterial: String, CaseIterable, Identifiable {
+    case glass
+    case flat
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .glass:
+            return "Glass"
+        case .flat:
+            return "Flat"
+        }
+    }
+}
+
 private struct AppearanceSettingsView: View {
     private enum AppearanceDefaults {
         static let foregroundHeightMode: AppearanceHeightMode = .defaultHeight
@@ -771,6 +803,11 @@ private struct AppearanceSettingsView: View {
     @ObservedObject private var configManager = ConfigManager.shared
 
     @State private var theme = AppearanceTheme.system
+    @State private var style = AppearanceStyle.default
+    @State private var tuiTopPadding: Double = 0
+    @State private var tuiAccentHex = "#7dd3fc"
+    @State private var tuiChipMaterial = AppearanceChipMaterial.glass
+    @State private var tuiChipOpacity: Double = 0.06
     @State private var foregroundHeightMode = AppearanceDefaults.foregroundHeightMode
     @State private var foregroundCustomHeight = AppearanceDefaults.foregroundCustomHeight
     @State private var selectedFontFamily = AppearanceFontFamilyOption.systemDefault
@@ -791,6 +828,21 @@ private struct AppearanceSettingsView: View {
     private let widgetBackgroundTable = "experimental.foreground.widgets-background"
     private let backgroundTable = "experimental.background"
     private let fontBookURL = URL(fileURLWithPath: "/System/Applications/Font Book.app")
+
+    private var tuiAccentColorBinding: Binding<Color> {
+        Binding(
+            get: { Color(hex: tuiAccentHex) ?? Color(red: 0.49, green: 0.83, blue: 0.99) },
+            set: { newValue in
+                let hex = newValue.toHexString() ?? "#7dd3fc"
+                tuiAccentHex = hex
+                ConfigManager.shared.updateConfigLiteralValue(
+                    tablePath: "tui",
+                    key: "accent",
+                    newValueLiteral: "\"\(hex)\""
+                )
+            }
+        )
+    }
 
     private var availableFontFamilyOptions: [AppearanceFontFamilyOption] {
         let filteredFamilies = BarikFontCatalog.availableFamilies().filter { family in
@@ -831,6 +883,91 @@ private struct AppearanceSettingsView: View {
                         key: "theme",
                         newValueLiteral: "\"\(newValue.rawValue)\""
                     )
+                }
+
+                SegmentedPickerRow(
+                    title: "Style",
+                    description: "Narrow monochrome “almost-TUI” look. Overrides widget capsules and spacing.",
+                    selection: $style,
+                    options: AppearanceStyle.allCases,
+                    titleForOption: \.title
+                )
+                .onChange(of: style) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        key: "style",
+                        newValueLiteral: "\"\(newValue.rawValue)\""
+                    )
+                }
+
+                if style == .tui {
+                    SliderSettingRow(
+                        title: "Top offset",
+                        description: "Push the TUI bar down from the top edge of the screen.",
+                        value: $tuiTopPadding,
+                        range: 0...20,
+                        step: 1,
+                        valueFormat: { "\(Int($0)) pt" }
+                    )
+                    .onChange(of: tuiTopPadding) { _, newValue in
+                        guard !isApplyingConfigSnapshot else { return }
+                        ConfigManager.shared.updateConfigLiteralValue(
+                            tablePath: "tui",
+                            key: "top-padding",
+                            newValueLiteral: String(Int(newValue.rounded()))
+                        )
+                    }
+
+                    ColorSettingRow(
+                        title: "Accent color",
+                        description: "Color for the active / important element in TUI.",
+                        color: tuiAccentColorBinding,
+                        hexText: Binding(
+                            get: { tuiAccentHex },
+                            set: { newValue in
+                                tuiAccentHex = newValue
+                                ConfigManager.shared.updateConfigLiteralValue(
+                                    tablePath: "tui",
+                                    key: "accent",
+                                    newValueLiteral: "\"\(newValue)\""
+                                )
+                            }
+                        )
+                    )
+
+                    SegmentedPickerRow(
+                        title: "Chip material",
+                        description: "Frosted glass or a flat translucent fill behind widgets.",
+                        selection: $tuiChipMaterial,
+                        options: AppearanceChipMaterial.allCases,
+                        titleForOption: \.title
+                    )
+                    .onChange(of: tuiChipMaterial) { _, newValue in
+                        guard !isApplyingConfigSnapshot else { return }
+                        ConfigManager.shared.updateConfigLiteralValue(
+                            tablePath: "tui",
+                            key: "chip-material",
+                            newValueLiteral: "\"\(newValue.rawValue)\""
+                        )
+                    }
+
+                    SliderSettingRow(
+                        title: "Chip opacity",
+                        description: "Visibility of the flat chip fill (ignored for glass).",
+                        value: $tuiChipOpacity,
+                        range: 0...0.3,
+                        step: 0.01,
+                        valueFormat: { String(format: "%.0f%%", $0 * 100) }
+                    )
+                    .disabled(tuiChipMaterial == .glass)
+                    .onChange(of: tuiChipOpacity) { _, newValue in
+                        guard !isApplyingConfigSnapshot else { return }
+                        ConfigManager.shared.updateConfigLiteralValue(
+                            tablePath: "tui",
+                            key: "chip-opacity",
+                            newValueLiteral: String(format: "%.2f", newValue)
+                        )
+                    }
                 }
             }
 
@@ -951,6 +1088,7 @@ private struct AppearanceSettingsView: View {
                     step: 1,
                     valueFormat: { "\(Int($0)) pt" }
                 )
+                .disabled(style == .tui)
                 .onChange(of: widgetSpacing) { _, newValue in
                     guard !isApplyingConfigSnapshot else { return }
                     ConfigManager.shared.updateConfigLiteralValue(
@@ -967,11 +1105,19 @@ private struct AppearanceSettingsView: View {
                 actionTitle: settingsLocalized("settings.action.reset"),
                 action: resetWidgetCapsuleDefaults
             ) {
+                if style == .tui {
+                    Text("Widget capsules are replaced by the TUI style’s own chips and aren’t used here.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 ToggleRow(
                     title: settingsLocalized("settings.appearance.field.show_widget_backgrounds.title"),
                     description: settingsLocalized("settings.appearance.field.show_widget_backgrounds.description"),
                     isOn: $widgetBackgroundsShown
                 )
+                .disabled(style == .tui)
                 .onChange(of: widgetBackgroundsShown) { _, newValue in
                     guard !isApplyingConfigSnapshot else { return }
                     ConfigManager.shared.updateConfigLiteralValue(
@@ -988,7 +1134,7 @@ private struct AppearanceSettingsView: View {
                     options: AppearanceBlur.allCases,
                     titleForOption: \.title
                 )
-                .disabled(!widgetBackgroundsShown)
+                .disabled(!widgetBackgroundsShown || style == .tui)
                 .onChange(of: widgetBlur) { _, newValue in
                     guard !isApplyingConfigSnapshot else { return }
                     ConfigManager.shared.updateConfigLiteralValue(
@@ -1087,6 +1233,11 @@ private struct AppearanceSettingsView: View {
         let background = config.experimental.background
 
         theme = AppearanceTheme(rawValue: config.rootToml.theme ?? "system") ?? .system
+        style = AppearanceStyle(rawValue: config.style) ?? .default
+        tuiTopPadding = config.tui.topPadding
+        tuiAccentHex = config.tui.accent
+        tuiChipMaterial = AppearanceChipMaterial(rawValue: config.tui.chipMaterial.lowercased()) ?? .glass
+        tuiChipOpacity = config.tui.chipOpacity
         foregroundHeightMode = AppearanceHeightMode(height: foreground.height)
         foregroundCustomHeight = AppearanceSettingsView.customHeightValue(from: foreground.height)
         selectedFontFamily = foreground.fontFamily.map(AppearanceFontFamilyOption.custom) ?? .systemDefault
