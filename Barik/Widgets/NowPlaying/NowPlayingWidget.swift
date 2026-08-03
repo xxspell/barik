@@ -52,23 +52,40 @@ struct NowPlayingWidget: View {
         let style = BarikStyle.current
         return Group {
             if let song = visibleSong {
-                HStack(spacing: 5) {
-                    Image(systemName: song.state == .paused ? "pause.fill" : "music.note")
-                        .barikFont(size: 10)
-                    Text(tuiText(for: song))
-                        .barikFont(size: 12, weight: .regular)
-                        .lineLimit(1)
-                }
-                .foregroundStyle(style.dim)
-                .experimentalConfiguration(cornerRadius: 15)
-                .frame(maxHeight: .infinity)
-                .background(.black.opacity(0.001))
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    MenuBarPopup.show(rect: widgetFrame, id: "nowplaying") {
-                        NowPlayingPopup(configProvider: configProvider)
+                TimelineView(.animation(minimumInterval: 1)) { context in
+                    let progress = tuiPlaybackProgress(for: song, at: context.date)
+                    HStack(spacing: 5) {
+                        Image(systemName: song.state == .paused ? "pause.fill" : "music.note")
+                            .barikFont(size: 10)
+                        Text(tuiText(for: song))
+                            .barikFont(size: 12, weight: .regular)
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(style.dim)
+                    .padding(.horizontal, BarikStyle.tuiChipHPadding)
+                    .frame(height: BarikStyle.tuiChipHeight)
+                    .background {
+                        ZStack {
+                            if style.chipEnabled {
+                                RoundedRectangle(cornerRadius: style.chipCornerRadius, style: .continuous)
+                                    .fill(style.chipGlass
+                                        ? AnyShapeStyle(.ultraThinMaterial)
+                                        : AnyShapeStyle(style.foreground.opacity(style.chipOpacity)))
+                            }
+                            if backgroundFillEnabled {
+                                tuiFillLayer(progress: progress)
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: style.chipCornerRadius, style: .continuous))
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        MenuBarPopup.show(rect: widgetFrame, id: "nowplaying") {
+                            NowPlayingPopup(configProvider: configProvider)
+                        }
                     }
                 }
+                .frame(maxHeight: .infinity)
             }
         }
         .captureScreenRect(into: $widgetFrame)
@@ -90,6 +107,50 @@ struct NowPlayingWidget: View {
         let maxLen = maxCharactersPerLine
         guard base.count > maxLen, maxLen > 2 else { return base }
         return String(base.prefix(maxLen - 2)) + ".."
+    }
+
+    private func tuiPlaybackProgress(for song: NowPlayingSong, at date: Date) -> CGFloat {
+        guard let duration = song.duration, duration > 0, let base = song.position else { return 0 }
+        let pos: Double
+        if song.state == .playing, let timestamp = song.positionTimestamp {
+            pos = base + max(date.timeIntervalSince(timestamp), 0)
+        } else {
+            pos = base
+        }
+        return CGFloat(min(max(pos / duration, 0), 1))
+    }
+
+    private var tuiFillColor: Color {
+        if backgroundFillSource == "custom", let custom = Color(hex: backgroundFillColorHex) {
+            return custom
+        }
+        return BarikStyle.current.accent
+    }
+
+    private func tuiFillLayer(progress: CGFloat) -> some View {
+        let color = tuiFillColor
+        return GeometryReader { geometry in
+            let totalWidth = geometry.size.width
+            let progressWidth = totalWidth * progress
+            let feather: CGFloat = 16
+
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(color.opacity(0.22))
+                    .frame(width: max(progressWidth - feather, 0))
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [color.opacity(0.22), .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: min(progressWidth, feather))
+                Spacer(minLength: 0)
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     @ViewBuilder
