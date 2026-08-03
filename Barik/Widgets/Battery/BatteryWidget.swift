@@ -23,6 +23,7 @@ struct BatteryWidget: View {
         return HStack(spacing: 3) {
             Text(tuiGauge)
                 .barikFont(size: 11)
+                .offset(y: -1)
             if showPercentage {
                 Text("\(level)%")
                     .barikFont(size: 12, weight: .semibold)
@@ -30,6 +31,7 @@ struct BatteryWidget: View {
             if isCharging && level != 100 {
                 Image(systemName: "bolt.fill")
                     .barikFont(size: 9)
+                    .offset(y: -1)
             }
         }
         .foregroundStyle(tuiColor(style: style))

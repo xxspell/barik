@@ -97,7 +97,7 @@ struct HomebrewWidget: View {
 
     private func brewIcon(size: CGFloat, badgeMode: Bool = false) -> some View {
         Image(systemName: "shippingbox.fill")
-            .barikFont(size: BarikStyle.current.isTUI ? 14 : size, weight: .medium)
+            .barikFont(size: BarikStyle.current.isTUI ? 12 : size, weight: .medium)
             .foregroundStyle(badgeMode ? Color.foregroundOutside : iconColor)
     }
 

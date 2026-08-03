@@ -30,7 +30,10 @@ struct FocusWidget: View {
         Group {
             if let activeMode {
                 Image(systemName: activeMode.resolvedSymbolName)
-                    .barikFont(size: FocusWidgetLayout.iconSize, weight: .semibold)
+                    .barikFont(
+                        size: BarikStyle.current.isTUI ? 12 : FocusWidgetLayout.iconSize,
+                        weight: .semibold
+                    )
                     .foregroundStyle(foregroundColor)
                     .frame(
                         width: BarikStyle.current.isTUI ? 20 : FocusWidgetLayout.badgeSize,
