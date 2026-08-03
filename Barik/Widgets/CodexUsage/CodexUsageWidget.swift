@@ -15,12 +15,53 @@ struct CodexUsageWidget: View {
     }
 
     private var ringColor: Color {
+        let style = BarikStyle.current
+        if style.isTUI {
+            return percentage >= 0.6 ? style.accent : style.foreground
+        }
         if percentage >= 0.8 { return .red }
         if percentage >= 0.6 { return .orange }
         return .white
     }
 
     var body: some View {
+        BarikStyle.current.isTUI ? AnyView(tuiBody) : AnyView(defaultBody)
+    }
+
+    private var tuiBody: some View {
+        HStack(spacing: 4) {
+            Image("CodexIcon")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 13, height: 13)
+                .saturation(0)
+            Text(tuiUsageText)
+                .barikFont(size: 12, weight: .medium, design: .monospaced)
+        }
+        .foregroundStyle(.foregroundOutside)
+        .experimentalConfiguration(cornerRadius: 15)
+        .frame(maxHeight: .infinity)
+        .background(.black.opacity(0.001))
+        .captureScreenRect(into: $widgetFrame)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            MenuBarPopup.show(rect: widgetFrame, id: "codex-usage") {
+                CodexUsagePopup()
+                    .environmentObject(configProvider)
+            }
+        }
+        .onAppear {
+            usageManager.startUpdating(config: configProvider.config)
+        }
+    }
+
+    private var tuiUsageText: String {
+        guard usageManager.usageData.isAvailable else { return "--" }
+        let session = Int((usageManager.usageData.primaryPercentage * 100).rounded())
+        return "\(session)%"
+    }
+
+    private var defaultBody: some View {
         ZStack {
             if usageManager.usageData.isAvailable {
                 ringShape
@@ -28,9 +69,9 @@ struct CodexUsageWidget: View {
 
             drainableIcon
         }
-        .frame(width: 28, height: 28)
+        .frame(width: BarikStyle.current.isTUI ? 16 : 28, height: BarikStyle.current.isTUI ? 16 : 28)
         .foregroundStyle(.foregroundOutside)
-        .shadow(color: .foregroundShadowOutside, radius: 3)
+        .shadow(color: .foregroundShadowOutside, radius: BarikStyle.current.isTUI ? 0 : 3)
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))
@@ -47,7 +88,7 @@ struct CodexUsageWidget: View {
     }
 
     private var drainableIcon: some View {
-        let iconSize: CGFloat = 16
+        let iconSize: CGFloat = BarikStyle.current.isTUI ? 14 : 16
 
         return ZStack {
             Image("CodexIcon")

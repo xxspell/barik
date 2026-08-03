@@ -15,12 +15,63 @@ struct ClaudeUsageWidget: View {
     }
 
     private var ringColor: Color {
+        let style = BarikStyle.current
+        if style.isTUI {
+            return percentage >= 0.6 ? style.accent : style.foreground
+        }
         if percentage >= 0.8 { return .red }
         if percentage >= 0.6 { return .orange }
         return .white
     }
 
     var body: some View {
+        BarikStyle.current.isTUI ? AnyView(tuiBody) : AnyView(defaultBody)
+    }
+
+    private var tuiBody: some View {
+        HStack(spacing: 4) {
+            Image("ClaudeIcon")
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: 13, height: 13)
+            tuiUsageView
+                .barikFont(size: 12, weight: .medium, design: .monospaced)
+        }
+        .foregroundStyle(.foregroundOutside)
+        .experimentalConfiguration(cornerRadius: 15)
+        .frame(maxHeight: .infinity)
+        .background(.black.opacity(0.001))
+        .captureScreenRect(into: $widgetFrame)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            MenuBarPopup.show(rect: widgetFrame, id: "claude-usage") {
+                ClaudeUsagePopup()
+                    .environmentObject(configProvider)
+            }
+        }
+        .onAppear {
+            usageManager.startUpdating(config: configProvider.config)
+        }
+    }
+
+    @ViewBuilder
+    private var tuiUsageView: some View {
+        let style = BarikStyle.current
+        if usageManager.usageData.isAvailable {
+            let session = Int((usageManager.usageData.fiveHourPercentage * 100).rounded())
+            let weekly = Int((usageManager.usageData.weeklyPercentage * 100).rounded())
+            HStack(spacing: 0) {
+                Text("\(session)%").foregroundStyle(style.foreground)
+                Text("/").foregroundStyle(style.dim)
+                Text("\(weekly)%").foregroundStyle(style.foreground)
+            }
+        } else {
+            Text("--").foregroundStyle(style.dim)
+        }
+    }
+
+    private var defaultBody: some View {
         ZStack {
             if usageManager.usageData.isAvailable {
                 ringShape
@@ -28,9 +79,9 @@ struct ClaudeUsageWidget: View {
 
             drainableIcon
         }
-        .frame(width: 28, height: 28)
+        .frame(width: BarikStyle.current.isTUI ? 16 : 28, height: BarikStyle.current.isTUI ? 16 : 28)
         .foregroundStyle(.foregroundOutside)
-        .shadow(color: .foregroundShadowOutside, radius: 3)
+        .shadow(color: .foregroundShadowOutside, radius: BarikStyle.current.isTUI ? 0 : 3)
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))
@@ -47,14 +98,17 @@ struct ClaudeUsageWidget: View {
     }
 
     private var drainableIcon: some View {
-        let iconSize: CGFloat = 16
+        let style = BarikStyle.current
+        let iconSize: CGFloat = style.isTUI ? 14 : 16
+        let baseColor: Color = style.isTUI ? style.foreground.opacity(0.3) : .white.opacity(0.3)
+        let fillColor: Color = style.isTUI ? style.foreground : .white
 
         return ZStack {
             Image("ClaudeIcon")
                 .resizable()
                 .renderingMode(.template)
                 .scaledToFit()
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(baseColor)
                 .frame(width: iconSize, height: iconSize)
 
             if weeklyRemaining >= 1 {
@@ -62,11 +116,11 @@ struct ClaudeUsageWidget: View {
                     .resizable()
                     .renderingMode(.template)
                     .scaledToFit()
-                    .foregroundStyle(.white)
+                    .foregroundStyle(fillColor)
                     .frame(width: iconSize, height: iconSize)
             } else if weeklyRemaining > 0 {
                 Rectangle()
-                    .fill(.white)
+                    .fill(fillColor)
                     .frame(width: iconSize, height: iconSize * weeklyRemaining)
                     .frame(width: iconSize, height: iconSize, alignment: .bottom)
                     .mask(
