@@ -179,7 +179,10 @@ struct CLIProxyUsageWidget: View {
                     if usageManager.usageData.isAvailable {
                         Text(quotaPercentageText)
                             .barikFont(size: 12, weight: .medium)
-                            .foregroundStyle(.foregroundOutside)
+                            .foregroundStyle(
+                                (BarikStyle.current.isTUI && normalizedProgress(quotaSummary.percentage) <= warnThreshold)
+                                    ? BarikStyle.current.accent : Color.foregroundOutside
+                            )
                     } else if usageManager.fetchFailed {
                         Image(systemName: "exclamationmark.circle.fill")
                             .barikFont(size: 10)

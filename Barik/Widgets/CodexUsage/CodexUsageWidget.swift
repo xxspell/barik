@@ -37,6 +37,7 @@ struct CodexUsageWidget: View {
                 .saturation(0)
             Text(tuiUsageText)
                 .barikFont(size: 12, weight: .medium, design: .monospaced)
+                .foregroundStyle(usageManager.usageData.primaryPercentage >= 0.6 ? BarikStyle.current.accent : Color.foregroundOutside)
         }
         .foregroundStyle(.foregroundOutside)
         .experimentalConfiguration(cornerRadius: 15)

@@ -62,9 +62,11 @@ struct ClaudeUsageWidget: View {
             let session = Int((usageManager.usageData.fiveHourPercentage * 100).rounded())
             let weekly = Int((usageManager.usageData.weeklyPercentage * 100).rounded())
             HStack(spacing: 0) {
-                Text("\(session)%").foregroundStyle(style.foreground)
+                Text("\(session)%")
+                    .foregroundStyle(usageManager.usageData.fiveHourPercentage >= 0.6 ? style.accent : style.foreground)
                 Text("/").foregroundStyle(style.dim)
-                Text("\(weekly)%").foregroundStyle(style.foreground)
+                Text("\(weekly)%")
+                    .foregroundStyle(usageManager.usageData.weeklyPercentage >= 0.6 ? style.accent : style.foreground)
             }
         } else {
             Text("--").foregroundStyle(style.dim)
