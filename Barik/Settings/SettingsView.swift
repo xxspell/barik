@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 import OSLog
-import UniformTypeIdentifiers
 
 struct SettingsRootView: View {
     @ObservedObject private var router = SettingsRouter.shared
@@ -6549,15 +6548,28 @@ private struct SystemMonitorSettingsView: View {
         persistMetricSelection()
     }
 
+    /// Reconstructs the full metric order (visible + hidden) from the newly
+    /// resolved visible-metrics array. Walks the previous full order and
+    /// replaces each previously-visible slot with the next id from
+    /// `visibleOrder`, in sequence, while leaving previously-hidden slots
+    /// untouched — so a hidden metric keeps its position and a drag/toggle
+    /// only reshuffles the currently-visible slots.
     private func mergedMetricsOrder(fromVisible visibleOrder: [String]) -> [String] {
-        var order = visibleOrder
-        let hiddenFallbackOrder = metricsOrder.isEmpty
+        let previousOrder = metricsOrder.isEmpty
             ? SystemMonitorMetric.allCases.map(\.rawValue)
             : metricsOrder
-        for id in hiddenFallbackOrder where !order.contains(id) {
-            order.append(id)
+        var remainingVisible = visibleOrder
+        var result: [String] = []
+        for id in previousOrder {
+            if visibleOrder.contains(id) {
+                guard !remainingVisible.isEmpty else { continue }
+                result.append(remainingVisible.removeFirst())
+            } else {
+                result.append(id)
+            }
         }
-        return order
+        result.append(contentsOf: remainingVisible)
+        return result
     }
 
     private func selectedSystemMonitorMetrics() -> [String] {
