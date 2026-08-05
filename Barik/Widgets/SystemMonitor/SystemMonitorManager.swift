@@ -55,6 +55,10 @@ enum SystemMonitorMetric: String, CaseIterable {
     }
 }
 
+extension SystemMonitorMetric: Identifiable {
+    var id: String { rawValue }
+}
+
 private struct SystemMonitorSnapshot: Equatable {
     var cpuLoad: Double = 0
     var userLoad: Double = 0

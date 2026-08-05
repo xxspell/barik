@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 import OSLog
-import UniformTypeIdentifiers
 
 struct SettingsRootView: View {
     @ObservedObject private var router = SettingsRouter.shared
@@ -606,9 +605,11 @@ private struct DisplaysSettingsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(24)
-        .onAppear(perform: syncDraftsFromConfig)
-        .onReceive(configManager.$config) { _ in
-            syncDraftsFromConfig()
+        .onAppear {
+            syncDraftsFromConfig(using: configManager.config)
+        }
+        .onReceive(configManager.$config) { config in
+            syncDraftsFromConfig(using: config)
         }
         .sheet(item: $catalogContext) { context in
             DisplayCatalogSheet(
@@ -628,6 +629,13 @@ private struct DisplaysSettingsView: View {
         configManager
             .displayedWidgets(for: monitor.id)
             .map(\.id)
+    }
+
+    private func effectiveWidgetIDs(for monitor: MonitorDescriptor, in config: Config) -> [String] {
+        if let displayConfig = config.rootToml.widgets.displays[monitor.id] {
+            return displayConfig.displayed.map(\.id)
+        }
+        return config.rootToml.widgets.displayed.map(\.id)
     }
 
     private func currentLayout(for monitor: MonitorDescriptor) -> [String] {
@@ -718,10 +726,10 @@ private struct DisplaysSettingsView: View {
         return settingsLocalized("settings.displays.status.global_layout")
     }
 
-    private func syncDraftsFromConfig() {
+    private func syncDraftsFromConfig(using config: Config) {
         let monitors = NSScreen.screens.map(\.monitorDescriptor)
         for monitor in monitors {
-            drafts[monitor.id] = effectiveWidgetIDs(for: monitor)
+            drafts[monitor.id] = effectiveWidgetIDs(for: monitor, in: config)
         }
     }
 
@@ -1409,89 +1417,6 @@ private struct DisplayCatalogContext: Identifiable {
     var id: String { monitorID }
 }
 
-private struct DisplayLayoutDragItem: Equatable {
-    let monitorID: String
-    let widgetID: String
-    let index: Int
-}
-
-private struct DisplayLayoutDropTarget: Equatable {
-    let monitorID: String
-    let destinationIndex: Int
-}
-
-private struct DisplayListContainerDropDelegate: DropDelegate {
-    let monitorID: String
-    let destinationIndex: Int
-    @Binding var draggedLayoutItem: DisplayLayoutDragItem?
-    @Binding var dropTarget: DisplayLayoutDropTarget?
-    let moveWidget: (Int, Int) -> Void
-
-    func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [UTType.plainText])
-    }
-
-    func dropEntered(info: DropInfo) {
-        guard let currentDrag = draggedLayoutItem, currentDrag.monitorID == monitorID else {
-            return
-        }
-        withAnimation(.easeInOut(duration: 0.14)) {
-            dropTarget = .init(
-                monitorID: monitorID,
-                destinationIndex: currentDrag.index == destinationIndex
-                    ? currentDrag.index
-                    : destinationIndex
-            )
-        }
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        withAnimation(.easeInOut(duration: 0.14)) {
-            dropTarget = .init(monitorID: monitorID, destinationIndex: destinationIndex)
-        }
-        return DropProposal(operation: .move)
-    }
-
-    func dropExited(info: DropInfo) {
-        withAnimation(.easeInOut(duration: 0.14)) {
-            if dropTarget?.monitorID == monitorID
-                && dropTarget?.destinationIndex == destinationIndex {
-                dropTarget = nil
-            }
-        }
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        defer {
-            withAnimation(.easeInOut(duration: 0.14)) {
-                draggedLayoutItem = nil
-                dropTarget = nil
-            }
-        }
-        guard let draggedLayoutItem, draggedLayoutItem.monitorID == monitorID else {
-            return false
-        }
-
-        let adjustedDestination = adjustedDestinationIndex(
-            sourceIndex: draggedLayoutItem.index,
-            destinationIndex: destinationIndex
-        )
-        guard adjustedDestination != draggedLayoutItem.index else {
-            return true
-        }
-
-        moveWidget(draggedLayoutItem.index, adjustedDestination)
-        return true
-    }
-
-    private func adjustedDestinationIndex(sourceIndex: Int, destinationIndex: Int) -> Int {
-        if destinationIndex > sourceIndex {
-            return max(0, destinationIndex - 1)
-        }
-        return destinationIndex
-    }
-}
-
 private struct DisplayWidgetDefinition: Identifiable {
     let id: String
     let title: String
@@ -1562,75 +1487,22 @@ private struct DisplayLayoutListEditor: View {
     let items: [DisplayLayoutListItem]
     let onMove: (Int, Int) -> Void
     let onRemove: (Int) -> Void
-    @State private var draggedLayoutItem: DisplayLayoutDragItem?
-    @State private var dropTarget: DisplayLayoutDropTarget?
 
     var body: some View {
-        VStack(spacing: 8) {
-            DisplayLayoutInsertionZone(
-                isTargeted: dropTarget == .init(
-                    monitorID: monitorID,
-                    destinationIndex: 0
-                )
+        ReorderableListEditor(
+            groupID: monitorID,
+            items: items,
+            onMove: onMove
+        ) { item, _, isDragging in
+            DisplayLayoutListRow(
+                title: item.title,
+                widgetID: item.widgetID,
+                isDragging: isDragging,
+                onRemove: {
+                    onRemove(item.index)
+                }
             )
-            .onDrop(
-                of: [UTType.plainText],
-                delegate: DisplayListContainerDropDelegate(
-                    monitorID: monitorID,
-                    destinationIndex: 0,
-                    draggedLayoutItem: $draggedLayoutItem,
-                    dropTarget: $dropTarget,
-                    moveWidget: onMove
-                )
-            )
-
-            ForEach(items) { item in
-                DisplayLayoutListRow(
-                    title: item.title,
-                    widgetID: item.widgetID,
-                    isDragging: draggedLayoutItem?.monitorID == monitorID
-                        && draggedLayoutItem?.index == item.index,
-                    onRemove: {
-                        onRemove(item.index)
-                    },
-                    dragProvider: {
-                        draggedLayoutItem = .init(
-                            monitorID: monitorID,
-                            widgetID: item.widgetID,
-                            index: item.index
-                        )
-                        return NSItemProvider(object: "\(item.index)" as NSString)
-                    }
-                )
-
-                DisplayLayoutInsertionZone(
-                    isTargeted: dropTarget == .init(
-                        monitorID: monitorID,
-                        destinationIndex: item.index + 1
-                    )
-                )
-                .onDrop(
-                    of: [UTType.plainText],
-                    delegate: DisplayListContainerDropDelegate(
-                        monitorID: monitorID,
-                        destinationIndex: item.index + 1,
-                        draggedLayoutItem: $draggedLayoutItem,
-                        dropTarget: $dropTarget,
-                        moveWidget: onMove
-                    )
-                )
-            }
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.primary.opacity(0.035))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
-        .animation(.spring(response: 0.22, dampingFraction: 0.9), value: items)
     }
 }
 
@@ -1639,7 +1511,6 @@ private struct DisplayLayoutListRow: View {
     let widgetID: String
     let isDragging: Bool
     let onRemove: () -> Void
-    let dragProvider: () -> NSItemProvider
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1682,29 +1553,6 @@ private struct DisplayLayoutListRow: View {
         )
         .scaleEffect(isDragging ? 0.985 : 1)
         .opacity(isDragging ? 0.72 : 1)
-        .onDrag(dragProvider)
-    }
-}
-
-private struct DisplayLayoutInsertionZone: View {
-    let isTargeted: Bool
-
-    var body: some View {
-        Color.clear
-            .frame(maxWidth: .infinity)
-            .frame(height: isTargeted ? 18 : 8)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(isTargeted ? Color.accentColor.opacity(0.18) : Color.clear)
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(
-                        isTargeted ? Color.accentColor.opacity(0.55) : Color.clear,
-                        lineWidth: 1.5
-                    )
-            )
-            .animation(.spring(response: 0.18, dampingFraction: 0.9), value: isTargeted)
     }
 }
 
@@ -6278,6 +6126,54 @@ private enum SystemMonitorPopupNetworkDetailOption: String, CaseIterable, System
     }
 }
 
+private struct SystemMonitorMetricRow: View {
+    let metric: SystemMonitorMetric
+    let description: String
+    let isEnabled: Bool
+    let isDragging: Bool
+    let onToggle: (Bool) -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+                .padding(.vertical, 8)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(metric.title)
+                    .font(.subheadline.weight(.semibold))
+
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 8)
+
+            Toggle(
+                "",
+                isOn: Binding(get: { isEnabled }, set: onToggle)
+            )
+            .labelsHidden()
+            .toggleStyle(.switch)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(isDragging ? 0.07 : 0.03))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .scaleEffect(isDragging ? 0.985 : 1)
+        .opacity(isDragging ? 0.72 : (isEnabled ? 1 : 0.5))
+    }
+}
+
 private struct SystemMonitorSettingsView: View {
     @ObservedObject private var configManager = ConfigManager.shared
     @ObservedObject private var settingsStore = SettingsStore.shared
@@ -6301,6 +6197,7 @@ private struct SystemMonitorSettingsView: View {
     @State private var gpuWarningLevel = 70.0
     @State private var gpuCriticalLevel = 90.0
     @State private var metricSelections: [String: Bool] = [:]
+    @State private var metricsOrder: [String] = []
     @State private var popupMetricSelections: [String: Bool] = [:]
     @State private var popupCPUDetailSelections: [String: Bool] = [:]
     @State private var popupTemperatureDetailSelections: [String: Bool] = [:]
@@ -6426,17 +6323,20 @@ private struct SystemMonitorSettingsView: View {
                 actionTitle: settingsLocalized("settings.action.reset"),
                 action: resetMetricDefaults
             ) {
-                ForEach(SystemMonitorMetric.allCases, id: \.rawValue) { metric in
-                    ToggleRow(
-                        title: metric.title,
+                ReorderableListEditor(
+                    groupID: "system-monitor-metrics",
+                    items: metricsOrder.compactMap(SystemMonitorMetric.init(rawValue:)),
+                    onMove: moveMetric
+                ) { metric, _, isDragging in
+                    SystemMonitorMetricRow(
+                        metric: metric,
                         description: systemMonitorMetricDescription(for: metric),
-                        isOn: Binding(
-                            get: { metricSelections[metric.rawValue] ?? true },
-                            set: { newValue in
-                                metricSelections[metric.rawValue] = newValue
-                                persistMetricSelection()
-                            }
-                        )
+                        isEnabled: metricSelections[metric.rawValue] ?? true,
+                        isDragging: isDragging,
+                        onToggle: { newValue in
+                            metricSelections[metric.rawValue] = newValue
+                            persistMetricSelection()
+                        }
                     )
                 }
             }
@@ -6643,6 +6543,7 @@ private struct SystemMonitorSettingsView: View {
             incoming: config["metrics"]?.stringArrayValue ?? SystemMonitorMetric.allCases.map(\.rawValue),
             current: selectedSystemMonitorMetrics()
         )
+        metricsOrder = mergedMetricsOrder(fromVisible: resolvedMetrics)
         metricSelections = Dictionary(uniqueKeysWithValues: SystemMonitorMetric.allCases.map { metric in
             (metric.rawValue, resolvedMetrics.contains(metric.rawValue))
         })
@@ -6713,6 +6614,7 @@ private struct SystemMonitorSettingsView: View {
 
     private func resetMetricDefaults() {
         let defaults = SystemMonitorMetric.allCases.map(\.rawValue)
+        metricsOrder = defaults
         metricSelections = Dictionary(uniqueKeysWithValues: SystemMonitorMetric.allCases.map { ($0.rawValue, true) })
         pendingArrayWrites.removeValue(forKey: fieldIdentifier(.init(tablePath: systemMonitorTable, key: "metrics")))
         ConfigManager.shared.updateConfigStringArrayValue(tablePath: systemMonitorTable, key: "metrics", newValue: defaults)
@@ -6787,10 +6689,45 @@ private struct SystemMonitorSettingsView: View {
         setStringArrayValue(values, for: .init(tablePath: systemMonitorTable, key: "metrics"))
     }
 
-    private func selectedSystemMonitorMetrics() -> [String] {
-        let selected = SystemMonitorMetric.allCases.compactMap { metric in
-            (metricSelections[metric.rawValue] ?? true) ? metric.rawValue : nil
+    private func moveMetric(from source: Int, to destination: Int) {
+        guard metricsOrder.indices.contains(source) else { return }
+        var order = metricsOrder
+        let item = order.remove(at: source)
+        let boundedDestination = max(0, min(destination, order.count))
+        order.insert(item, at: boundedDestination)
+        metricsOrder = order
+        persistMetricSelection()
+    }
+
+    /// Reconstructs the full metric order (visible + hidden) from the newly
+    /// resolved visible-metrics array. Walks the previous full order and
+    /// replaces each previously-visible slot with the next id from
+    /// `visibleOrder`, in sequence, while leaving previously-hidden slots
+    /// untouched — so a hidden metric keeps its position and a drag/toggle
+    /// only reshuffles the currently-visible slots.
+    private func mergedMetricsOrder(fromVisible visibleOrder: [String]) -> [String] {
+        let previousOrder = metricsOrder.isEmpty
+            ? SystemMonitorMetric.allCases.map(\.rawValue)
+            : metricsOrder
+        var remainingVisible = visibleOrder
+        var result: [String] = []
+        for id in previousOrder {
+            if visibleOrder.contains(id) {
+                guard !remainingVisible.isEmpty else { continue }
+                result.append(remainingVisible.removeFirst())
+            } else {
+                result.append(id)
+            }
         }
+        result.append(contentsOf: remainingVisible)
+        return result
+    }
+
+    private func selectedSystemMonitorMetrics() -> [String] {
+        let orderedIDs = metricsOrder.isEmpty
+            ? SystemMonitorMetric.allCases.map(\.rawValue)
+            : metricsOrder
+        let selected = orderedIDs.filter { metricSelections[$0] ?? true }
         return selected.isEmpty ? ["cpu", "temperature", "ram", "disk", "gpu", "network"] : selected
     }
 
