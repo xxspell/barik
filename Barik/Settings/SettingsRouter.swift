@@ -21,6 +21,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case ticktick
     case shortcuts
     case systemMonitor
+    case widgetExport
     case other
     case about
 
@@ -62,6 +63,10 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return String(localized: "settings.section.shortcuts")
         case .systemMonitor:
             return String(localized: "settings.section.system_monitor")
+        case .widgetExport:
+            // Dev-only, never user-facing — hardcoded like .gotify below,
+            // no Localizable.xcstrings entry needed.
+            return "Widget Export"
         case .other:
             return String(localized: "settings.section.other")
         case .about:
@@ -105,6 +110,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return "square.stack.3d.up"
         case .systemMonitor:
             return "menubar.dock.rectangle"
+        case .widgetExport:
+            return "square.and.arrow.up.on.square"
         case .other:
             return "square.grid.2x2"
         case .about:

@@ -433,6 +433,13 @@ struct WidgetBackgroundConfig: Decodable {
     enum CodingKeys: String, CodingKey {
         case displayed, height, blur
     }
+
+    /// `Material` can't be captured correctly by `ImageRenderer` outside a
+    /// live window (it renders as a flat, opaque, near-white rectangle), so
+    /// widget-export code paths should use this instead of `blur` directly.
+    func fillStyle(isExporting: Bool) -> AnyShapeStyle {
+        isExporting ? AnyShapeStyle(Color.black.opacity(0.55)) : AnyShapeStyle(blur)
+    }
 }
 
 struct BackgroundConfig: Decodable {

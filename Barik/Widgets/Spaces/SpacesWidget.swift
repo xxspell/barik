@@ -419,7 +419,7 @@ private struct WindowView: View {
             }
             .background {
                 if showHoverTooltip {
-                    ScreenRectReader(screenRect: $iconFrame)
+                    Color.clear.captureScreenRect(into: $iconFrame)
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -514,7 +514,7 @@ private struct CompactWindowIconView: View {
         }
         .background {
             if showHoverTooltip {
-                ScreenRectReader(screenRect: $iconFrame)
+                Color.clear.captureScreenRect(into: $iconFrame)
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -650,62 +650,6 @@ private struct HiddenWindowBadge: View {
                 .foregroundStyle(.white.opacity(0.95))
         }
         .shadow(color: .black.opacity(0.18), radius: 1)
-    }
-}
-
-private struct ScreenRectReader: NSViewRepresentable {
-    @Binding var screenRect: CGRect
-
-    func makeNSView(context: Context) -> TrackingRectView {
-        let view = TrackingRectView()
-        view.onScreenRectChange = { rect in
-            if screenRect != rect {
-                screenRect = rect
-            }
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: TrackingRectView, context: Context) {
-        nsView.onScreenRectChange = { rect in
-            if screenRect != rect {
-                screenRect = rect
-            }
-        }
-        nsView.reportRectIfPossible()
-    }
-}
-
-private final class TrackingRectView: NSView {
-    var onScreenRectChange: ((CGRect) -> Void)?
-    private var lastReportedRect: CGRect = .null
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        reportRectIfPossible()
-    }
-
-    override func layout() {
-        super.layout()
-        reportRectIfPossible()
-    }
-
-    func reportRectIfPossible() {
-        guard let window else { return }
-        let localRect = convert(bounds, to: nil)
-        let screenRect = window.convertToScreen(localRect)
-        guard shouldReport(screenRect) else { return }
-        lastReportedRect = screenRect
-        onScreenRectChange?(screenRect)
-    }
-
-    private func shouldReport(_ rect: CGRect) -> Bool {
-        guard !lastReportedRect.isNull else { return true }
-
-        return abs(lastReportedRect.minX - rect.minX) > 0.5
-            || abs(lastReportedRect.minY - rect.minY) > 0.5
-            || abs(lastReportedRect.width - rect.width) > 0.5
-            || abs(lastReportedRect.height - rect.height) > 0.5
     }
 }
 

@@ -101,7 +101,7 @@ struct CLIProxyUsageWidget: View {
                 .experimentalConfiguration(cornerRadius: 15)
                 .frame(maxHeight: .infinity)
                 .background(.black.opacity(0.001))
-                .background(widgetFrameReader)
+                .captureScreenRect(into: $widgetFrame)
         )
         let interactive = AnyView(
             styled
@@ -148,10 +148,6 @@ struct CLIProxyUsageWidget: View {
             return ringShapeView()
         }
         return AnyView(EmptyView())
-    }
-
-    private var widgetFrameReader: some View {
-        ScreenSpaceRectReader(screenRect: $widgetFrame)
     }
 
     private func widgetContentView() -> AnyView {

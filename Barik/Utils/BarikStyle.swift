@@ -44,4 +44,17 @@ struct BarikStyle {
     var foreground: Color { Color.foregroundOutside }
     var dim: Color { Color.foregroundOutside.opacity(dimOpacity) }
     var chipCornerRadius: CGFloat { 8 }
+
+    /// Fill for a TUI chip's glass/flat background. `isExporting` swaps
+    /// `.ultraThinMaterial` for a solid approximation — see
+    /// `BarikExportEnvironment.swift` for why.
+    func chipFillStyle(isExporting: Bool) -> AnyShapeStyle {
+        guard chipGlass else {
+            return AnyShapeStyle(foreground.opacity(chipOpacity))
+        }
+        if isExporting {
+            return AnyShapeStyle(Color.black.opacity(0.55))
+        }
+        return AnyShapeStyle(.ultraThinMaterial)
+    }
 }

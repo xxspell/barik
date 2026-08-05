@@ -2,8 +2,9 @@ import SwiftUI
 
 private struct ExperimentalConfigurationModifier: ViewModifier {
     @ObservedObject var configManager = ConfigManager.shared
+    @Environment(\.isBarikExporting) private var isExporting
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
-    
+
     let horizontalPadding: CGFloat
     let cornerRadius: CGFloat
     
@@ -25,9 +26,7 @@ private struct ExperimentalConfigurationModifier: ViewModifier {
                 .padding(.horizontal, BarikStyle.tuiChipHPadding)
                 .background(
                     RoundedRectangle(cornerRadius: style.chipCornerRadius, style: .continuous)
-                        .fill(style.chipGlass
-                            ? AnyShapeStyle(.ultraThinMaterial)
-                            : AnyShapeStyle(style.foreground.opacity(style.chipOpacity)))
+                        .fill(style.chipFillStyle(isExporting: isExporting))
                 )
         } else {
             content
@@ -46,7 +45,9 @@ private struct ExperimentalConfigurationModifier: ViewModifier {
                     .padding(.horizontal, foregroundHeight < 45 && horizontalPadding != 15 ? 0 :
                                 foregroundHeight < 30 ? 0 : horizontalPadding
                     )
-                    .background(configManager.config.experimental.foreground.widgetsBackground.blur)
+                    .background(
+                        configManager.config.experimental.foreground.widgetsBackground.fillStyle(isExporting: isExporting)
+                    )
                     .cornerRadius(foregroundHeight < 30 ? 0 : cornerRadius)
                     .overlay(
                         foregroundHeight < 30 ? nil :

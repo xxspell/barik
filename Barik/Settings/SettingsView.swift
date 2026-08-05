@@ -7,7 +7,12 @@ struct SettingsRootView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(SettingsSection.allCases, selection: $router.selectedSection) { section in
+            List(
+                SettingsSection.allCases.filter {
+                    $0 != .widgetExport || AppRuntimeFlags.isWidgetExportEnabled
+                },
+                selection: $router.selectedSection
+            ) { section in
                 Label(section.title, systemImage: section.iconName)
                     .tag(section)
             }
@@ -59,6 +64,8 @@ private struct SettingsDetailView: View {
                 ShortcutsSettingsView()
             case .systemMonitor:
                 SystemMonitorSettingsView()
+            case .widgetExport:
+                WidgetExportView()
             case .other:
                 OtherSettingsView()
             case .about:
@@ -8150,5 +8157,104 @@ private struct FontFamilySettingRow: View {
             return .custom(family, size: 13).weight(.medium)
         }
         return .system(size: 13, weight: .medium)
+    }
+}
+
+/// Dev-only screen (see `AppRuntimeFlags.isWidgetExportEnabled`) that
+/// renders every currently-configured widget to a transparent PNG via
+/// `WidgetExporter`, for changelog/marketing screenshots.
+private struct WidgetExportView: View {
+    @ObservedObject private var configManager = ConfigManager.shared
+    @State private var lastResultSummary: String?
+
+    private static let nonExportableIDs: Set<String> = ["spacer", "divider", "system-banner"]
+
+    /// Union of the global `widgets.displayed` list and every per-display
+    /// `[widgets.displays."N"]` override, deduplicated by widget id. A
+    /// widget enabled only on one monitor (not in the global fallback list)
+    /// should still be exportable.
+    private var exportableItems: [TomlWidgetItem] {
+        let widgets = configManager.config.rootToml.widgets
+        var seenIDs = Set<String>()
+        var items: [TomlWidgetItem] = []
+
+        for item in widgets.displayed + widgets.displays.values.flatMap(\.displayed) {
+            guard !Self.nonExportableIDs.contains(item.id), !seenIDs.contains(item.id) else {
+                continue
+            }
+            seenIDs.insert(item.id)
+            items.append(item)
+        }
+
+        return items
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            SettingsHeaderView(
+                title: "Widget Export",
+                description: "Renders each widget in your current bar config to a transparent PNG at 3x scale using live data. Dev-only — visible because Barik was launched with --dev-export."
+            )
+
+            SettingsCardView(
+                "Widgets",
+                actionTitle: exportableItems.isEmpty ? nil : "Export All",
+                action: exportableItems.isEmpty ? nil : exportAll
+            ) {
+                if exportableItems.isEmpty {
+                    Text("No exportable widgets in the current configuration.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(exportableItems, id: \.id) { item in
+                            HStack {
+                                Text(displayName(for: item.id))
+
+                                Spacer()
+
+                                Button("Export") {
+                                    exportOne(item)
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
+                if let lastResultSummary {
+                    Text(lastResultSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    private func displayName(for id: String) -> String {
+        let stripped = id.hasPrefix("default.") ? String(id.dropFirst("default.".count)) : id
+        return stripped
+            .replacingOccurrences(of: "-", with: " ")
+            .capitalized
+    }
+
+    private func exportOne(_ item: TomlWidgetItem) {
+        let result = WidgetExporter.exportAll(items: [item])
+        reveal(result.folder)
+        lastResultSummary = "Exported \(result.succeeded.count) of 1"
+    }
+
+    private func exportAll() {
+        let result = WidgetExporter.exportAll(items: exportableItems)
+        reveal(result.folder)
+        let total = result.succeeded.count + result.skipped.count
+        lastResultSummary = result.skipped.isEmpty
+            ? "Exported \(result.succeeded.count) of \(total)"
+            : "Exported \(result.succeeded.count) of \(total) — skipped: \(result.skipped.joined(separator: ", "))"
+    }
+
+    private func reveal(_ folder: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([folder])
     }
 }

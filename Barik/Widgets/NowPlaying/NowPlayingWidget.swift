@@ -39,6 +39,8 @@ struct NowPlayingWidget: View {
         return Date().timeIntervalSince(song.stateTimestamp) >= hideAfterSeconds ? nil : song
     }
 
+    @Environment(\.isBarikExporting) private var isExporting
+
     private var pauseRefreshKey: String {
         guard let song = playingManager.nowPlaying else { return "none:\(hideAfterPausedMinutes)" }
         return "\(song.id):\(song.state.rawValue):\(song.stateTimestamp.timeIntervalSinceReferenceDate):\(hideAfterPausedMinutes)"
@@ -68,9 +70,7 @@ struct NowPlayingWidget: View {
                         ZStack {
                             if style.chipEnabled {
                                 RoundedRectangle(cornerRadius: style.chipCornerRadius, style: .continuous)
-                                    .fill(style.chipGlass
-                                        ? AnyShapeStyle(.ultraThinMaterial)
-                                        : AnyShapeStyle(style.foreground.opacity(style.chipOpacity)))
+                                    .fill(style.chipFillStyle(isExporting: isExporting))
                             }
                             if backgroundFillEnabled {
                                 tuiFillLayer(progress: progress)
@@ -249,6 +249,7 @@ struct NowPlayingContent: View {
     let maxCharactersPerLine: Int
     let scrollLongText: Bool
     @ObservedObject var configManager = ConfigManager.shared
+    @Environment(\.isBarikExporting) private var isExporting
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
     private var backgroundFillColor: Color {
         if backgroundFillSource == "custom", let customColor = Color(hex: backgroundFillColorHex) {
@@ -353,7 +354,7 @@ struct NowPlayingContent: View {
                 .frame(height: foregroundHeight < 45 ? NowPlayingWidgetLayout.capsuleHeight : NowPlayingWidgetLayout.compactHeight)
                 .background {
                     ZStack {
-                        Capsule().fill(configManager.config.experimental.foreground.widgetsBackground.blur)
+                        Capsule().fill(configManager.config.experimental.foreground.widgetsBackground.fillStyle(isExporting: isExporting))
                         if backgroundFillEnabled {
                             backgroundFillLayer(for: context.date)
                         }

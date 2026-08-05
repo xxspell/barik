@@ -9,6 +9,7 @@ struct FocusWidget: View {
     @EnvironmentObject var configProvider: ConfigProvider
     @StateObject private var focusManager = FocusManager.shared
     @ObservedObject private var configManager = ConfigManager.shared
+    @Environment(\.isBarikExporting) private var isExporting
 
     @State private var widgetFrame: CGRect = .zero
 
@@ -43,7 +44,7 @@ struct FocusWidget: View {
                     Group {
                         if !BarikStyle.current.isTUI {
                             Circle()
-                                .fill(configManager.config.experimental.foreground.widgetsBackground.blur)
+                                .fill(configManager.config.experimental.foreground.widgetsBackground.fillStyle(isExporting: isExporting))
                         }
                     }
                 )
@@ -56,7 +57,7 @@ struct FocusWidget: View {
                     }
                 )
                 .shadow(color: .foregroundShadowOutside, radius: BarikStyle.current.isTUI ? 0 : 3)
-                .background(widgetFrameReader)
+                .captureScreenRect(into: $widgetFrame)
                 .contentShape(Rectangle())
                 .experimentalConfiguration(cornerRadius: 15)
                 .frame(maxHeight: .infinity)
@@ -69,10 +70,6 @@ struct FocusWidget: View {
                 }
             }
         }
-    }
-
-    private var widgetFrameReader: some View {
-        ScreenSpaceRectReader(screenRect: $widgetFrame)
     }
 }
 

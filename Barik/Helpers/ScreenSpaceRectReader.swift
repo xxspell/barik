@@ -57,8 +57,29 @@ final class ScreenSpaceTrackingView: NSView {
     }
 }
 
+private struct CaptureScreenRectModifier: ViewModifier {
+    @Binding var screenRect: CGRect
+    @Environment(\.isBarikExporting) private var isExporting
+
+    func body(content: Content) -> some View {
+        if isExporting {
+            // `ScreenSpaceRectReader` is an `NSViewRepresentable`, which
+            // needs a live `NSWindow` to report its on-screen frame.
+            // `ImageRenderer` renders offscreen with no such window, so
+            // SwiftUI can't flatten this layer at all: it fails the whole
+            // render pass and substitutes a system "unable to render"
+            // placeholder (a circle-slash glyph over a flat olive
+            // background) for the entire widget. Popups aren't reachable
+            // from a static export anyway, so just skip tracking the rect.
+            content
+        } else {
+            content.background(ScreenSpaceRectReader(screenRect: $screenRect))
+        }
+    }
+}
+
 extension View {
     func captureScreenRect(into rect: Binding<CGRect>) -> some View {
-        background(ScreenSpaceRectReader(screenRect: rect))
+        modifier(CaptureScreenRectModifier(screenRect: rect))
     }
 }
