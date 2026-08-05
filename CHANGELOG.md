@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.13.0
+
+![Header](https://github.com/user-attachments/assets/5bb4408b-353c-49e2-b695-767a19ee9668)
+
+### Added
+- Add TUI style: a compact, monospaced alternative bar look with glass/flat chip chrome, configurable via `style = "tui"` and a new `[tui]` config section
+- Add per-widget TUI treatments: Spaces shows numbers with the focused window title, Time shows mono time with a dimmed event line, Battery shows a block gauge with percent, Network uses monochrome glyphs with accent states, Now Playing shows compact text with an edge-to-edge progress fill, and System Monitor shows inline text metrics with single-letter labels
+- Add TUI-only Settings controls: a Default/TUI style picker in Appearance, plus top offset, accent color, chip material, and chip opacity rows
+- Add accent glow on Claude/Codex/CLIProxy usage widgets when usage crosses a warning threshold, mirroring the System Monitor's over-threshold accent
+- Add drag-reorder support for Visible Metrics in System Monitor settings
+
+### Fixed
+- Fix icon alignment and sizing in the Shortcuts, Homebrew, Focus, and Battery widgets so they sit centered against TUI's monospaced text
+- Fix Displays drag-reorder so a rapid second move no longer reverts the previous one
+- Fix System Monitor settings so hiding a metric preserves its position when it's shown again
+
 ## 0.12.3
 
 ### Fixed
