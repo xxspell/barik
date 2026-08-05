@@ -1,37 +1,19 @@
+<p align="center" dir="auto">
+  <a href="LICENSE">
+    <img alt="License Badge" src="https://img.shields.io/github/license/xxspell/barik.svg?color=green" style="max-width: 100%;">
+  </a>
+  <a href="https://github.com/xxspell/barik/issues">
+    <img alt="Issues Badge" src="https://img.shields.io/github/issues/xxspell/barik.svg?color=green" style="max-width: 100%;">
+  </a>
+  <a href="CHANGELOG.md">
+    <img alt="Changelog Badge" src="https://img.shields.io/badge/view-changelog-green.svg" style="max-width: 100%;">
+  </a>
+  <a href="https://github.com/xxspell/barik/releases">
+    <img alt="GitHub Downloads &#40;all assets, all releases&#41;" src="https://img.shields.io/github/downloads/xxspell/barik/total">
+  </a>
+</p>
 
-[//]: # (<p align="center" dir="auto">)
-
-[//]: # (  <img src="resources/header-image.png" alt="Barik"">)
-
-[//]: # (  <p align="center" dir="auto">)
-
-[//]: # (    <a href="LICENSE">)
-
-[//]: # (      <img alt="License Badge" src="https://img.shields.io/github/license/mocki-toki/barik.svg?color=green" style="max-width: 100%;">)
-
-[//]: # (    </a>)
-
-[//]: # (    <a href="https://github.com/mocki-toki/barik/issues">)
-
-[//]: # (      <img alt="Issues Badge" src="https://img.shields.io/github/issues/mocki-toki/barik.svg?color=green" style="max-width: 100%;">)
-
-[//]: # (    </a>)
-
-[//]: # (    <a href="CHANGELOG.md">)
-
-[//]: # (      <img alt="Changelog Badge" src="https://img.shields.io/badge/view-changelog-green.svg" style="max-width: 100%;">)
-
-[//]: # (    </a>)
-
-[//]: # (    <a href="https://github.com/mocki-toki/barik/releases">)
-
-[//]: # (      <img alt="GitHub Downloads &#40;all assets, all releases&#41;" src="https://img.shields.io/github/downloads/mocki-toki/barik/total">)
-
-[//]: # (    </a>)
-
-[//]: # (  </p>)
-
-[//]: # (</p>)
+> This is a fork of [mocki-toki/barik](https://github.com/mocki-toki/barik) with additional widgets and features.
 
 **barik** is a lightweight macOS menu bar replacement. If you use [**yabai**](https://github.com/koekeishiya/yabai) or [**AeroSpace**](https://github.com/nikitabobko/AeroSpace) for tiling WM, you can display the current space in a sleek macOS-style panel with smooth animations. This makes it easy to see which number to press to switch spaces.
 
@@ -55,16 +37,12 @@ It also supports compact usage widgets for **Claude Code**, **Codex**, and **CLI
 
 <div align="center">
   <h3>Screenshots</h3>
-  <img src="resources/preview-image-light.png" alt="Barik Light Theme">
-  <img src="resources/preview-image-dark.png" alt="Barik Dark Theme">
+  <p><em>Default style</em></p>
+  <img src="https://github.com/user-attachments/assets/5efa356f-6a0a-4ff1-8bcc-f0077718cb5e" alt="Barik Default Style">
+  <p><em>TUI style</em></p>
+  <img src="https://github.com/user-attachments/assets/dbac05ac-bb23-4411-97ac-b103d3e933f4" alt="Barik TUI Style">
+  <img src="https://github.com/user-attachments/assets/22d22f69-ca57-47b1-89d3-ad36e170a721" alt="Barik TUI Style, alternate config">
 </div>
-<br>
-<div align="center">
-  <h3>Video</h3>
-  <video src="https://github.com/user-attachments/assets/33cfd2c2-e961-4d04-8012-664db0113d4f">
-</div>
-    
-https://github.com/user-attachments/assets/d3799e24-c077-4c6a-a7da-a1f2eee1a07f
 
 <br>
 
@@ -74,15 +52,9 @@ https://github.com/user-attachments/assets/d3799e24-c077-4c6a-a7da-a1f2eee1a07f
 
 ## Quick Start
 
-1. Install **barik** via [Homebrew](https://brew.sh/)
+1. Download the latest build from [Releases](https://github.com/xxspell/barik/releases), unzip it, and move it to your Applications folder.
 
-```sh
-brew install --cask mocki-toki/formulae/barik
-```
-
-Or you can download from [Releases](https://github.com/mocki-toki/barik/releases), unzip it, and move it to your Applications folder.
-
-2. _(Optional)_ To display open applications and spaces, install [**yabai**](https://github.com/koekeishiya/yabai) or [**AeroSpace**](https://github.com/nikitabobko/AeroSpace) and set up hotkeys. For **yabai**, you'll need **skhd** or **Raycast scripts**. Don't forget to configure **top padding** — [here's an example for **yabai**](https://github.com/mocki-toki/barik/blob/main/example/.yabairc).
+2. _(Optional)_ To display open applications and spaces, install [**yabai**](https://github.com/koekeishiya/yabai) or [**AeroSpace**](https://github.com/nikitabobko/AeroSpace) and set up hotkeys. For **yabai**, you'll need **skhd** or **Raycast scripts**. Don't forget to configure **top padding** — [here's an example for **yabai**](https://github.com/xxspell/barik/blob/main/example/.yabairc).
 
 3. Hide the system menu bar in **System Settings** and uncheck **Desktop & Dock → Show items → On Desktop**.
 
@@ -539,30 +511,11 @@ priorities = ["medium", "high"] # low, medium, high
 
 When `display-mode = "rotating-item"`, the widget will show one unfinished task or unchecked habit at a time and rotate through the filtered set at random. Clicking the rotating item opens the TickTick popup, switches to the matching tab, scrolls to the related task or habit, and temporarily highlights it. Task rotation can be narrowed to overdue, today, important, tomorrow, or normal items, and the `priorities` list controls which priority levels count as `important`.
 
-## Future Plans
+## FAQ
 
-I'm not planning to stick to minimal functionality—exciting new features are coming soon! The roadmap includes full style customization, the ability to create custom widgets or extend existing ones, and a public **Store** where you can share your styles and widgets.
+**Now Playing shows nothing.** macOS doesn't expose a public API for music control, so barik relies on per-service integrations. Currently supported: Spotify and Apple Music (both require the desktop app). [Open an issue](https://github.com/xxspell/barik/issues/new) to request another service.
 
-Soon, you'll also be able to place widgets not just at the top, but at the bottom, left, and right as well. This means you can replace not only the menu bar but also the Dock! 🚀
-
-## What to do if the currently playing song is not displayed in the Now Playing widget?
-
-Unfortunately, macOS does not support access to its API that allows music control. Fortunately, there is a workaround using Apple Script or a service API, but this requires additional work to integrate each service. Currently, the Now Playing widget supports the following services:
-
-1. Spotify (requires the desktop application)
-2. Apple Music (requires the desktop application)
-
-Create an issue so we can add your favorite music service: https://github.com/mocki-toki/barik/issues/new
-
-## Where Are the Menu Items?
-
-[#5](https://github.com/mocki-toki/barik/issues/5), [#1](https://github.com/mocki-toki/barik/issues/1)
-
-Menu items (such as File, Edit, View, etc.) are not currently supported, but they are planned for future releases. However, you can use [Raycast](https://www.raycast.com/), which supports menu items through an interface similar to Spotlight. I personally use it with the `option + tab` shortcut, and it works very well.
-
-If you’re accustomed to using menu items from the system menu bar, simply move your mouse to the top of the screen to reveal the system menu bar, where they will be available.
-
-<img src="resources/raycast-menu-items.jpeg" alt="Raycast Menu Items">
+**Where are the menu items (File, Edit, View...)?** Not supported yet. Move your mouse to the top of the screen to reveal the system menu bar when you need them, or use [Raycast](https://www.raycast.com/) as a menu-item launcher.
 
 ## Contributing
 
@@ -575,7 +528,3 @@ Contributions are welcome! Please feel free to submit a PR.
 ## Trademarks
 
 Apple and macOS are trademarks of Apple Inc. This project is not connected to Apple Inc. and does not have their approval or support.
-
-## Stars
-
-[![Stargazers over time](https://starchart.cc/mocki-toki/barik.svg?variant=adaptive)](https://starchart.cc/mocki-toki/barik)
