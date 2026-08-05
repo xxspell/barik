@@ -1267,89 +1267,6 @@ private struct DisplayCatalogContext: Identifiable {
     var id: String { monitorID }
 }
 
-private struct DisplayLayoutDragItem: Equatable {
-    let monitorID: String
-    let widgetID: String
-    let index: Int
-}
-
-private struct DisplayLayoutDropTarget: Equatable {
-    let monitorID: String
-    let destinationIndex: Int
-}
-
-private struct DisplayListContainerDropDelegate: DropDelegate {
-    let monitorID: String
-    let destinationIndex: Int
-    @Binding var draggedLayoutItem: DisplayLayoutDragItem?
-    @Binding var dropTarget: DisplayLayoutDropTarget?
-    let moveWidget: (Int, Int) -> Void
-
-    func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [UTType.plainText])
-    }
-
-    func dropEntered(info: DropInfo) {
-        guard let currentDrag = draggedLayoutItem, currentDrag.monitorID == monitorID else {
-            return
-        }
-        withAnimation(.easeInOut(duration: 0.14)) {
-            dropTarget = .init(
-                monitorID: monitorID,
-                destinationIndex: currentDrag.index == destinationIndex
-                    ? currentDrag.index
-                    : destinationIndex
-            )
-        }
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        withAnimation(.easeInOut(duration: 0.14)) {
-            dropTarget = .init(monitorID: monitorID, destinationIndex: destinationIndex)
-        }
-        return DropProposal(operation: .move)
-    }
-
-    func dropExited(info: DropInfo) {
-        withAnimation(.easeInOut(duration: 0.14)) {
-            if dropTarget?.monitorID == monitorID
-                && dropTarget?.destinationIndex == destinationIndex {
-                dropTarget = nil
-            }
-        }
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        defer {
-            withAnimation(.easeInOut(duration: 0.14)) {
-                draggedLayoutItem = nil
-                dropTarget = nil
-            }
-        }
-        guard let draggedLayoutItem, draggedLayoutItem.monitorID == monitorID else {
-            return false
-        }
-
-        let adjustedDestination = adjustedDestinationIndex(
-            sourceIndex: draggedLayoutItem.index,
-            destinationIndex: destinationIndex
-        )
-        guard adjustedDestination != draggedLayoutItem.index else {
-            return true
-        }
-
-        moveWidget(draggedLayoutItem.index, adjustedDestination)
-        return true
-    }
-
-    private func adjustedDestinationIndex(sourceIndex: Int, destinationIndex: Int) -> Int {
-        if destinationIndex > sourceIndex {
-            return max(0, destinationIndex - 1)
-        }
-        return destinationIndex
-    }
-}
-
 private struct DisplayWidgetDefinition: Identifiable {
     let id: String
     let title: String
@@ -1420,75 +1337,22 @@ private struct DisplayLayoutListEditor: View {
     let items: [DisplayLayoutListItem]
     let onMove: (Int, Int) -> Void
     let onRemove: (Int) -> Void
-    @State private var draggedLayoutItem: DisplayLayoutDragItem?
-    @State private var dropTarget: DisplayLayoutDropTarget?
 
     var body: some View {
-        VStack(spacing: 8) {
-            DisplayLayoutInsertionZone(
-                isTargeted: dropTarget == .init(
-                    monitorID: monitorID,
-                    destinationIndex: 0
-                )
+        ReorderableListEditor(
+            groupID: monitorID,
+            items: items,
+            onMove: onMove
+        ) { item, _, isDragging in
+            DisplayLayoutListRow(
+                title: item.title,
+                widgetID: item.widgetID,
+                isDragging: isDragging,
+                onRemove: {
+                    onRemove(item.index)
+                }
             )
-            .onDrop(
-                of: [UTType.plainText],
-                delegate: DisplayListContainerDropDelegate(
-                    monitorID: monitorID,
-                    destinationIndex: 0,
-                    draggedLayoutItem: $draggedLayoutItem,
-                    dropTarget: $dropTarget,
-                    moveWidget: onMove
-                )
-            )
-
-            ForEach(items) { item in
-                DisplayLayoutListRow(
-                    title: item.title,
-                    widgetID: item.widgetID,
-                    isDragging: draggedLayoutItem?.monitorID == monitorID
-                        && draggedLayoutItem?.index == item.index,
-                    onRemove: {
-                        onRemove(item.index)
-                    },
-                    dragProvider: {
-                        draggedLayoutItem = .init(
-                            monitorID: monitorID,
-                            widgetID: item.widgetID,
-                            index: item.index
-                        )
-                        return NSItemProvider(object: "\(item.index)" as NSString)
-                    }
-                )
-
-                DisplayLayoutInsertionZone(
-                    isTargeted: dropTarget == .init(
-                        monitorID: monitorID,
-                        destinationIndex: item.index + 1
-                    )
-                )
-                .onDrop(
-                    of: [UTType.plainText],
-                    delegate: DisplayListContainerDropDelegate(
-                        monitorID: monitorID,
-                        destinationIndex: item.index + 1,
-                        draggedLayoutItem: $draggedLayoutItem,
-                        dropTarget: $dropTarget,
-                        moveWidget: onMove
-                    )
-                )
-            }
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.primary.opacity(0.035))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
-        .animation(.spring(response: 0.22, dampingFraction: 0.9), value: items)
     }
 }
 
@@ -1497,7 +1361,6 @@ private struct DisplayLayoutListRow: View {
     let widgetID: String
     let isDragging: Bool
     let onRemove: () -> Void
-    let dragProvider: () -> NSItemProvider
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1540,29 +1403,6 @@ private struct DisplayLayoutListRow: View {
         )
         .scaleEffect(isDragging ? 0.985 : 1)
         .opacity(isDragging ? 0.72 : 1)
-        .onDrag(dragProvider)
-    }
-}
-
-private struct DisplayLayoutInsertionZone: View {
-    let isTargeted: Bool
-
-    var body: some View {
-        Color.clear
-            .frame(maxWidth: .infinity)
-            .frame(height: isTargeted ? 18 : 8)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(isTargeted ? Color.accentColor.opacity(0.18) : Color.clear)
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(
-                        isTargeted ? Color.accentColor.opacity(0.55) : Color.clear,
-                        lineWidth: 1.5
-                    )
-            )
-            .animation(.spring(response: 0.18, dampingFraction: 0.9), value: isTargeted)
     }
 }
 
