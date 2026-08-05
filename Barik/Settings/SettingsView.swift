@@ -5976,6 +5976,54 @@ private enum SystemMonitorPopupNetworkDetailOption: String, CaseIterable, System
     }
 }
 
+private struct SystemMonitorMetricRow: View {
+    let metric: SystemMonitorMetric
+    let description: String
+    let isEnabled: Bool
+    let isDragging: Bool
+    let onToggle: (Bool) -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+                .padding(.vertical, 8)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(metric.title)
+                    .font(.subheadline.weight(.semibold))
+
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 8)
+
+            Toggle(
+                "",
+                isOn: Binding(get: { isEnabled }, set: onToggle)
+            )
+            .labelsHidden()
+            .toggleStyle(.switch)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(isDragging ? 0.07 : 0.03))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .scaleEffect(isDragging ? 0.985 : 1)
+        .opacity(isDragging ? 0.72 : (isEnabled ? 1 : 0.5))
+    }
+}
+
 private struct SystemMonitorSettingsView: View {
     @ObservedObject private var configManager = ConfigManager.shared
     @ObservedObject private var settingsStore = SettingsStore.shared
@@ -5999,6 +6047,7 @@ private struct SystemMonitorSettingsView: View {
     @State private var gpuWarningLevel = 70.0
     @State private var gpuCriticalLevel = 90.0
     @State private var metricSelections: [String: Bool] = [:]
+    @State private var metricsOrder: [String] = []
     @State private var popupMetricSelections: [String: Bool] = [:]
     @State private var popupCPUDetailSelections: [String: Bool] = [:]
     @State private var popupTemperatureDetailSelections: [String: Bool] = [:]
@@ -6124,17 +6173,20 @@ private struct SystemMonitorSettingsView: View {
                 actionTitle: settingsLocalized("settings.action.reset"),
                 action: resetMetricDefaults
             ) {
-                ForEach(SystemMonitorMetric.allCases, id: \.rawValue) { metric in
-                    ToggleRow(
-                        title: metric.title,
+                ReorderableListEditor(
+                    groupID: "system-monitor-metrics",
+                    items: metricsOrder.compactMap(SystemMonitorMetric.init(rawValue:)),
+                    onMove: moveMetric
+                ) { metric, _, isDragging in
+                    SystemMonitorMetricRow(
+                        metric: metric,
                         description: systemMonitorMetricDescription(for: metric),
-                        isOn: Binding(
-                            get: { metricSelections[metric.rawValue] ?? true },
-                            set: { newValue in
-                                metricSelections[metric.rawValue] = newValue
-                                persistMetricSelection()
-                            }
-                        )
+                        isEnabled: metricSelections[metric.rawValue] ?? true,
+                        isDragging: isDragging,
+                        onToggle: { newValue in
+                            metricSelections[metric.rawValue] = newValue
+                            persistMetricSelection()
+                        }
                     )
                 }
             }
@@ -6341,6 +6393,7 @@ private struct SystemMonitorSettingsView: View {
             incoming: config["metrics"]?.stringArrayValue ?? SystemMonitorMetric.allCases.map(\.rawValue),
             current: selectedSystemMonitorMetrics()
         )
+        metricsOrder = mergedMetricsOrder(fromVisible: resolvedMetrics)
         metricSelections = Dictionary(uniqueKeysWithValues: SystemMonitorMetric.allCases.map { metric in
             (metric.rawValue, resolvedMetrics.contains(metric.rawValue))
         })
@@ -6411,6 +6464,7 @@ private struct SystemMonitorSettingsView: View {
 
     private func resetMetricDefaults() {
         let defaults = SystemMonitorMetric.allCases.map(\.rawValue)
+        metricsOrder = defaults
         metricSelections = Dictionary(uniqueKeysWithValues: SystemMonitorMetric.allCases.map { ($0.rawValue, true) })
         pendingArrayWrites.removeValue(forKey: fieldIdentifier(.init(tablePath: systemMonitorTable, key: "metrics")))
         ConfigManager.shared.updateConfigStringArrayValue(tablePath: systemMonitorTable, key: "metrics", newValue: defaults)
@@ -6485,10 +6539,32 @@ private struct SystemMonitorSettingsView: View {
         setStringArrayValue(values, for: .init(tablePath: systemMonitorTable, key: "metrics"))
     }
 
-    private func selectedSystemMonitorMetrics() -> [String] {
-        let selected = SystemMonitorMetric.allCases.compactMap { metric in
-            (metricSelections[metric.rawValue] ?? true) ? metric.rawValue : nil
+    private func moveMetric(from source: Int, to destination: Int) {
+        guard metricsOrder.indices.contains(source) else { return }
+        var order = metricsOrder
+        let item = order.remove(at: source)
+        let boundedDestination = max(0, min(destination, order.count))
+        order.insert(item, at: boundedDestination)
+        metricsOrder = order
+        persistMetricSelection()
+    }
+
+    private func mergedMetricsOrder(fromVisible visibleOrder: [String]) -> [String] {
+        var order = visibleOrder
+        let hiddenFallbackOrder = metricsOrder.isEmpty
+            ? SystemMonitorMetric.allCases.map(\.rawValue)
+            : metricsOrder
+        for id in hiddenFallbackOrder where !order.contains(id) {
+            order.append(id)
         }
+        return order
+    }
+
+    private func selectedSystemMonitorMetrics() -> [String] {
+        let orderedIDs = metricsOrder.isEmpty
+            ? SystemMonitorMetric.allCases.map(\.rawValue)
+            : metricsOrder
+        let selected = orderedIDs.filter { metricSelections[$0] ?? true }
         return selected.isEmpty ? ["cpu", "temperature", "ram", "disk", "gpu", "network"] : selected
     }
 
