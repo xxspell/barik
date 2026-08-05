@@ -606,9 +606,11 @@ private struct DisplaysSettingsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(24)
-        .onAppear(perform: syncDraftsFromConfig)
-        .onReceive(configManager.$config) { _ in
-            syncDraftsFromConfig()
+        .onAppear {
+            syncDraftsFromConfig(using: configManager.config)
+        }
+        .onReceive(configManager.$config) { config in
+            syncDraftsFromConfig(using: config)
         }
         .sheet(item: $catalogContext) { context in
             DisplayCatalogSheet(
@@ -628,6 +630,13 @@ private struct DisplaysSettingsView: View {
         configManager
             .displayedWidgets(for: monitor.id)
             .map(\.id)
+    }
+
+    private func effectiveWidgetIDs(for monitor: MonitorDescriptor, in config: Config) -> [String] {
+        if let displayConfig = config.rootToml.widgets.displays[monitor.id] {
+            return displayConfig.displayed.map(\.id)
+        }
+        return config.rootToml.widgets.displayed.map(\.id)
     }
 
     private func currentLayout(for monitor: MonitorDescriptor) -> [String] {
@@ -718,10 +727,10 @@ private struct DisplaysSettingsView: View {
         return settingsLocalized("settings.displays.status.global_layout")
     }
 
-    private func syncDraftsFromConfig() {
+    private func syncDraftsFromConfig(using config: Config) {
         let monitors = NSScreen.screens.map(\.monitorDescriptor)
         for monitor in monitors {
-            drafts[monitor.id] = effectiveWidgetIDs(for: monitor)
+            drafts[monitor.id] = effectiveWidgetIDs(for: monitor, in: config)
         }
     }
 
