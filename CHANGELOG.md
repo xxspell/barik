@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.1
+
+### Fixed
+- Fix Shortcuts, Pomodoro, and TickTick popups so their background is pure black, matching every other widget popup
+- Fix the popup open/close animation so it no longer distorts content (text, artwork, progress bars) mid-animation
+
+### Documentation
+- Refresh README for the fork: point badges and links at xxspell/barik, drop the upstream Homebrew tap line, and update screenshots
+
 ## 0.13.0
 
 ![Header](https://github.com/user-attachments/assets/5bb4408b-353c-49e2-b695-767a19ee9668)
