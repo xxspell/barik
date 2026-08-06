@@ -112,7 +112,7 @@ struct PomodoroPopup: View {
             }
         }
         .frame(width: popupWidth)
-        .background(Color(red: 0.09, green: 0.09, blue: 0.11))
+        .background(Color.black)
         .onAppear {
             manager.popupPresented()
             manager.startUpdating(config: configProvider.config)

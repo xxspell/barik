@@ -55,7 +55,7 @@ struct ShortcutsPopup: View {
             }
         }
         .frame(width: 520, height: 420)
-        .background(Color(red: 0.09, green: 0.09, blue: 0.11))
+        .background(Color.black)
         .onAppear {
             manager.startUpdating(config: configProvider.config)
             reconcileSelectedFolder()
