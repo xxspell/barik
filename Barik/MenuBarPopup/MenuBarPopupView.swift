@@ -50,6 +50,15 @@ struct MenuBarPopupView<Content: View>: View {
         foregroundHeight
     }
 
+    // Radius/blur for the decorative card shape that drives the "genie" open/close look.
+    private var cardCornerRadius: CGFloat { ((1.0 - animationValue) * 1) + 40 }
+    private var cardBlurRadius: CGFloat { (1.0 - (0.1 + 0.9 * animationValue)) * 20 }
+    // The card intentionally scales x and y at different rates to sell the unfurl effect.
+    // Applying that same non-uniform scale to the real widget content stretches it visibly
+    // (e.g. album art or a progress bar look distorted mid-animation), so it's confined to
+    // this decorative background shape only; the content is revealed via a mask instead.
+    private var cardRevealScaleX: CGFloat { 0.2 + 0.8 * animationValue }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             Color.clear
@@ -58,111 +67,122 @@ struct MenuBarPopupView<Content: View>: View {
                     MenuBarPopup.hide()
                 }
 
-            content
-                .barikPopupTextStyle(.body)
-                .fixedSize(horizontal: true, vertical: true)
-                .background(
-                    GeometryReader { geometry in
-                        Color.clear
-                            .onAppear {
-                                DispatchQueue.main.async {
-                                    contentSize = geometry.size
+            Group {
+                RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+                    .fill(Color.black)
+                    .frame(width: contentSize.width, height: contentSize.height)
+                    .shadow(radius: 30)
+                    .blur(radius: cardBlurRadius)
+                    .scaleEffect(
+                        x: cardRevealScaleX,
+                        y: animationValue,
+                        anchor: .top
+                    )
+
+                content
+                    .barikPopupTextStyle(.body)
+                    .fixedSize(horizontal: true, vertical: true)
+                    .background(
+                        GeometryReader { geometry in
+                            Color.clear
+                                .onAppear {
+                                    DispatchQueue.main.async {
+                                        contentSize = geometry.size
+                                    }
                                 }
-                            }
-                            .onChange(of: geometry.size) { _, newSize in
-                                contentSize = newSize
-                            }
-                    }
-                )
-                .background(Color.black)
-                .cornerRadius(((1.0 - animationValue) * 1) + 40)
-                .shadow(radius: 30)
-                .blur(radius: (1.0 - (0.1 + 0.9 * animationValue)) * 20)
-                .scaleEffect(
-                    x: 0.2 + 0.8 * animationValue,
-                    y: animationValue,
-                    anchor: .top
-                )
-                .offset(x: computedOffset, y: popupTopPosition)
-                .opacity(animationValue)
-                .onTapGesture {
-                    // Consume taps inside the popup card so only background taps dismiss it.
-                }
-                .transaction { transaction in
-                    if isHideAnimation {
-                        transaction.animation = .linear(duration: 0.1)
-                    }
-                }
-                .onReceive(willShowWindow) { _ in
-                    isShowAnimation = true
-                    withAnimation(
-                        .smooth(
-                            duration: Double(
-                                Constants
-                                    .menuBarPopupAnimationDurationInMilliseconds
-                            ) / 1000.0, extraBounce: 0.3)
-                    ) {
-                        animationValue = 1.0
-                    }
-                    DispatchQueue.main.asyncAfter(
-                        deadline: .now()
-                            + .milliseconds(
-                                Constants
-                                    .menuBarPopupAnimationDurationInMilliseconds
+                                .onChange(of: geometry.size) { _, newSize in
+                                    contentSize = newSize
+                                }
+                        }
+                    )
+                    .mask(alignment: .top) {
+                        RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+                            .frame(
+                                width: contentSize.width * cardRevealScaleX,
+                                height: contentSize.height * animationValue
                             )
-                    ) {
-                        isShowAnimation = false
                     }
+            }
+            .offset(x: computedOffset, y: popupTopPosition)
+            .opacity(animationValue)
+            .onTapGesture {
+                // Consume taps inside the popup card so only background taps dismiss it.
+            }
+            .transaction { transaction in
+                if isHideAnimation {
+                    transaction.animation = .linear(duration: 0.1)
                 }
-                .onReceive(willHideWindow) { _ in
-                    isHideAnimation = true
-                    withAnimation(
-                        .interactiveSpring(
-                            duration: Double(
-                                Constants
-                                    .menuBarPopupAnimationDurationInMilliseconds
-                            ) / 1000.0)
-                    ) {
-                        animationValue = 0.01
-                    }
-                    DispatchQueue.main.asyncAfter(
-                        deadline: .now()
-                            + .milliseconds(
-                                Constants
-                                    .menuBarPopupAnimationDurationInMilliseconds
-                            )
-                    ) {
-                        isHideAnimation = false
-                    }
+            }
+            .onReceive(willShowWindow) { _ in
+                isShowAnimation = true
+                withAnimation(
+                    .smooth(
+                        duration: Double(
+                            Constants
+                                .menuBarPopupAnimationDurationInMilliseconds
+                        ) / 1000.0, extraBounce: 0.3)
+                ) {
+                    animationValue = 1.0
                 }
-                .onReceive(willChangeContent) { _ in
-                    isHideAnimation = true
-                    withAnimation(
-                        .spring(
-                            duration: Double(
-                                Constants
-                                    .menuBarPopupAnimationDurationInMilliseconds
-                            ) / 1000.0)
-                    ) {
-                        animationValue = 0.01
-                    }
-                    DispatchQueue.main.asyncAfter(
-                        deadline: .now()
-                            + .milliseconds(
-                                Constants
-                                    .menuBarPopupAnimationDurationInMilliseconds
-                            )
-                    ) {
-                        isHideAnimation = false
-                    }
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now()
+                        + .milliseconds(
+                            Constants
+                                .menuBarPopupAnimationDurationInMilliseconds
+                        )
+                ) {
+                    isShowAnimation = false
                 }
-                .animation(
-                    .smooth(duration: 0.3), value: animated ? 0 : computedOffset
-                )
-                .animation(
-                    .smooth(duration: 0.3),
-                    value: animated ? 0 : computedYOffset
-                )
+            }
+            .onReceive(willHideWindow) { _ in
+                isHideAnimation = true
+                withAnimation(
+                    .interactiveSpring(
+                        duration: Double(
+                            Constants
+                                .menuBarPopupAnimationDurationInMilliseconds
+                        ) / 1000.0)
+                ) {
+                    animationValue = 0.01
+                }
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now()
+                        + .milliseconds(
+                            Constants
+                                .menuBarPopupAnimationDurationInMilliseconds
+                        )
+                ) {
+                    isHideAnimation = false
+                }
+            }
+            .onReceive(willChangeContent) { _ in
+                isHideAnimation = true
+                withAnimation(
+                    .spring(
+                        duration: Double(
+                            Constants
+                                .menuBarPopupAnimationDurationInMilliseconds
+                        ) / 1000.0)
+                ) {
+                    animationValue = 0.01
+                }
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now()
+                        + .milliseconds(
+                            Constants
+                                .menuBarPopupAnimationDurationInMilliseconds
+                        )
+                ) {
+                    isHideAnimation = false
+                }
+            }
+            .animation(
+                .smooth(duration: 0.3), value: animated ? 0 : computedOffset
+            )
+            .animation(
+                .smooth(duration: 0.3),
+                value: animated ? 0 : computedYOffset
+            )
         }
         .foregroundStyle(.white)
         .preferredColorScheme(.dark)
