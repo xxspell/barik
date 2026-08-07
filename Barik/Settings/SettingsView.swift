@@ -756,6 +756,7 @@ private struct DisplaysSettingsView: View {
                 id: widgetID,
                 title: widgetID,
                 description: settingsLocalized("settings.displays.catalog.custom_widget_description"),
+                icon: "square.on.square",
                 allowsMultiple: false
             )
     }
@@ -1428,31 +1429,72 @@ private struct DisplayWidgetDefinition: Identifiable {
     let id: String
     let title: String
     let description: String
+    let icon: String
     let allowsMultiple: Bool
 }
 
 private let displayWidgetDefinitions: [DisplayWidgetDefinition] = [
-    .init(id: "default.spaces", title: settingsLocalized("settings.section.spaces"), description: settingsLocalized("settings.displays.catalog.widget.spaces.description"), allowsMultiple: false),
-    .init(id: "default.claude-usage", title: settingsLocalized("settings.section.claude_usage"), description: settingsLocalized("settings.displays.catalog.widget.claude_usage.description"), allowsMultiple: false),
-    .init(id: "default.codex-usage", title: settingsLocalized("settings.section.codex_usage"), description: settingsLocalized("settings.displays.catalog.widget.codex_usage.description"), allowsMultiple: false),
-    .init(id: "default.system-monitor", title: settingsLocalized("settings.section.system_monitor"), description: settingsLocalized("settings.displays.catalog.widget.system_monitor.description"), allowsMultiple: false),
-    .init(id: "default.network", title: settingsLocalized("settings.section.network"), description: settingsLocalized("settings.displays.catalog.widget.network.description"), allowsMultiple: false),
-    .init(id: "default.focus", title: settingsLocalized("settings.displays.catalog.widget.focus.title"), description: settingsLocalized("settings.displays.catalog.widget.focus.description"), allowsMultiple: false),
-    .init(id: "default.pomodoro", title: settingsLocalized("settings.section.pomodoro"), description: settingsLocalized("settings.displays.catalog.widget.pomodoro.description"), allowsMultiple: false),
-    .init(id: "default.shortcuts", title: settingsLocalized("settings.section.shortcuts"), description: settingsLocalized("settings.displays.catalog.widget.shortcuts.description"), allowsMultiple: false),
-    .init(id: "default.keyboard-layout", title: settingsLocalized("settings.displays.catalog.widget.keyboard_layout.title"), description: settingsLocalized("settings.displays.catalog.widget.keyboard_layout.description"), allowsMultiple: false),
-    .init(id: "default.battery", title: settingsLocalized("settings.displays.catalog.widget.battery.title"), description: settingsLocalized("settings.displays.catalog.widget.battery.description"), allowsMultiple: false),
-    .init(id: "default.time", title: settingsLocalized("settings.section.time"), description: settingsLocalized("settings.displays.catalog.widget.time.description"), allowsMultiple: false),
-    .init(id: "default.weather", title: settingsLocalized("settings.section.weather"), description: settingsLocalized("settings.displays.catalog.widget.weather.description"), allowsMultiple: false),
-    .init(id: "default.screen-recording-stop", title: settingsLocalized("settings.displays.catalog.widget.screen_recording_stop.title"), description: settingsLocalized("settings.displays.catalog.widget.screen_recording_stop.description"), allowsMultiple: false),
-    .init(id: "default.qwen-proxy-usage", title: settingsLocalized("settings.section.qwen_proxy_usage"), description: settingsLocalized("settings.displays.catalog.widget.qwen_proxy_usage.description"), allowsMultiple: false),
-    .init(id: "default.cliproxy-usage", title: settingsLocalized("settings.section.cli_proxy_usage"), description: settingsLocalized("settings.displays.catalog.widget.cli_proxy_usage.description"), allowsMultiple: false),
-    .init(id: "default.nowplaying", title: settingsLocalized("settings.section.now_playing"), description: settingsLocalized("settings.displays.catalog.widget.now_playing.description"), allowsMultiple: false),
-    .init(id: "default.homebrew", title: settingsLocalized("settings.displays.catalog.widget.homebrew.title"), description: settingsLocalized("settings.displays.catalog.widget.homebrew.description"), allowsMultiple: false),
-    .init(id: "default.ticktick", title: settingsLocalized("settings.section.ticktick"), description: settingsLocalized("settings.displays.catalog.widget.ticktick.description"), allowsMultiple: false),
-    .init(id: "spacer", title: settingsLocalized("settings.displays.catalog.widget.spacer.title"), description: settingsLocalized("settings.displays.catalog.widget.spacer.description"), allowsMultiple: true),
-    .init(id: "divider", title: settingsLocalized("settings.displays.catalog.widget.divider.title"), description: settingsLocalized("settings.displays.catalog.widget.divider.description"), allowsMultiple: true)
+    .init(id: "default.spaces", title: settingsLocalized("settings.section.spaces"), description: settingsLocalized("settings.displays.catalog.widget.spaces.description"), icon: "square.3.layers.3d", allowsMultiple: false),
+    .init(id: "default.claude-usage", title: settingsLocalized("settings.section.claude_usage"), description: settingsLocalized("settings.displays.catalog.widget.claude_usage.description"), icon: "c.circle", allowsMultiple: false),
+    .init(id: "default.codex-usage", title: settingsLocalized("settings.section.codex_usage"), description: settingsLocalized("settings.displays.catalog.widget.codex_usage.description"), icon: "chevron.left.forwardslash.chevron.right", allowsMultiple: false),
+    .init(id: "default.system-monitor", title: settingsLocalized("settings.section.system_monitor"), description: settingsLocalized("settings.displays.catalog.widget.system_monitor.description"), icon: "menubar.dock.rectangle", allowsMultiple: false),
+    .init(id: "default.network", title: settingsLocalized("settings.section.network"), description: settingsLocalized("settings.displays.catalog.widget.network.description"), icon: "wifi", allowsMultiple: false),
+    .init(id: "default.focus", title: settingsLocalized("settings.displays.catalog.widget.focus.title"), description: settingsLocalized("settings.displays.catalog.widget.focus.description"), icon: "moon.circle", allowsMultiple: false),
+    .init(id: "default.pomodoro", title: settingsLocalized("settings.section.pomodoro"), description: settingsLocalized("settings.displays.catalog.widget.pomodoro.description"), icon: "timer", allowsMultiple: false),
+    .init(id: "default.shortcuts", title: settingsLocalized("settings.section.shortcuts"), description: settingsLocalized("settings.displays.catalog.widget.shortcuts.description"), icon: "square.stack.3d.up", allowsMultiple: false),
+    .init(id: "default.keyboard-layout", title: settingsLocalized("settings.displays.catalog.widget.keyboard_layout.title"), description: settingsLocalized("settings.displays.catalog.widget.keyboard_layout.description"), icon: "keyboard", allowsMultiple: false),
+    .init(id: "default.battery", title: settingsLocalized("settings.displays.catalog.widget.battery.title"), description: settingsLocalized("settings.displays.catalog.widget.battery.description"), icon: "battery.100", allowsMultiple: false),
+    .init(id: "default.time", title: settingsLocalized("settings.section.time"), description: settingsLocalized("settings.displays.catalog.widget.time.description"), icon: "clock", allowsMultiple: false),
+    .init(id: "default.weather", title: settingsLocalized("settings.section.weather"), description: settingsLocalized("settings.displays.catalog.widget.weather.description"), icon: "cloud.sun", allowsMultiple: false),
+    .init(id: "default.screen-recording-stop", title: settingsLocalized("settings.displays.catalog.widget.screen_recording_stop.title"), description: settingsLocalized("settings.displays.catalog.widget.screen_recording_stop.description"), icon: "record.circle", allowsMultiple: false),
+    .init(id: "default.qwen-proxy-usage", title: settingsLocalized("settings.section.qwen_proxy_usage"), description: settingsLocalized("settings.displays.catalog.widget.qwen_proxy_usage.description"), icon: "q.circle", allowsMultiple: false),
+    .init(id: "default.cliproxy-usage", title: settingsLocalized("settings.section.cli_proxy_usage"), description: settingsLocalized("settings.displays.catalog.widget.cli_proxy_usage.description"), icon: "server.rack", allowsMultiple: false),
+    .init(id: "default.nowplaying", title: settingsLocalized("settings.section.now_playing"), description: settingsLocalized("settings.displays.catalog.widget.now_playing.description"), icon: "music.note", allowsMultiple: false),
+    .init(id: "default.homebrew", title: settingsLocalized("settings.displays.catalog.widget.homebrew.title"), description: settingsLocalized("settings.displays.catalog.widget.homebrew.description"), icon: "shippingbox", allowsMultiple: false),
+    .init(id: "default.ticktick", title: settingsLocalized("settings.section.ticktick"), description: settingsLocalized("settings.displays.catalog.widget.ticktick.description"), icon: "checklist", allowsMultiple: false),
+    .init(id: "spacer", title: settingsLocalized("settings.displays.catalog.widget.spacer.title"), description: settingsLocalized("settings.displays.catalog.widget.spacer.description"), icon: "arrow.left.and.right", allowsMultiple: true),
+    .init(id: "divider", title: settingsLocalized("settings.displays.catalog.widget.divider.title"), description: settingsLocalized("settings.displays.catalog.widget.divider.description"), icon: "line.diagonal", allowsMultiple: true)
 ]
+
+private final class WidgetConfiguratorDragState: ObservableObject {
+    enum Origin: Equatable {
+        case available
+        case active(monitorID: String, index: Int)
+    }
+
+    @Published var draggedWidgetID: String?
+    @Published var origin: Origin?
+    @Published var dragLocation: CGPoint = .zero
+
+    var isDragging: Bool { draggedWidgetID != nil }
+
+    func reset() {
+        draggedWidgetID = nil
+        origin = nil
+    }
+}
+
+private struct WidgetRowFrameKey: PreferenceKey {
+    struct Entry: Equatable {
+        let monitorID: String
+        let index: Int
+        let midY: CGFloat
+    }
+
+    static var defaultValue: [Entry] = []
+
+    static func reduce(value: inout [Entry], nextValue: () -> [Entry]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+private struct MonitorColumnFrameKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
 
 private struct DisplayLayoutRow<Accessory: View>: View {
     let definition: DisplayWidgetDefinition
