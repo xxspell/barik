@@ -3,6 +3,28 @@ import Foundation
 import OSLog
 import SwiftUI
 
+enum SettingsSectionCategory: String, CaseIterable, Identifiable {
+    case general
+    case widgets
+    case usage
+    case about
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general:
+            return String(localized: "settings.category.general")
+        case .widgets:
+            return String(localized: "settings.category.widgets")
+        case .usage:
+            return String(localized: "settings.category.usage")
+        case .about:
+            return String(localized: "settings.category.about")
+        }
+    }
+}
+
 enum SettingsSection: String, CaseIterable, Identifiable {
     case general
     case appearance
@@ -116,6 +138,24 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return "square.grid.2x2"
         case .about:
             return "info.circle"
+        }
+    }
+
+    var category: SettingsSectionCategory {
+        switch self {
+        case .general, .appearance, .displays:
+            return .general
+        case .spaces, .time, .weather, .network, .nowPlaying, .pomodoro,
+             .ticktick, .shortcuts, .systemMonitor, .gotify, .other:
+            return .widgets
+        case .cliProxyUsage, .qwenProxyUsage, .claudeUsage, .codexUsage:
+            return .usage
+        case .about:
+            return .about
+        case .widgetExport:
+            // Dev-only — SettingsRootView renders this outside the grouped
+            // categories entirely, this value is never read.
+            return .general
         }
     }
 }

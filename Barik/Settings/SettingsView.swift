@@ -7,14 +7,27 @@ struct SettingsRootView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(
-                SettingsSection.allCases.filter {
-                    $0 != .widgetExport || AppRuntimeFlags.isWidgetExportEnabled
-                },
-                selection: $router.selectedSection
-            ) { section in
-                Label(section.title, systemImage: section.iconName)
-                    .tag(section)
+            List(selection: $router.selectedSection) {
+                ForEach(SettingsSectionCategory.allCases) { category in
+                    Section(category.title) {
+                        ForEach(
+                            SettingsSection.allCases.filter { $0.category == category }
+                        ) { section in
+                            Label(section.title, systemImage: section.iconName)
+                                .tag(section)
+                        }
+                    }
+                }
+
+                if AppRuntimeFlags.isWidgetExportEnabled {
+                    Section("Widget Export") {
+                        Label(
+                            SettingsSection.widgetExport.title,
+                            systemImage: SettingsSection.widgetExport.iconName
+                        )
+                        .tag(SettingsSection.widgetExport)
+                    }
+                }
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 210)
             .scrollContentBackground(.hidden)
