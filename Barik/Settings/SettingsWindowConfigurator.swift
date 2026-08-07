@@ -22,5 +22,11 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
         window.titlebarAppearsTransparent = true
         window.appearance = NSAppearance(named: .darkAqua)
         window.backgroundColor = .black
+        // Belt-and-suspenders: `.windowResizability(.contentMinSize)` on the
+        // `Settings` scene (BarikApp.swift) should already make this window
+        // resizable, but that's an implicit SwiftUI-level guarantee. Since
+        // we already have a direct NSWindow handle here, enforce it
+        // explicitly at the AppKit level too.
+        window.styleMask.insert(.resizable)
     }
 }
