@@ -17,10 +17,15 @@ struct SettingsRootView: View {
                     .tag(section)
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 210)
+            .scrollContentBackground(.hidden)
+            .background(Color.black)
         } detail: {
             SettingsDetailView(section: router.selectedSection)
+                .background(Color.black)
         }
         .frame(minWidth: 760, minHeight: 480)
+        .background(SettingsWindowConfigurator())
+        .preferredColorScheme(.dark)
     }
 }
 
