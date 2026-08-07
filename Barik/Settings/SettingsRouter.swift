@@ -154,7 +154,9 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return .about
         case .widgetExport:
             // Dev-only — SettingsRootView renders this outside the grouped
-            // categories entirely, this value is never read.
+            // categories in its own gated trailing section; the categorized
+            // sidebar loop explicitly excludes `.widgetExport` so this
+            // category value is never actually used for grouping.
             return .general
         }
     }

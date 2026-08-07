@@ -11,7 +11,9 @@ struct SettingsRootView: View {
                 ForEach(SettingsSectionCategory.allCases) { category in
                     Section(category.title) {
                         ForEach(
-                            SettingsSection.allCases.filter { $0.category == category }
+                            SettingsSection.allCases.filter {
+                                $0.category == category && $0 != .widgetExport
+                            }
                         ) { section in
                             Label(section.title, systemImage: section.iconName)
                                 .tag(section)
