@@ -7769,6 +7769,23 @@
         }
       }
     },
+    "settings.displays.edit_on_bar.toggle": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit widgets on the bar"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Редактировать виджеты на баре"
+          }
+        }
+      }
+    },
     "settings.displays.empty_override": {
       "extractionState": "stale",
       "localizations": {

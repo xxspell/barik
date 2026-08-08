@@ -596,6 +596,7 @@ private struct WidgetConfiguratorDragPreview: View {
 
 private struct WidgetConfiguratorView: View {
     @ObservedObject private var configManager = ConfigManager.shared
+    @ObservedObject private var editModeState = BarEditModeState.shared
     @StateObject private var dragState = WidgetConfiguratorDragState()
     @State private var drafts: [String: [String]] = [:]
     @State private var catalogContext: DisplayCatalogContext?
@@ -606,7 +607,10 @@ private struct WidgetConfiguratorView: View {
     private var monitors: [MonitorDescriptor] { NSScreen.screens.map(\.monitorDescriptor) }
 
     var body: some View {
-        GeometryReader { geometry in
+        VStack(alignment: .leading, spacing: 16) {
+            editModeToggleHeader
+
+            GeometryReader { geometry in
             let requiredWideWidth = 188 + 12 + CGFloat(monitors.count) * (260 + 12)
             let isWide = geometry.size.width >= requiredWideWidth
 
@@ -692,6 +696,15 @@ private struct WidgetConfiguratorView: View {
                 }
             )
         }
+        }
+    }
+
+    private var editModeToggleHeader: some View {
+        Toggle(isOn: $editModeState.isActive) {
+            Text(settingsLocalized("settings.displays.edit_on_bar.toggle"))
+                .font(.subheadline.weight(.semibold))
+        }
+        .toggleStyle(.switch)
     }
 
     @State private var selectedMonitorID: String?
