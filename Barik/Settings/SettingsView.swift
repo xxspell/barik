@@ -539,8 +539,12 @@ private struct WidgetConfiguratorView: View {
                         currentInsertion = computeInsertion(at: location)
                     },
                     onDragEnded: { definition in
-                        currentInsertion = nil
-                        // Task 6 turns this into an actual config write.
+                        defer { currentInsertion = nil }
+                        guard let insertion = currentInsertion,
+                              let monitor = monitorDescriptor(for: insertion.monitorID) else {
+                            return
+                        }
+                        appendWidget(definition.id, to: monitor, at: insertion.index)
                     }
                 )
 
@@ -631,8 +635,24 @@ private struct WidgetConfiguratorView: View {
                 currentInsertion = computeInsertion(at: location)
             },
             onDragEnded: {
-                currentInsertion = nil
-                // Task 6 turns this into an actual config write.
+                defer { currentInsertion = nil }
+                guard let insertion = currentInsertion,
+                      let origin = dragState.origin,
+                      case .active(let sourceMonitorID, let sourceIndex) = origin,
+                      let sourceMonitor = monitorDescriptor(for: sourceMonitorID),
+                      let widgetID = dragState.draggedWidgetID else {
+                    return
+                }
+
+                if sourceMonitorID == insertion.monitorID {
+                    moveWidget(for: sourceMonitor, from: sourceIndex, to: insertion.index)
+                } else if let destMonitor = monitorDescriptor(for: insertion.monitorID) {
+                    removeWidget(at: sourceIndex, for: sourceMonitor)
+                    let adjustedIndex = insertion.index
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+                        appendWidget(widgetID, to: destMonitor, at: adjustedIndex)
+                    }
+                }
             }
         )
     }
@@ -676,6 +696,18 @@ private struct WidgetConfiguratorView: View {
     private func appendWidget(_ widgetID: String, toMonitorID monitorID: String) {
         guard let monitor = monitorDescriptor(for: monitorID) else { return }
         appendWidget(widgetID, to: monitor)
+    }
+
+    private func appendWidget(_ widgetID: String, to monitor: MonitorDescriptor, at index: Int) {
+        var layout = currentLayout(for: monitor)
+        guard definition(for: widgetID).allowsMultiple || !layout.contains(widgetID) else {
+            return
+        }
+        let boundedIndex = max(0, min(index, layout.count))
+        layout.insert(widgetID, at: boundedIndex)
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+            persistLayout(layout, for: monitor)
+        }
     }
 
     private func removeWidget(at index: Int, for monitor: MonitorDescriptor) {
