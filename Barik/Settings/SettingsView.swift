@@ -48,51 +48,61 @@ private struct SettingsDetailView: View {
     let section: SettingsSection
 
     var body: some View {
-        ScrollView {
-            switch section {
-            case .general:
-                GeneralSettingsView()
-            case .appearance:
-                AppearanceSettingsView()
-            case .displays:
-                WidgetConfiguratorView()
-            case .spaces:
-                SpacesSettingsView()
-            case .time:
-                TimeSettingsView()
-            case .gotify:
-                GotifySettingsView()
-            case .weather:
-                WeatherSettingsView()
-            case .network:
-                NetworkSettingsView()
-            case .nowPlaying:
-                NowPlayingSettingsView()
-            case .cliProxyUsage:
-                CLIProxyUsageSettingsView()
-            case .qwenProxyUsage:
-                QwenProxyUsageSettingsView()
-            case .claudeUsage:
-                ClaudeUsageSettingsView()
-            case .codexUsage:
-                CodexUsageSettingsView()
-            case .pomodoro:
-                PomodoroSettingsView()
-            case .ticktick:
-                TickTickSettingsView()
-            case .shortcuts:
-                ShortcutsSettingsView()
-            case .systemMonitor:
-                SystemMonitorSettingsView()
-            case .widgetExport:
-                WidgetExportView()
-            case .other:
-                OtherSettingsView()
-            case .about:
-                AboutSettingsView()
+        // `.displays` manages its own internal per-column scrolling and
+        // needs the full available height to lay out its adaptive
+        // wide/compact columns — nesting it in this page-level ScrollView
+        // would let it collapse to content size instead of filling the
+        // window, since a ScrollView proposes unbounded height to children.
+        if section == .displays {
+            WidgetConfiguratorView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                switch section {
+                case .general:
+                    GeneralSettingsView()
+                case .appearance:
+                    AppearanceSettingsView()
+                case .displays:
+                    EmptyView()
+                case .spaces:
+                    SpacesSettingsView()
+                case .time:
+                    TimeSettingsView()
+                case .gotify:
+                    GotifySettingsView()
+                case .weather:
+                    WeatherSettingsView()
+                case .network:
+                    NetworkSettingsView()
+                case .nowPlaying:
+                    NowPlayingSettingsView()
+                case .cliProxyUsage:
+                    CLIProxyUsageSettingsView()
+                case .qwenProxyUsage:
+                    QwenProxyUsageSettingsView()
+                case .claudeUsage:
+                    ClaudeUsageSettingsView()
+                case .codexUsage:
+                    CodexUsageSettingsView()
+                case .pomodoro:
+                    PomodoroSettingsView()
+                case .ticktick:
+                    TickTickSettingsView()
+                case .shortcuts:
+                    ShortcutsSettingsView()
+                case .systemMonitor:
+                    SystemMonitorSettingsView()
+                case .widgetExport:
+                    WidgetExportView()
+                case .other:
+                    OtherSettingsView()
+                case .about:
+                    AboutSettingsView()
+                }
             }
+            .scrollContentBackground(.hidden)
         }
-        .scrollContentBackground(.hidden)
     }
 }
 
@@ -538,11 +548,19 @@ private struct SettingsPlaceholderView: View {
 private struct WidgetConfiguratorDragPreview: View {
     let title: String
     let icon: String
+    let iconIsAsset: Bool
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+            if iconIsAsset {
+                Image(icon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
+            } else {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+            }
             Text(title)
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
@@ -626,7 +644,7 @@ private struct WidgetConfiguratorView: View {
             .overlay(alignment: .topLeading) {
                 if let draggedID = dragState.draggedWidgetID {
                     let dragged = definition(for: draggedID)
-                    WidgetConfiguratorDragPreview(title: dragged.title, icon: dragged.icon)
+                    WidgetConfiguratorDragPreview(title: dragged.title, icon: dragged.icon, iconIsAsset: dragged.iconIsAsset)
                         .position(dragState.dragLocation)
                         .allowsHitTesting(false)
                         .transition(.scale(scale: 0.7).combined(with: .opacity))
@@ -674,7 +692,7 @@ private struct WidgetConfiguratorView: View {
         MonitorActiveColumn(
             monitor: monitor,
             items: layout.enumerated().map { index, widgetID in
-                .init(index: index, widgetID: widgetID, title: definition(for: widgetID).title, icon: definition(for: widgetID).icon)
+                .init(index: index, widgetID: widgetID, title: definition(for: widgetID).title, icon: definition(for: widgetID).icon, iconIsAsset: definition(for: widgetID).iconIsAsset)
             },
             widgetCount: layout.count,
             statusText: displayStatus(for: monitor),
@@ -1541,31 +1559,61 @@ private struct DisplayWidgetDefinition: Identifiable {
     let title: String
     let description: String
     let icon: String
+    /// When true, `icon` names an asset-catalog image (the widget's real
+    /// brand mark, e.g. "ClaudeIcon") to load via `Image(_:)` instead of
+    /// `Image(systemName:)`.
+    let iconIsAsset: Bool
     let allowsMultiple: Bool
+
+    init(id: String, title: String, description: String, icon: String, iconIsAsset: Bool = false, allowsMultiple: Bool) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.icon = icon
+        self.iconIsAsset = iconIsAsset
+        self.allowsMultiple = allowsMultiple
+    }
 }
 
+// Icons mirror what each widget actually renders on the bar (see each
+// Widget.swift's own Image(systemName:)/Image(_:) calls) rather than
+// generic stand-ins, so the catalog/tiles are recognizable at a glance.
 private let displayWidgetDefinitions: [DisplayWidgetDefinition] = [
     .init(id: "default.spaces", title: settingsLocalized("settings.section.spaces"), description: settingsLocalized("settings.displays.catalog.widget.spaces.description"), icon: "square.3.layers.3d", allowsMultiple: false),
-    .init(id: "default.claude-usage", title: settingsLocalized("settings.section.claude_usage"), description: settingsLocalized("settings.displays.catalog.widget.claude_usage.description"), icon: "c.circle", allowsMultiple: false),
-    .init(id: "default.codex-usage", title: settingsLocalized("settings.section.codex_usage"), description: settingsLocalized("settings.displays.catalog.widget.codex_usage.description"), icon: "chevron.left.forwardslash.chevron.right", allowsMultiple: false),
-    .init(id: "default.system-monitor", title: settingsLocalized("settings.section.system_monitor"), description: settingsLocalized("settings.displays.catalog.widget.system_monitor.description"), icon: "menubar.dock.rectangle", allowsMultiple: false),
+    .init(id: "default.claude-usage", title: settingsLocalized("settings.section.claude_usage"), description: settingsLocalized("settings.displays.catalog.widget.claude_usage.description"), icon: "ClaudeIcon", iconIsAsset: true, allowsMultiple: false),
+    .init(id: "default.codex-usage", title: settingsLocalized("settings.section.codex_usage"), description: settingsLocalized("settings.displays.catalog.widget.codex_usage.description"), icon: "CodexIcon", iconIsAsset: true, allowsMultiple: false),
+    .init(id: "default.system-monitor", title: settingsLocalized("settings.section.system_monitor"), description: settingsLocalized("settings.displays.catalog.widget.system_monitor.description"), icon: "cpu", allowsMultiple: false),
     .init(id: "default.network", title: settingsLocalized("settings.section.network"), description: settingsLocalized("settings.displays.catalog.widget.network.description"), icon: "wifi", allowsMultiple: false),
     .init(id: "default.focus", title: settingsLocalized("settings.displays.catalog.widget.focus.title"), description: settingsLocalized("settings.displays.catalog.widget.focus.description"), icon: "moon.circle", allowsMultiple: false),
-    .init(id: "default.pomodoro", title: settingsLocalized("settings.section.pomodoro"), description: settingsLocalized("settings.displays.catalog.widget.pomodoro.description"), icon: "timer", allowsMultiple: false),
-    .init(id: "default.shortcuts", title: settingsLocalized("settings.section.shortcuts"), description: settingsLocalized("settings.displays.catalog.widget.shortcuts.description"), icon: "square.stack.3d.up", allowsMultiple: false),
-    .init(id: "default.keyboard-layout", title: settingsLocalized("settings.displays.catalog.widget.keyboard_layout.title"), description: settingsLocalized("settings.displays.catalog.widget.keyboard_layout.description"), icon: "keyboard", allowsMultiple: false),
+    .init(id: "default.pomodoro", title: settingsLocalized("settings.section.pomodoro"), description: settingsLocalized("settings.displays.catalog.widget.pomodoro.description"), icon: "PomodoroIcon", iconIsAsset: true, allowsMultiple: false),
+    .init(id: "default.shortcuts", title: settingsLocalized("settings.section.shortcuts"), description: settingsLocalized("settings.displays.catalog.widget.shortcuts.description"), icon: "square.stack.3d.up.fill", allowsMultiple: false),
+    .init(id: "default.keyboard-layout", title: settingsLocalized("settings.displays.catalog.widget.keyboard_layout.title"), description: settingsLocalized("settings.displays.catalog.widget.keyboard_layout.description"), icon: "globe", allowsMultiple: false),
     .init(id: "default.battery", title: settingsLocalized("settings.displays.catalog.widget.battery.title"), description: settingsLocalized("settings.displays.catalog.widget.battery.description"), icon: "battery.100", allowsMultiple: false),
     .init(id: "default.time", title: settingsLocalized("settings.section.time"), description: settingsLocalized("settings.displays.catalog.widget.time.description"), icon: "clock", allowsMultiple: false),
     .init(id: "default.weather", title: settingsLocalized("settings.section.weather"), description: settingsLocalized("settings.displays.catalog.widget.weather.description"), icon: "cloud.sun", allowsMultiple: false),
-    .init(id: "default.screen-recording-stop", title: settingsLocalized("settings.displays.catalog.widget.screen_recording_stop.title"), description: settingsLocalized("settings.displays.catalog.widget.screen_recording_stop.description"), icon: "record.circle", allowsMultiple: false),
-    .init(id: "default.qwen-proxy-usage", title: settingsLocalized("settings.section.qwen_proxy_usage"), description: settingsLocalized("settings.displays.catalog.widget.qwen_proxy_usage.description"), icon: "q.circle", allowsMultiple: false),
+    .init(id: "default.screen-recording-stop", title: settingsLocalized("settings.displays.catalog.widget.screen_recording_stop.title"), description: settingsLocalized("settings.displays.catalog.widget.screen_recording_stop.description"), icon: "stop.fill", allowsMultiple: false),
+    .init(id: "default.qwen-proxy-usage", title: settingsLocalized("settings.section.qwen_proxy_usage"), description: settingsLocalized("settings.displays.catalog.widget.qwen_proxy_usage.description"), icon: "QwenIcon", iconIsAsset: true, allowsMultiple: false),
     .init(id: "default.cliproxy-usage", title: settingsLocalized("settings.section.cli_proxy_usage"), description: settingsLocalized("settings.displays.catalog.widget.cli_proxy_usage.description"), icon: "server.rack", allowsMultiple: false),
     .init(id: "default.nowplaying", title: settingsLocalized("settings.section.now_playing"), description: settingsLocalized("settings.displays.catalog.widget.now_playing.description"), icon: "music.note", allowsMultiple: false),
-    .init(id: "default.homebrew", title: settingsLocalized("settings.displays.catalog.widget.homebrew.title"), description: settingsLocalized("settings.displays.catalog.widget.homebrew.description"), icon: "shippingbox", allowsMultiple: false),
-    .init(id: "default.ticktick", title: settingsLocalized("settings.section.ticktick"), description: settingsLocalized("settings.displays.catalog.widget.ticktick.description"), icon: "checklist", allowsMultiple: false),
+    .init(id: "default.homebrew", title: settingsLocalized("settings.displays.catalog.widget.homebrew.title"), description: settingsLocalized("settings.displays.catalog.widget.homebrew.description"), icon: "shippingbox.fill", allowsMultiple: false),
+    .init(id: "default.ticktick", title: settingsLocalized("settings.section.ticktick"), description: settingsLocalized("settings.displays.catalog.widget.ticktick.description"), icon: "TickTickIcon", iconIsAsset: true, allowsMultiple: false),
     .init(id: "spacer", title: settingsLocalized("settings.displays.catalog.widget.spacer.title"), description: settingsLocalized("settings.displays.catalog.widget.spacer.description"), icon: "arrow.left.and.right", allowsMultiple: true),
     .init(id: "divider", title: settingsLocalized("settings.displays.catalog.widget.divider.title"), description: settingsLocalized("settings.displays.catalog.widget.divider.description"), icon: "line.diagonal", allowsMultiple: true)
 ]
+
+@ViewBuilder
+private func displayWidgetIconView(_ definition: DisplayWidgetDefinition, size: CGFloat) -> some View {
+    if definition.iconIsAsset {
+        Image(definition.icon)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: size, height: size)
+    } else {
+        Image(systemName: definition.icon)
+            .font(.system(size: size * 0.7, weight: .medium))
+            .frame(width: size, height: size)
+    }
+}
 
 private final class WidgetConfiguratorDragState: ObservableObject {
     enum Origin: Equatable {
@@ -1620,9 +1668,7 @@ private struct AvailableWidgetTile: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Image(systemName: definition.icon)
-                .font(.system(size: 22, weight: .medium))
-                .frame(width: 32, height: 32)
+            displayWidgetIconView(definition, size: 32)
 
             Text(definition.title)
                 .font(.caption.weight(.medium))
@@ -1686,8 +1732,10 @@ private struct AvailableWidgetsPanel: View {
                     }
                 }
             }
+            .frame(maxHeight: .infinity)
         }
         .frame(width: 188)
+        .frame(maxHeight: .infinity, alignment: .top)
         .padding(14)
         .background(SettingsCardBackground())
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -1699,6 +1747,7 @@ private struct MonitorActiveColumnItem: Identifiable, Equatable {
     let widgetID: String
     let title: String
     let icon: String
+    let iconIsAsset: Bool
     var id: String { "\(index)-\(widgetID)" }
 }
 
@@ -1722,9 +1771,17 @@ private struct MonitorActiveColumnRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 16)
 
-            Image(systemName: item.icon)
-                .font(.system(size: 14, weight: .medium))
-                .frame(width: 18)
+            if item.iconIsAsset {
+                Image(item.icon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 16, height: 16)
+                    .frame(width: 18)
+            } else {
+                Image(systemName: item.icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 18)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
@@ -1849,8 +1906,9 @@ private struct MonitorActiveColumn: View {
                     }
                 }
             }
+            .frame(maxHeight: .infinity)
         }
-        .frame(minWidth: 260)
+        .frame(minWidth: 260, maxHeight: .infinity, alignment: .top)
         .padding(14)
         .background(SettingsCardBackground())
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
