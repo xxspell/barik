@@ -8,5 +8,6 @@ struct BarikApp: App {
         Settings {
             SettingsRootView()
         }
+        .windowResizability(.contentMinSize)
     }
 }
