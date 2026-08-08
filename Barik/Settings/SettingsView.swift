@@ -1560,6 +1560,154 @@ private struct AvailableWidgetsPanel: View {
     }
 }
 
+private struct MonitorActiveColumnItem: Identifiable, Equatable {
+    let index: Int
+    let widgetID: String
+    let title: String
+    let icon: String
+    var id: String { "\(index)-\(widgetID)" }
+}
+
+private struct MonitorActiveColumnRow: View {
+    let item: MonitorActiveColumnItem
+    let monitorID: String
+    @ObservedObject var dragState: WidgetConfiguratorDragState
+    let onRemove: () -> Void
+
+    private var isBeingDragged: Bool {
+        dragState.draggedWidgetID == item.widgetID
+            && dragState.origin == .active(monitorID: monitorID, index: item.index)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+
+            Image(systemName: item.icon)
+                .font(.system(size: 14, weight: .medium))
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.subheadline.weight(.semibold))
+                Text(item.widgetID)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .opacity(isBeingDragged ? 0.35 : 1)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: WidgetRowFrameKey.self,
+                    value: [.init(monitorID: monitorID, index: item.index, midY: geo.frame(in: .named("widgetConfigurator")).midY)]
+                )
+            }
+        )
+    }
+}
+
+private struct WidgetConfiguratorInsertionGap: View {
+    let isTargeted: Bool
+
+    var body: some View {
+        Color.clear
+            .frame(height: isTargeted ? 40 : 0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.88), value: isTargeted)
+    }
+}
+
+private struct MonitorActiveColumn: View {
+    let monitor: MonitorDescriptor
+    let items: [MonitorActiveColumnItem]
+    let widgetCount: Int
+    let statusText: String
+    let hasOverride: Bool
+    let insertionIndex: Int?
+    @ObservedObject var dragState: WidgetConfiguratorDragState
+    let onOpenCatalog: () -> Void
+    let onUseGlobalLayout: () -> Void
+    let onRemove: (Int) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(monitor.name)
+                        .font(.headline)
+                    Text(statusText)
+                        .font(.caption)
+                        .foregroundStyle(hasOverride ? .primary : .secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                Text("\(widgetCount) \(settingsLocalized("settings.displays.widget_count_suffix"))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                Button(settingsLocalized("settings.displays.action.open_catalog"), action: onOpenCatalog)
+                    .font(.caption.weight(.semibold))
+                if hasOverride {
+                    Button(settingsLocalized("settings.displays.action.use_global_layout"), action: onUseGlobalLayout)
+                        .font(.caption.weight(.semibold))
+                }
+            }
+
+            ScrollView {
+                VStack(spacing: 6) {
+                    WidgetConfiguratorInsertionGap(isTargeted: insertionIndex == 0)
+                    ForEach(items) { item in
+                        MonitorActiveColumnRow(
+                            item: item,
+                            monitorID: monitor.id,
+                            dragState: dragState,
+                            onRemove: { onRemove(item.index) }
+                        )
+                        WidgetConfiguratorInsertionGap(isTargeted: insertionIndex == item.index + 1)
+                    }
+                }
+            }
+        }
+        .frame(minWidth: 260)
+        .padding(14)
+        .background(SettingsCardBackground())
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: MonitorColumnFrameKey.self,
+                    value: [monitor.id: geo.frame(in: .named("widgetConfigurator"))]
+                )
+            }
+        )
+    }
+}
+
 private struct DisplayLayoutRow<Accessory: View>: View {
     let definition: DisplayWidgetDefinition
     @ViewBuilder let accessory: () -> Accessory

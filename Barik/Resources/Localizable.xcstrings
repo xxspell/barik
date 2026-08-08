@@ -7803,6 +7803,23 @@
         }
       }
     },
+    "settings.displays.widget_count_suffix": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "widgets"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "виджетов"
+          }
+        }
+      }
+    },
     "settings.field.api_key.title": {
       "extractionState": "stale",
       "localizations": {
