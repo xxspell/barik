@@ -35,7 +35,7 @@ private struct SettingsDetailView: View {
             case .appearance:
                 AppearanceSettingsView()
             case .displays:
-                DisplaysSettingsView()
+                WidgetConfiguratorView()
             case .spaces:
                 SpacesSettingsView()
             case .time:
@@ -509,6 +509,248 @@ private struct SettingsPlaceholderView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(24)
+    }
+}
+
+private struct WidgetConfiguratorView: View {
+    @ObservedObject private var configManager = ConfigManager.shared
+    @StateObject private var dragState = WidgetConfiguratorDragState()
+    @State private var drafts: [String: [String]] = [:]
+    @State private var catalogContext: DisplayCatalogContext?
+    @State private var currentInsertion: (monitorID: String, index: Int)?
+
+    private var monitors: [MonitorDescriptor] { NSScreen.screens.map(\.monitorDescriptor) }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let requiredWideWidth = 188 + 12 + CGFloat(monitors.count) * (260 + 12)
+            let isWide = geometry.size.width >= requiredWideWidth
+
+            HStack(alignment: .top, spacing: 12) {
+                AvailableWidgetsPanel(
+                    isWidgetFullyPlaced: { widgetID in
+                        let visibleMonitors = isWide ? monitors : monitors.filter { $0.id == selectedMonitorID }
+                        return visibleMonitors.allSatisfy { !canAdd(widgetID, to: $0) }
+                    },
+                    dragState: dragState
+                )
+
+                if isWide {
+                    ScrollView(.horizontal) {
+                        HStack(alignment: .top, spacing: 12) {
+                            ForEach(monitors) { monitor in
+                                monitorColumn(for: monitor)
+                            }
+                        }
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if monitors.count > 1 {
+                            Picker("", selection: selectedMonitorIDBinding) {
+                                ForEach(monitors) { monitor in
+                                    Text(monitor.name).tag(monitor.id)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+
+                        if let monitor = monitors.first(where: { $0.id == selectedMonitorID }) ?? monitors.first {
+                            monitorColumn(for: monitor)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(24)
+        .coordinateSpace(name: "widgetConfigurator")
+        .onAppear {
+            syncDraftsFromConfig(using: configManager.config)
+            if selectedMonitorID == nil {
+                selectedMonitorID = monitors.first?.id
+            }
+        }
+        .onReceive(configManager.$config) { config in
+            syncDraftsFromConfig(using: config)
+        }
+        .sheet(item: $catalogContext) { context in
+            DisplayCatalogSheet(
+                monitorName: context.monitorName,
+                definitions: displayWidgetDefinitions,
+                canAdd: { widgetID in
+                    canAdd(widgetID, toMonitorID: context.monitorID)
+                },
+                addWidget: { widgetID in
+                    appendWidget(widgetID, toMonitorID: context.monitorID)
+                }
+            )
+        }
+    }
+
+    @State private var selectedMonitorID: String?
+    private var selectedMonitorIDBinding: Binding<String> {
+        Binding(
+            get: { selectedMonitorID ?? monitors.first?.id ?? "" },
+            set: { selectedMonitorID = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private func monitorColumn(for monitor: MonitorDescriptor) -> some View {
+        let layout = currentLayout(for: monitor)
+        MonitorActiveColumn(
+            monitor: monitor,
+            items: layout.enumerated().map { index, widgetID in
+                .init(index: index, widgetID: widgetID, title: definition(for: widgetID).title, icon: definition(for: widgetID).icon)
+            },
+            widgetCount: layout.count,
+            statusText: displayStatus(for: monitor),
+            hasOverride: configManager.hasDisplayOverride(for: monitor.id),
+            insertionIndex: currentInsertion?.monitorID == monitor.id ? currentInsertion?.index : nil,
+            dragState: dragState,
+            onOpenCatalog: {
+                catalogContext = .init(monitorID: monitor.id, monitorName: monitor.name)
+            },
+            onUseGlobalLayout: {
+                resetOverride(for: monitor)
+            },
+            onRemove: { index in
+                removeWidget(at: index, for: monitor)
+            }
+        )
+    }
+
+    // MARK: - Persistence (ported unchanged from the former DisplaysSettingsView)
+
+    private func effectiveWidgetIDs(for monitor: MonitorDescriptor) -> [String] {
+        configManager
+            .displayedWidgets(for: monitor.id)
+            .map(\.id)
+    }
+
+    private func effectiveWidgetIDs(for monitor: MonitorDescriptor, in config: Config) -> [String] {
+        if let displayConfig = config.rootToml.widgets.displays[monitor.id] {
+            return displayConfig.displayed.map(\.id)
+        }
+        return config.rootToml.widgets.displayed.map(\.id)
+    }
+
+    private func currentLayout(for monitor: MonitorDescriptor) -> [String] {
+        if let draft = drafts[monitor.id] {
+            return draft
+        }
+
+        let fallback = effectiveWidgetIDs(for: monitor)
+        drafts[monitor.id] = fallback
+        return fallback
+    }
+
+    private func appendWidget(_ widgetID: String, to monitor: MonitorDescriptor) {
+        var layout = currentLayout(for: monitor)
+        guard definition(for: widgetID).allowsMultiple || !layout.contains(widgetID) else {
+            return
+        }
+        layout.append(widgetID)
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+            persistLayout(layout, for: monitor)
+        }
+    }
+
+    private func appendWidget(_ widgetID: String, toMonitorID monitorID: String) {
+        guard let monitor = monitorDescriptor(for: monitorID) else { return }
+        appendWidget(widgetID, to: monitor)
+    }
+
+    private func removeWidget(at index: Int, for monitor: MonitorDescriptor) {
+        var layout = currentLayout(for: monitor)
+        guard layout.indices.contains(index) else { return }
+        layout.remove(at: index)
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.88)) {
+            persistLayout(layout, for: monitor)
+        }
+    }
+
+    private func moveWidget(for monitor: MonitorDescriptor, from source: Int, to destination: Int) {
+        var layout = currentLayout(for: monitor)
+        guard layout.indices.contains(source) else { return }
+
+        let item = layout.remove(at: source)
+        let boundedDestination = max(0, min(destination, layout.count))
+        layout.insert(item, at: boundedDestination)
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+            persistLayout(layout, for: monitor)
+        }
+    }
+
+    private func persistLayout(_ widgetIDs: [String], for monitor: MonitorDescriptor) {
+        let normalized = widgetIDs.filter { !$0.isEmpty }
+        let globalLayout = configManager.config.rootToml.widgets.displayed.map(\.id)
+
+        drafts[monitor.id] = normalized
+
+        guard !normalized.isEmpty else {
+            resetOverride(for: monitor)
+            return
+        }
+
+        if normalized == globalLayout {
+            configManager.removeTable("widgets.displays.\"\(monitor.id)\"")
+            return
+        }
+
+        configManager.updateConfigStringArrayValue(
+            tablePath: "widgets.displays.\"\(monitor.id)\"",
+            key: "displayed",
+            newValue: normalized
+        )
+    }
+
+    private func resetOverride(for monitor: MonitorDescriptor) {
+        configManager.removeTable("widgets.displays.\"\(monitor.id)\"")
+        drafts[monitor.id] = configManager
+            .config
+            .rootToml
+            .widgets
+            .displayed
+            .map(\.id)
+    }
+
+    private func displayStatus(for monitor: MonitorDescriptor) -> String {
+        if configManager.hasDisplayOverride(for: monitor.id) {
+            return settingsLocalized("settings.displays.status.custom_override")
+        }
+
+        return settingsLocalized("settings.displays.status.global_layout")
+    }
+
+    private func syncDraftsFromConfig(using config: Config) {
+        for monitor in monitors {
+            drafts[monitor.id] = effectiveWidgetIDs(for: monitor, in: config)
+        }
+    }
+
+    private func canAdd(_ widgetID: String, to monitor: MonitorDescriptor) -> Bool {
+        let itemDefinition = definition(for: widgetID)
+        return itemDefinition.allowsMultiple || !currentLayout(for: monitor).contains(widgetID)
+    }
+
+    private func canAdd(_ widgetID: String, toMonitorID monitorID: String) -> Bool {
+        guard let monitor = monitorDescriptor(for: monitorID) else { return false }
+        return canAdd(widgetID, to: monitor)
+    }
+
+    private func definition(for widgetID: String) -> DisplayWidgetDefinition {
+        displayWidgetDefinitions.first(where: { $0.id == widgetID })
+            ?? DisplayWidgetDefinition(
+                id: widgetID,
+                title: widgetID,
+                description: settingsLocalized("settings.displays.catalog.custom_widget_description"),
+                icon: "square.dashed",
+                allowsMultiple: false
+            )
+    }
+
+    private func monitorDescriptor(for monitorID: String) -> MonitorDescriptor? {
+        monitors.first(where: { $0.id == monitorID })
     }
 }
 
