@@ -4,6 +4,7 @@ struct MenuBarView: View {
     let monitor: MonitorDescriptor
 
     @ObservedObject var configManager = ConfigManager.shared
+    @ObservedObject private var editModeState = BarEditModeState.shared
     @StateObject private var screenRecordingManager = ScreenRecordingManager.shared
     private var horizontalPadding: CGFloat {
         configManager.config.experimental.foreground.horizontalPadding
@@ -103,7 +104,12 @@ struct MenuBarView: View {
             Spacer(minLength: max(monitor.notchGapWidth, 0))
                 .frame(maxWidth: max(monitor.notchGapWidth, 0))
 
-            widgetRow(rightItems, alignment: .trailing)
+            widgetRow(
+                rightItems,
+                baseIndex: split.leftItems.count + 1,
+                editableCount: split.rightItems.count,
+                alignment: .trailing
+            )
                 .padding(.trailing, notchZonePadding)
                 .frame(
                     width: max(monitor.auxiliaryTopRightArea.width, 0),
@@ -115,15 +121,30 @@ struct MenuBarView: View {
     @ViewBuilder
     private func widgetRow(
         _ items: [TomlWidgetItem],
+        baseIndex: Int = 0,
+        editableCount: Int? = nil,
         alignment: HorizontalAlignment = .leading
     ) -> some View {
+        let editableUpperBound = editableCount ?? items.count
         HStack(spacing: widgetSpacing) {
-            ForEach(0..<items.count, id: \.self) { index in
-                let item = items[index]
-                buildView(for: item)
+            ForEach(0..<items.count, id: \.self) { offset in
+                let item = items[offset]
+                let content = buildView(for: item)
                     .modifier(TUIMonochromeNet(
                         handTuned: MenuBarView.tuiHandTunedWidgetIDs.contains(item.id)
                     ))
+
+                if editModeState.isActive && offset < editableUpperBound {
+                    EditableWidgetSlot(
+                        monitor: monitor,
+                        index: baseIndex + offset,
+                        widgetID: item.id
+                    ) {
+                        content
+                    }
+                } else {
+                    content
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
@@ -168,6 +189,37 @@ struct MenuBarView: View {
     private func requestScreenRecordingAccessibilityPermissionIfNeeded(for itemIDs: [String]) {
         guard itemIDs.contains("default.screen-recording-stop") else { return }
         screenRecordingManager.requestAccessibilityPermissionIfNeeded()
+    }
+}
+
+private struct EditableWidgetSlot<Content: View>: View {
+    let monitor: MonitorDescriptor
+    let index: Int
+    let widgetID: String
+    let content: () -> Content
+
+    init(
+        monitor: MonitorDescriptor,
+        index: Int,
+        widgetID: String,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.monitor = monitor
+        self.index = index
+        self.widgetID = widgetID
+        self.content = content
+    }
+
+    var body: some View {
+        content()
+            .allowsHitTesting(false)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        Color.foregroundOutside.opacity(0.5),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
+                    )
+            )
     }
 }
 
