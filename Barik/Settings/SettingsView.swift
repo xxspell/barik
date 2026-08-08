@@ -576,6 +576,7 @@ private struct WidgetConfiguratorView: View {
             .onPreferenceChange(WidgetRowFrameKey.self) { rowFrames = $0 }
             .onPreferenceChange(MonitorColumnFrameKey.self) { columnFrames = $0 }
         }
+        .frame(minHeight: 520)
         .padding(24)
         .coordinateSpace(name: "widgetConfigurator")
         .onAppear {
@@ -645,7 +646,8 @@ private struct WidgetConfiguratorView: View {
                 }
 
                 if sourceMonitorID == insertion.monitorID {
-                    moveWidget(for: sourceMonitor, from: sourceIndex, to: insertion.index)
+                    let adjustedDestination = sourceIndex < insertion.index ? insertion.index - 1 : insertion.index
+                    moveWidget(for: sourceMonitor, from: sourceIndex, to: adjustedDestination)
                 } else if let destMonitor = monitorDescriptor(for: insertion.monitorID) {
                     removeWidget(at: sourceIndex, for: sourceMonitor)
                     let adjustedIndex = insertion.index
