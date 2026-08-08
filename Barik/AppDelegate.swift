@@ -79,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             installEscapeMonitorIfNeeded()
         } else {
             removeEscapeMonitorIfNeeded()
+            BarEditDragState.shared.reset()
         }
     }
 
