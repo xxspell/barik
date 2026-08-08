@@ -1496,6 +1496,70 @@ private struct MonitorColumnFrameKey: PreferenceKey {
     }
 }
 
+private struct AvailableWidgetTile: View {
+    let definition: DisplayWidgetDefinition
+    let isFullyPlaced: Bool
+    @ObservedObject var dragState: WidgetConfiguratorDragState
+
+    private var isBeingDragged: Bool {
+        dragState.draggedWidgetID == definition.id && dragState.origin == .available
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: definition.icon)
+                .font(.system(size: 22, weight: .medium))
+                .frame(width: 32, height: 32)
+
+            Text(definition.title)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(width: 72, height: 72)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.primary.opacity(isFullyPlaced ? 0.02 : 0.035))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+        .opacity(isFullyPlaced ? 0.35 : (isBeingDragged ? 0.4 : 1))
+        .help("\(definition.description)\n\(definition.id)")
+    }
+}
+
+private struct AvailableWidgetsPanel: View {
+    let isWidgetFullyPlaced: (String) -> Bool
+    @ObservedObject var dragState: WidgetConfiguratorDragState
+
+    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(settingsLocalized("settings.displays.catalog.title"))
+                .font(.headline)
+
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(displayWidgetDefinitions) { definition in
+                        AvailableWidgetTile(
+                            definition: definition,
+                            isFullyPlaced: isWidgetFullyPlaced(definition.id),
+                            dragState: dragState
+                        )
+                    }
+                }
+            }
+        }
+        .frame(width: 188)
+        .padding(14)
+        .background(SettingsCardBackground())
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
 private struct DisplayLayoutRow<Accessory: View>: View {
     let definition: DisplayWidgetDefinition
     @ViewBuilder let accessory: () -> Accessory
