@@ -45,3 +45,20 @@ extension NSScreen {
         )
     }
 }
+
+extension MonitorDescriptor {
+    /// Converts a point local to this monitor's bar row (SwiftUI coordinate
+    /// space: origin top-left, y increasing downward) into AppKit screen
+    /// coordinates (origin at the primary screen's bottom-left, y increasing
+    /// upward) — needed because each monitor's bar renders in its own
+    /// `NSPanel`/SwiftUI view tree, so there is no shared SwiftUI coordinate
+    /// space to drag across panel boundaries.
+    func screenPoint(fromRowLocal local: CGPoint) -> CGPoint {
+        CGPoint(x: frame.minX + local.x, y: frame.minY + frame.height - local.y)
+    }
+
+    /// The inverse of `screenPoint(fromRowLocal:)`.
+    func rowLocalPoint(fromScreen screenPoint: CGPoint) -> CGPoint {
+        CGPoint(x: screenPoint.x - frame.minX, y: frame.height - (screenPoint.y - frame.minY))
+    }
+}

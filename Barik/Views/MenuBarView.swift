@@ -1,10 +1,13 @@
 import SwiftUI
+import AppKit
 
 struct MenuBarView: View {
     let monitor: MonitorDescriptor
 
     @ObservedObject var configManager = ConfigManager.shared
     @ObservedObject private var editModeState = BarEditModeState.shared
+    @ObservedObject private var dragState = BarEditDragState.shared
+    @State private var rowFrames: [BarEditRowFrameKey.Entry] = []
     @StateObject private var screenRecordingManager = ScreenRecordingManager.shared
     private var horizontalPadding: CGFloat {
         configManager.config.experimental.foreground.horizontalPadding
@@ -48,6 +51,28 @@ struct MenuBarView: View {
                 notchAwareLayout(items: items)
             } else {
                 standardLayout(items: items)
+            }
+        }
+        .coordinateSpace(name: "barEditRow")
+        .onPreferenceChange(BarEditRowFrameKey.self) { rowFrames = $0 }
+        .onChange(of: dragState.dragScreenLocation) { _, newLocation in
+            updateInsertionIfTargeted(at: newLocation)
+        }
+        .overlay(alignment: .topLeading) {
+            if dragState.isDragging, monitor.frame.contains(dragState.dragScreenLocation) {
+                let local = monitor.rowLocalPoint(fromScreen: dragState.dragScreenLocation)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.foregroundOutside.opacity(0.18))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(
+                                Color.foregroundOutside.opacity(0.6),
+                                style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
+                            )
+                    )
+                    .frame(width: 28, height: 20)
+                    .position(local)
+                    .allowsHitTesting(false)
             }
         }
         .foregroundStyle(Color.foregroundOutside)
@@ -138,7 +163,17 @@ struct MenuBarView: View {
                     EditableWidgetSlot(
                         monitor: monitor,
                         index: baseIndex + offset,
-                        widgetID: item.id
+                        widgetID: item.id,
+                        onDragChanged: { localLocation in
+                            if dragState.draggedWidgetID == nil {
+                                dragState.draggedWidgetID = item.id
+                                dragState.origin = .init(monitorID: monitor.id, index: baseIndex + offset)
+                            }
+                            dragState.dragScreenLocation = monitor.screenPoint(fromRowLocal: localLocation)
+                        },
+                        onDragEnded: {
+                            commitDragIfNeeded()
+                        }
                     ) {
                         content
                     }
@@ -146,8 +181,43 @@ struct MenuBarView: View {
                     content
                 }
             }
+
+            if editModeState.isActive {
+                let trailingIndex = baseIndex + editableUpperBound
+                Color.clear
+                    .frame(width: dragState.currentInsertion == .init(monitorID: monitor.id, index: trailingIndex) ? 24 : 0)
+                    .animation(.spring(response: 0.22, dampingFraction: 0.85), value: dragState.currentInsertion)
+            }
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+    }
+
+    private func commitDragIfNeeded() {
+        defer { dragState.reset() }
+        guard let origin = dragState.origin,
+              let insertion = dragState.currentInsertion,
+              let widgetID = dragState.draggedWidgetID,
+              origin.monitorID == monitor.id,
+              let destinationMonitor = MenuBarView.resolveMonitor(insertion.monitorID) else {
+            return
+        }
+
+        let adjustedDestinationIndex =
+            (origin.monitorID == insertion.monitorID && origin.index < insertion.index)
+            ? insertion.index - 1
+            : insertion.index
+
+        BarWidgetLayoutStore.moveWidget(
+            withID: widgetID,
+            fromMonitor: monitor,
+            sourceIndex: origin.index,
+            toMonitor: destinationMonitor,
+            destinationIndex: adjustedDestinationIndex
+        )
+    }
+
+    private static func resolveMonitor(_ id: String) -> MonitorDescriptor? {
+        NSScreen.screens.first(where: { $0.monitorDescriptor.id == id })?.monitorDescriptor
     }
 
     private func splitItemsForNotch(_ items: [TomlWidgetItem]) -> (leftItems: [TomlWidgetItem], rightItems: [TomlWidgetItem]) {
@@ -190,59 +260,114 @@ struct MenuBarView: View {
         guard itemIDs.contains("default.screen-recording-stop") else { return }
         screenRecordingManager.requestAccessibilityPermissionIfNeeded()
     }
+
+    private func updateInsertionIfTargeted(at screenLocation: CGPoint) {
+        guard dragState.isDragging, monitor.frame.contains(screenLocation) else { return }
+        let local = monitor.rowLocalPoint(fromScreen: screenLocation)
+        let index = computeLocalInsertion(at: local)
+        dragState.currentInsertion = .init(monitorID: monitor.id, index: index)
+    }
+
+    private func computeLocalInsertion(at location: CGPoint) -> Int {
+        let sorted = rowFrames.sorted { $0.index < $1.index }
+        for entry in sorted where location.x < entry.midX {
+            return entry.index
+        }
+        return (sorted.last?.index ?? -1) + 1
+    }
 }
 
 private struct EditableWidgetSlot<Content: View>: View {
     let monitor: MonitorDescriptor
     let index: Int
     let widgetID: String
+    let onDragChanged: (CGPoint) -> Void
+    let onDragEnded: () -> Void
     let content: () -> Content
 
+    @ObservedObject private var dragState = BarEditDragState.shared
     @State private var isHovering = false
 
     init(
         monitor: MonitorDescriptor,
         index: Int,
         widgetID: String,
+        onDragChanged: @escaping (CGPoint) -> Void,
+        onDragEnded: @escaping () -> Void,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.monitor = monitor
         self.index = index
         self.widgetID = widgetID
+        self.onDragChanged = onDragChanged
+        self.onDragEnded = onDragEnded
         self.content = content
     }
 
+    private var isBeingDragged: Bool {
+        dragState.draggedWidgetID == widgetID
+            && dragState.origin == .init(monitorID: monitor.id, index: index)
+    }
+
+    private var isInsertionTarget: Bool {
+        dragState.currentInsertion == .init(monitorID: monitor.id, index: index)
+    }
+
     var body: some View {
-        content()
-            .allowsHitTesting(false)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(
-                        Color.foregroundOutside.opacity(isHovering ? 0.85 : 0.5),
-                        style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
-                    )
-            )
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.foregroundOutside.opacity(isHovering ? 0.12 : 0))
-            )
-            .overlay(alignment: .topTrailing) {
-                if isHovering {
-                    Button {
-                        BarWidgetLayoutStore.removeWidget(at: index, for: monitor)
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white, .black.opacity(0.6))
+        HStack(spacing: 0) {
+            Color.clear
+                .frame(width: isInsertionTarget ? 24 : 0)
+                .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isInsertionTarget)
+
+            content()
+                .allowsHitTesting(false)
+                .opacity(isBeingDragged ? 0.35 : 1)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(
+                            Color.foregroundOutside.opacity(isHovering ? 0.85 : 0.5),
+                            style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
+                        )
+                )
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.foregroundOutside.opacity(isHovering ? 0.12 : 0))
+                )
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: BarEditRowFrameKey.self,
+                            value: [.init(index: index, midX: geo.frame(in: .named("barEditRow")).midX)]
+                        )
                     }
-                    .buttonStyle(.plain)
-                    .offset(x: 6, y: -6)
+                )
+        }
+        .overlay(alignment: .topTrailing) {
+            if isHovering {
+                Button {
+                    BarWidgetLayoutStore.removeWidget(at: index, for: monitor)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white, .black.opacity(0.6))
                 }
+                .buttonStyle(.plain)
+                .offset(x: 6, y: -6)
             }
-            .contentShape(Rectangle())
-            .onHover { hovering in
-                isHovering = hovering
-            }
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .gesture(
+            DragGesture(minimumDistance: 2, coordinateSpace: .named("barEditRow"))
+                .onChanged { value in
+                    onDragChanged(value.location)
+                }
+                .onEnded { _ in
+                    onDragEnded()
+                }
+        )
     }
 }
 
