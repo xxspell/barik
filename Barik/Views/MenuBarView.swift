@@ -151,14 +151,36 @@ struct MenuBarView: View {
         alignment: HorizontalAlignment = .leading
     ) -> some View {
         let editableUpperBound = editableCount ?? items.count
-        HStack(spacing: widgetSpacing) {
-            ForEach(0..<items.count, id: \.self) { offset in
-                let item = items[offset]
-                let content = buildView(for: item)
-                    .modifier(TUIMonochromeNet(
-                        handTuned: MenuBarView.tuiHandTunedWidgetIDs.contains(item.id)
-                    ))
+        let hasSpacer = items.contains(where: { $0.id == "spacer" })
 
+        Group {
+            if hasSpacer {
+                SpacerAwareRowLayout(spacing: widgetSpacing) {
+                    widgetRowContent(items, baseIndex: baseIndex, editableUpperBound: editableUpperBound)
+                }
+            } else {
+                HStack(spacing: widgetSpacing) {
+                    widgetRowContent(items, baseIndex: baseIndex, editableUpperBound: editableUpperBound)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+    }
+
+    @ViewBuilder
+    private func widgetRowContent(
+        _ items: [TomlWidgetItem],
+        baseIndex: Int,
+        editableUpperBound: Int
+    ) -> some View {
+        ForEach(0..<items.count, id: \.self) { offset in
+            let item = items[offset]
+            let content = buildView(for: item)
+                .modifier(TUIMonochromeNet(
+                    handTuned: MenuBarView.tuiHandTunedWidgetIDs.contains(item.id)
+                ))
+
+            Group {
                 if editModeState.isActive && offset < editableUpperBound {
                     EditableWidgetSlot(
                         monitor: monitor,
@@ -181,15 +203,16 @@ struct MenuBarView: View {
                     content
                 }
             }
-
-            if editModeState.isActive {
-                let trailingIndex = baseIndex + editableUpperBound
-                Color.clear
-                    .frame(width: dragState.currentInsertion == .init(monitorID: monitor.id, index: trailingIndex) ? 24 : 0)
-                    .animation(.spring(response: 0.22, dampingFraction: 0.85), value: dragState.currentInsertion)
-            }
+            .layoutValue(key: RowSpacerFlag.self, value: item.id == "spacer")
         }
-        .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+
+        if editModeState.isActive {
+            let trailingIndex = baseIndex + editableUpperBound
+            Color.clear
+                .frame(width: dragState.currentInsertion == .init(monitorID: monitor.id, index: trailingIndex) ? 24 : 0)
+                .animation(.spring(response: 0.22, dampingFraction: 0.85), value: dragState.currentInsertion)
+                .layoutValue(key: RowSpacerFlag.self, value: false)
+        }
     }
 
     private func commitDragIfNeeded() {

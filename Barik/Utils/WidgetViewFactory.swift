@@ -73,7 +73,7 @@ enum WidgetViewFactory {
                 .environmentObject(config)
 
         case "spacer":
-            Spacer().frame(minWidth: 50, maxWidth: .infinity)
+            Spacer()
 
         case "divider":
             let style = BarikStyle.current
