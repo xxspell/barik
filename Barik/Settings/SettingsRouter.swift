@@ -119,15 +119,15 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .cliProxyUsage:
             return "server.rack"
         case .qwenProxyUsage:
-            return "q.circle"
+            return "QwenIcon"
         case .claudeUsage:
-            return "c.circle"
+            return "ClaudeIcon"
         case .codexUsage:
-            return "chevron.left.forwardslash.chevron.right"
+            return "CodexIcon"
         case .pomodoro:
-            return "timer"
+            return "PomodoroIcon"
         case .ticktick:
-            return "checklist"
+            return "TickTickIcon"
         case .shortcuts:
             return "square.stack.3d.up"
         case .systemMonitor:
@@ -138,6 +138,17 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return "square.grid.2x2"
         case .about:
             return "info.circle"
+        }
+    }
+
+    /// When true, `iconName` names an asset-catalog image (the widget's
+    /// real brand mark, e.g. "ClaudeIcon") rather than an SF Symbol.
+    var iconIsAsset: Bool {
+        switch self {
+        case .qwenProxyUsage, .claudeUsage, .codexUsage, .pomodoro, .ticktick:
+            return true
+        default:
+            return false
         }
     }
 

@@ -2,6 +2,25 @@ import AppKit
 import SwiftUI
 import OSLog
 
+private struct SettingsSectionLabel: View {
+    let section: SettingsSection
+
+    var body: some View {
+        Label {
+            Text(section.title)
+        } icon: {
+            if section.iconIsAsset {
+                Image(section.iconName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 15, height: 15)
+            } else {
+                Image(systemName: section.iconName)
+            }
+        }
+    }
+}
+
 struct SettingsRootView: View {
     @ObservedObject private var router = SettingsRouter.shared
 
@@ -15,7 +34,7 @@ struct SettingsRootView: View {
                                 $0.category == category && $0 != .widgetExport
                             }
                         ) { section in
-                            Label(section.title, systemImage: section.iconName)
+                            SettingsSectionLabel(section: section)
                                 .tag(section)
                         }
                     }
@@ -23,11 +42,8 @@ struct SettingsRootView: View {
 
                 if AppRuntimeFlags.isWidgetExportEnabled {
                     Section("Widget Export") {
-                        Label(
-                            SettingsSection.widgetExport.title,
-                            systemImage: SettingsSection.widgetExport.iconName
-                        )
-                        .tag(SettingsSection.widgetExport)
+                        SettingsSectionLabel(section: .widgetExport)
+                            .tag(SettingsSection.widgetExport)
                     }
                 }
             }
@@ -1607,6 +1623,7 @@ private func displayWidgetIconView(_ definition: DisplayWidgetDefinition, size: 
         Image(definition.icon)
             .resizable()
             .aspectRatio(contentMode: .fit)
+            .frame(width: size * 0.55, height: size * 0.55)
             .frame(width: size, height: size)
     } else {
         Image(systemName: definition.icon)
@@ -1775,7 +1792,7 @@ private struct MonitorActiveColumnRow: View {
                 Image(item.icon)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 16, height: 16)
+                    .frame(width: 11, height: 11)
                     .frame(width: 18)
             } else {
                 Image(systemName: item.icon)
