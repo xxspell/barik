@@ -518,6 +518,8 @@ private struct WidgetConfiguratorView: View {
     @State private var drafts: [String: [String]] = [:]
     @State private var catalogContext: DisplayCatalogContext?
     @State private var currentInsertion: (monitorID: String, index: Int)?
+    @State private var rowFrames: [WidgetRowFrameKey.Entry] = []
+    @State private var columnFrames: [String: CGRect] = [:]
 
     private var monitors: [MonitorDescriptor] { NSScreen.screens.map(\.monitorDescriptor) }
 
@@ -532,7 +534,14 @@ private struct WidgetConfiguratorView: View {
                         let visibleMonitors = isWide ? monitors : monitors.filter { $0.id == selectedMonitorID }
                         return visibleMonitors.allSatisfy { !canAdd(widgetID, to: $0) }
                     },
-                    dragState: dragState
+                    dragState: dragState,
+                    onDragChanged: { location in
+                        currentInsertion = computeInsertion(at: location)
+                    },
+                    onDragEnded: { definition in
+                        currentInsertion = nil
+                        // Task 6 turns this into an actual config write.
+                    }
                 )
 
                 if isWide {
@@ -560,6 +569,8 @@ private struct WidgetConfiguratorView: View {
                     }
                 }
             }
+            .onPreferenceChange(WidgetRowFrameKey.self) { rowFrames = $0 }
+            .onPreferenceChange(MonitorColumnFrameKey.self) { columnFrames = $0 }
         }
         .padding(24)
         .coordinateSpace(name: "widgetConfigurator")
@@ -615,6 +626,13 @@ private struct WidgetConfiguratorView: View {
             },
             onRemove: { index in
                 removeWidget(at: index, for: monitor)
+            },
+            onDragChanged: { location in
+                currentInsertion = computeInsertion(at: location)
+            },
+            onDragEnded: {
+                currentInsertion = nil
+                // Task 6 turns this into an actual config write.
             }
         )
     }
@@ -736,6 +754,21 @@ private struct WidgetConfiguratorView: View {
     private func canAdd(_ widgetID: String, toMonitorID monitorID: String) -> Bool {
         guard let monitor = monitorDescriptor(for: monitorID) else { return false }
         return canAdd(widgetID, to: monitor)
+    }
+
+    private func computeInsertion(at location: CGPoint) -> (monitorID: String, index: Int)? {
+        guard let match = columnFrames.first(where: { $0.value.contains(location) }) else {
+            return nil
+        }
+        let monitorID = match.key
+        let rowsInColumn = rowFrames
+            .filter { $0.monitorID == monitorID }
+            .sorted { $0.index < $1.index }
+
+        for row in rowsInColumn where location.y < row.midY {
+            return (monitorID, row.index)
+        }
+        return (monitorID, rowsInColumn.count)
     }
 
     private func definition(for widgetID: String) -> DisplayWidgetDefinition {
@@ -1742,6 +1775,8 @@ private struct AvailableWidgetTile: View {
     let definition: DisplayWidgetDefinition
     let isFullyPlaced: Bool
     @ObservedObject var dragState: WidgetConfiguratorDragState
+    let onDragChanged: (CGPoint) -> Void
+    let onDragEnded: () -> Void
 
     private var isBeingDragged: Bool {
         dragState.draggedWidgetID == definition.id && dragState.origin == .available
@@ -1769,12 +1804,28 @@ private struct AvailableWidgetTile: View {
         )
         .opacity(isFullyPlaced ? 0.35 : (isBeingDragged ? 0.4 : 1))
         .help("\(definition.description)\n\(definition.id)")
+        .gesture(
+            isFullyPlaced ? nil : DragGesture(minimumDistance: 2, coordinateSpace: .named("widgetConfigurator"))
+                .onChanged { value in
+                    if dragState.draggedWidgetID == nil {
+                        dragState.draggedWidgetID = definition.id
+                        dragState.origin = .available
+                    }
+                    onDragChanged(value.location)
+                }
+                .onEnded { _ in
+                    onDragEnded()
+                    dragState.reset()
+                }
+        )
     }
 }
 
 private struct AvailableWidgetsPanel: View {
     let isWidgetFullyPlaced: (String) -> Bool
     @ObservedObject var dragState: WidgetConfiguratorDragState
+    let onDragChanged: (CGPoint) -> Void
+    let onDragEnded: (DisplayWidgetDefinition) -> Void
 
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
@@ -1789,7 +1840,9 @@ private struct AvailableWidgetsPanel: View {
                         AvailableWidgetTile(
                             definition: definition,
                             isFullyPlaced: isWidgetFullyPlaced(definition.id),
-                            dragState: dragState
+                            dragState: dragState,
+                            onDragChanged: onDragChanged,
+                            onDragEnded: { onDragEnded(definition) }
                         )
                     }
                 }
@@ -1815,6 +1868,8 @@ private struct MonitorActiveColumnRow: View {
     let monitorID: String
     @ObservedObject var dragState: WidgetConfiguratorDragState
     let onRemove: () -> Void
+    let onDragChanged: (CGPoint) -> Void
+    let onDragEnded: () -> Void
 
     private var isBeingDragged: Bool {
         dragState.draggedWidgetID == item.widgetID
@@ -1868,6 +1923,20 @@ private struct MonitorActiveColumnRow: View {
                 )
             }
         )
+        .gesture(
+            DragGesture(minimumDistance: 2, coordinateSpace: .named("widgetConfigurator"))
+                .onChanged { value in
+                    if dragState.draggedWidgetID == nil {
+                        dragState.draggedWidgetID = item.widgetID
+                        dragState.origin = .active(monitorID: monitorID, index: item.index)
+                    }
+                    onDragChanged(value.location)
+                }
+                .onEnded { _ in
+                    onDragEnded()
+                    dragState.reset()
+                }
+        )
     }
 }
 
@@ -1892,6 +1961,8 @@ private struct MonitorActiveColumn: View {
     let onOpenCatalog: () -> Void
     let onUseGlobalLayout: () -> Void
     let onRemove: (Int) -> Void
+    let onDragChanged: (CGPoint) -> Void
+    let onDragEnded: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1928,7 +1999,9 @@ private struct MonitorActiveColumn: View {
                             item: item,
                             monitorID: monitor.id,
                             dragState: dragState,
-                            onRemove: { onRemove(item.index) }
+                            onRemove: { onRemove(item.index) },
+                            onDragChanged: onDragChanged,
+                            onDragEnded: onDragEnded
                         )
                         WidgetConfiguratorInsertionGap(isTargeted: insertionIndex == item.index + 1)
                     }
