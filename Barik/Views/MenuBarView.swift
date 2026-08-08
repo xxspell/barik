@@ -198,6 +198,8 @@ private struct EditableWidgetSlot<Content: View>: View {
     let widgetID: String
     let content: () -> Content
 
+    @State private var isHovering = false
+
     init(
         monitor: MonitorDescriptor,
         index: Int,
@@ -216,10 +218,31 @@ private struct EditableWidgetSlot<Content: View>: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(
-                        Color.foregroundOutside.opacity(0.5),
+                        Color.foregroundOutside.opacity(isHovering ? 0.85 : 0.5),
                         style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
                     )
             )
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.foregroundOutside.opacity(isHovering ? 0.12 : 0))
+            )
+            .overlay(alignment: .topTrailing) {
+                if isHovering {
+                    Button {
+                        BarWidgetLayoutStore.removeWidget(at: index, for: monitor)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white, .black.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                    .offset(x: 6, y: -6)
+                }
+            }
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                isHovering = hovering
+            }
     }
 }
 
