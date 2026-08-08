@@ -4,11 +4,17 @@ import OSLog
 import Combine
 import UserNotifications
 
+final class MenuBarEditablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private var backgroundPanels: [NSPanel] = []
     private var menuBarPanels: [NSPanel] = []
     private var configCancellable: AnyCancellable?
+    private var editModeCancellable: AnyCancellable?
+    private var escapeKeyMonitor: Any?
     private let tickTickWallpaperManager = TickTickWallpaperManager.shared
     private let gotifyManager = GotifyManager.shared
     private let logger = Logger(
@@ -49,6 +55,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 self?.gotifyManager.startUpdating(config: gotifyConfig)
             }
 
+        editModeCancellable = BarEditModeState.shared.$isActive
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isActive in
+                self?.handleEditModeChange(isActive)
+            }
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(screenParametersDidChange(_:)),
@@ -59,6 +71,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     @objc private func screenParametersDidChange(_ notification: Notification) {
         setupPanels()
         tickTickWallpaperManager.screenConfigurationDidChange()
+    }
+
+    private func handleEditModeChange(_ isActive: Bool) {
+        if isActive {
+            menuBarPanels.first?.makeKey()
+            installEscapeMonitorIfNeeded()
+        } else {
+            removeEscapeMonitorIfNeeded()
+        }
+    }
+
+    private func installEscapeMonitorIfNeeded() {
+        guard escapeKeyMonitor == nil else { return }
+        escapeKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.keyCode == 53 else { return event }
+            BarEditModeState.shared.isActive = false
+            return nil
+        }
+    }
+
+    private func removeEscapeMonitorIfNeeded() {
+        guard let monitor = escapeKeyMonitor else { return }
+        NSEvent.removeMonitor(monitor)
+        escapeKeyMonitor = nil
     }
 
     private func edgeInsetsDescription(_ insets: NSEdgeInsets) -> String {
@@ -96,7 +132,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             let menuBarPanel = createPanel(
                 frame: monitor.frame,
                 level: Int(CGWindowLevelForKey(.backstopMenu)),
-                hostingRootView: AnyView(MenuBarView(monitor: monitor)))
+                hostingRootView: AnyView(MenuBarView(monitor: monitor)),
+                isKeyCapable: true)
             menuBarPanels.append(menuBarPanel)
         }
     }
@@ -104,13 +141,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// Creates an NSPanel with the provided parameters.
     private func createPanel(
         frame: CGRect, level: Int,
-        hostingRootView: AnyView
+        hostingRootView: AnyView,
+        isKeyCapable: Bool = false
     ) -> NSPanel {
-        let newPanel = NSPanel(
-            contentRect: frame,
-            styleMask: [.nonactivatingPanel],
-            backing: .buffered,
-            defer: false)
+        let newPanel: NSPanel =
+            isKeyCapable
+            ? MenuBarEditablePanel(
+                contentRect: frame,
+                styleMask: [.nonactivatingPanel],
+                backing: .buffered,
+                defer: false)
+            : NSPanel(
+                contentRect: frame,
+                styleMask: [.nonactivatingPanel],
+                backing: .buffered,
+                defer: false)
         newPanel.level = NSWindow.Level(rawValue: level)
         newPanel.backgroundColor = .clear
         newPanel.hasShadow = false
