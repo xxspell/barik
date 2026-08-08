@@ -7769,6 +7769,23 @@
         }
       }
     },
+    "settings.displays.edit_on_bar.description": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reorder or remove widgets directly on the bar."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перетаскивайте и удаляйте виджеты прямо на баре."
+          }
+        }
+      }
+    },
     "settings.displays.edit_on_bar.toggle": {
       "extractionState": "stale",
       "localizations": {

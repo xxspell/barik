@@ -175,7 +175,7 @@ struct MenuBarView: View {
                             commitDragIfNeeded()
                         }
                     ) {
-                        content
+                        editableContent(for: item, fallback: content)
                     }
                 } else {
                     content
@@ -250,6 +250,27 @@ struct MenuBarView: View {
             monitor: monitor,
             screenRecordingManager: screenRecordingManager
         )
+    }
+
+    /// The real `spacer` pseudo-widget renders as a `Spacer()` that expands to
+    /// fill all remaining row width — fine for normal layout, but inside edit
+    /// mode its `EditableWidgetSlot` frame would then span most of the bar,
+    /// making its published midpoint swallow the insertion range for every
+    /// widget after it. Substitute a small fixed-size stand-in for the
+    /// editable slot only; normal-mode rendering (the `fallback`) is untouched.
+    @ViewBuilder
+    private func editableContent<Fallback: View>(
+        for item: TomlWidgetItem,
+        fallback: Fallback
+    ) -> some View {
+        if item.id == "spacer" {
+            Image(systemName: "arrow.left.and.right")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.foregroundOutside.opacity(0.7))
+                .frame(width: 28, height: 20)
+        } else {
+            fallback
+        }
     }
 
     private func requestScreenRecordingAccessibilityPermissionIfNeeded(for items: [TomlWidgetItem]) {

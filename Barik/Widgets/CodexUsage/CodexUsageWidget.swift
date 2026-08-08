@@ -32,9 +32,9 @@ struct CodexUsageWidget: View {
         HStack(spacing: 4) {
             Image("CodexIcon")
                 .resizable()
+                .renderingMode(.template)
                 .scaledToFit()
                 .frame(width: 13, height: 13)
-                .saturation(0)
             Text(tuiUsageText)
                 .barikFont(size: 12, weight: .medium, design: .monospaced)
                 .foregroundStyle(usageManager.usageData.primaryPercentage >= 0.6 ? BarikStyle.current.accent : Color.foregroundOutside)
@@ -94,6 +94,7 @@ struct CodexUsageWidget: View {
         return ZStack {
             Image("CodexIcon")
                 .resizable()
+                .renderingMode(.template)
                 .scaledToFit()
                 .opacity(0.28)
                 .frame(width: iconSize, height: iconSize)
@@ -101,11 +102,13 @@ struct CodexUsageWidget: View {
             if remainingPercentage >= 1 {
                 Image("CodexIcon")
                     .resizable()
+                    .renderingMode(.template)
                     .scaledToFit()
                     .frame(width: iconSize, height: iconSize)
             } else if remainingPercentage > 0 {
                 Image("CodexIcon")
                     .resizable()
+                    .renderingMode(.template)
                     .scaledToFit()
                     .frame(width: iconSize, height: iconSize)
                     .mask(

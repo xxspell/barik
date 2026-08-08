@@ -701,10 +701,19 @@ private struct WidgetConfiguratorView: View {
 
     private var editModeToggleHeader: some View {
         Toggle(isOn: $editModeState.isActive) {
-            Text(settingsLocalized("settings.displays.edit_on_bar.toggle"))
-                .font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(settingsLocalized("settings.displays.edit_on_bar.toggle"))
+                    .font(.headline)
+                Text(settingsLocalized("settings.displays.edit_on_bar.description"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
         }
         .toggleStyle(.switch)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SettingsCardBackground())
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     @State private var selectedMonitorID: String?
@@ -1636,7 +1645,7 @@ private func displayWidgetIconView(_ definition: DisplayWidgetDefinition, size: 
         Image(definition.icon)
             .resizable()
             .aspectRatio(contentMode: .fit)
-            .frame(width: size * 0.55, height: size * 0.55)
+            .frame(width: size * 0.68, height: size * 0.68)
             .frame(width: size, height: size)
     } else {
         Image(systemName: definition.icon)
@@ -1703,7 +1712,8 @@ private struct AvailableWidgetTile: View {
             Text(definition.title)
                 .font(.caption.weight(.medium))
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 5)
         }
         .frame(width: 72, height: 72)
         .background(
@@ -1805,7 +1815,7 @@ private struct MonitorActiveColumnRow: View {
                 Image(item.icon)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 11, height: 11)
+                    .frame(width: 14, height: 14)
                     .frame(width: 18)
             } else {
                 Image(systemName: item.icon)
