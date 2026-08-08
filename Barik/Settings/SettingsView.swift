@@ -532,6 +532,34 @@ private struct SettingsPlaceholderView: View {
     }
 }
 
+/// Floating card that follows the cursor while a widget is being dragged,
+/// giving explicit "something is being lifted" feedback beyond the source
+/// card's dimming and the target's insertion gap.
+private struct WidgetConfiguratorDragPreview: View {
+    let title: String
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.primary.opacity(0.9))
+        )
+        .foregroundStyle(Color(nsColor: .windowBackgroundColor))
+        .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
+        .scaleEffect(1.05)
+        .rotationEffect(.degrees(-3))
+    }
+}
+
 private struct WidgetConfiguratorView: View {
     @ObservedObject private var configManager = ConfigManager.shared
     @StateObject private var dragState = WidgetConfiguratorDragState()
@@ -595,6 +623,16 @@ private struct WidgetConfiguratorView: View {
             }
             .onPreferenceChange(WidgetRowFrameKey.self) { rowFrames = $0 }
             .onPreferenceChange(MonitorColumnFrameKey.self) { columnFrames = $0 }
+            .overlay(alignment: .topLeading) {
+                if let draggedID = dragState.draggedWidgetID {
+                    let dragged = definition(for: draggedID)
+                    WidgetConfiguratorDragPreview(title: dragged.title, icon: dragged.icon)
+                        .position(dragState.dragLocation)
+                        .allowsHitTesting(false)
+                        .transition(.scale(scale: 0.7).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.22, dampingFraction: 0.75), value: dragState.draggedWidgetID)
         }
         .frame(minHeight: 520)
         .padding(24)
@@ -1601,6 +1639,8 @@ private struct AvailableWidgetTile: View {
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
         .opacity(isFullyPlaced ? 0.35 : (isBeingDragged ? 0.4 : 1))
+        .scaleEffect(isBeingDragged ? 0.92 : 1)
+        .animation(.spring(response: 0.2, dampingFraction: 0.75), value: isBeingDragged)
         .help("\(definition.description)\n\(definition.id)")
         .gesture(
             isFullyPlaced ? nil : DragGesture(minimumDistance: 2, coordinateSpace: .named("widgetConfigurator"))
@@ -1609,6 +1649,7 @@ private struct AvailableWidgetTile: View {
                         dragState.draggedWidgetID = definition.id
                         dragState.origin = .available
                     }
+                    dragState.dragLocation = value.location
                     onDragChanged(value.location)
                 }
                 .onEnded { _ in
@@ -1713,6 +1754,8 @@ private struct MonitorActiveColumnRow: View {
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
         )
         .opacity(isBeingDragged ? 0.35 : 1)
+        .scaleEffect(isBeingDragged ? 0.96 : 1)
+        .animation(.spring(response: 0.2, dampingFraction: 0.75), value: isBeingDragged)
         .background(
             GeometryReader { geo in
                 Color.clear.preference(
@@ -1728,6 +1771,7 @@ private struct MonitorActiveColumnRow: View {
                         dragState.draggedWidgetID = item.widgetID
                         dragState.origin = .active(monitorID: monitorID, index: item.index)
                     }
+                    dragState.dragLocation = value.location
                     onDragChanged(value.location)
                 }
                 .onEnded { _ in
