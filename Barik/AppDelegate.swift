@@ -5,7 +5,7 @@ import Combine
 import UserNotifications
 
 final class MenuBarEditablePanel: NSPanel {
-    override var canBecomeKey: Bool { true }
+    override var canBecomeKey: Bool { BarEditModeState.shared.isActive }
 }
 
 @MainActor
