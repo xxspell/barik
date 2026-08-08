@@ -74,8 +74,11 @@ struct SpacerAwareRowLayout: Layout {
 
         let target = bounds.width / CGFloat(n)
         var gapWidths: [CGFloat] = []
-        for k in 1...n {
-            let raw = target - halfWidth(k - 1) - halfWidth(k) - 2 * spacing
+        for (k, spacerIndex) in spacerIndices.enumerated() {
+            let hasLeadingNeighbor = spacerIndex > 0
+            let hasTrailingNeighbor = spacerIndex < subviews.count - 1
+            let adjacentSpacingCount = (hasLeadingNeighbor ? 1 : 0) + (hasTrailingNeighbor ? 1 : 0)
+            let raw = target - halfWidth(k) - halfWidth(k + 1) - CGFloat(adjacentSpacingCount) * spacing
             gapWidths.append(max(raw, minGap))
         }
 
