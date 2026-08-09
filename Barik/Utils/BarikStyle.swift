@@ -41,7 +41,7 @@ struct BarikStyle {
     /// (handled in BarikFontModifier).
     var fontDesign: Font.Design { isTUI ? .monospaced : .default }
 
-    var foreground: Color { Color.foregroundOutside }
+    var foreground: Color { Color("TUI Foreground") }
     var dim: Color { Color.foregroundOutside.opacity(dimOpacity) }
     var chipCornerRadius: CGFloat { 8 }
 
