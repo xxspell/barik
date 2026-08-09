@@ -63,7 +63,7 @@ struct NowPlayingWidget: View {
                             .barikFont(size: 12, weight: .regular)
                             .lineLimit(1)
                     }
-                    .foregroundStyle(style.dim)
+                    .foregroundStyle(song.state == .paused ? style.dim : style.foreground)
                     .padding(.horizontal, BarikStyle.tuiChipHPadding)
                     .frame(height: BarikStyle.tuiChipHeight)
                     .background {
