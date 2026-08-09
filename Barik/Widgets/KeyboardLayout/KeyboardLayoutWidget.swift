@@ -10,6 +10,10 @@ struct KeyboardLayoutWidget: View {
 
     @State private var rect: CGRect = .zero
 
+    private var textColor: Color {
+        BarikStyle.current.isTUI ? BarikStyle.current.foreground : .foregroundOutside
+    }
+
     var body: some View {
         Group {
             if showText {
@@ -17,7 +21,7 @@ struct KeyboardLayoutWidget: View {
             } else {
                 Image(systemName: "globe")
                     .barikFont(size: 14, weight: .semibold)
-                    .foregroundStyle(.foregroundOutside)
+                    .foregroundStyle(textColor)
             }
         }
         .padding(.horizontal, BarikStyle.current.isTUI ? 0 : (showOutline ? (showText ? 8 : 2) : 0))
@@ -53,7 +57,7 @@ struct KeyboardLayoutWidget: View {
     private var labelView: some View {
         Text(layoutManager.currentSource?.shortLabel ?? "--")
             .barikFont(size: 12, weight: .semibold, design: .rounded)
-            .foregroundStyle(.foregroundOutside)
+            .foregroundStyle(textColor)
             .monospaced()
             .fixedSize(horizontal: true, vertical: false)
     }

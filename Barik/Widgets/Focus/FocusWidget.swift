@@ -20,7 +20,7 @@ struct FocusWidget: View {
 
     private var activeMode: FocusMode? { focusManager.activeMode }
     private var foregroundColor: Color {
-        if BarikStyle.current.isTUI { return .foregroundOutside }
+        if BarikStyle.current.isTUI { return BarikStyle.current.foreground }
         guard tintWithFocusColor, let tintColor = activeMode?.tintColor else {
             return .foregroundOutside
         }

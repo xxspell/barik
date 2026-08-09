@@ -11,13 +11,14 @@ struct ShortcutsWidget: View {
     private var iconSize: CGFloat { isTUI ? 12 : 15 }
     /// The filled stack glyph sits below its optical center; nudge it up in TUI.
     private var iconVerticalOffset: CGFloat { isTUI ? -1 : 0 }
+    private var iconColor: Color { isTUI ? BarikStyle.current.foreground : .foregroundOutside }
 
     var body: some View {
         ZStack {
             if manager.isRunningShortcut {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .barikFont(size: iconSize, weight: .semibold)
-                    .foregroundStyle(.foregroundOutside)
+                    .foregroundStyle(iconColor)
                     .rotationEffect(.degrees(manager.isRunningShortcut ? 360 : 0))
                     .animation(
                         .linear(duration: 0.9).repeatForever(autoreverses: false),
@@ -26,7 +27,7 @@ struct ShortcutsWidget: View {
             } else {
                 Image(systemName: "square.stack.3d.up.fill")
                     .barikFont(size: iconSize, weight: .semibold)
-                    .foregroundStyle(.foregroundOutside)
+                    .foregroundStyle(iconColor)
             }
         }
         .offset(y: iconVerticalOffset)

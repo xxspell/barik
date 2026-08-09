@@ -98,13 +98,13 @@ struct HomebrewWidget: View {
     private func brewIcon(size: CGFloat, badgeMode: Bool = false) -> some View {
         Image(systemName: "shippingbox.fill")
             .barikFont(size: BarikStyle.current.isTUI ? 12 : size, weight: .medium)
-            .foregroundStyle(badgeMode ? Color.foregroundOutside : iconColor)
+            .foregroundStyle(badgeMode ? outsideTextColor : iconColor)
     }
 
     private func updatingSpinner(size: CGFloat) -> some View {
         Image(systemName: "arrow.triangle.2.circlepath")
             .barikFont(size: size, weight: .semibold)
-            .foregroundStyle(.foregroundOutside)
+            .foregroundStyle(outsideTextColor)
             .rotationEffect(.degrees(manager.isUpdating ? 360 : 0))
             .animation(
                 .linear(duration: 1).repeatForever(autoreverses: false),
@@ -114,13 +114,17 @@ struct HomebrewWidget: View {
 
     // MARK: - Colors
 
+    private var outsideTextColor: Color {
+        BarikStyle.current.isTUI ? BarikStyle.current.foreground : .foregroundOutside
+    }
+
     private var iconColor: Color {
-        if BarikStyle.current.isTUI { return .foregroundOutside }
+        if BarikStyle.current.isTUI { return BarikStyle.current.foreground }
         return manager.outdatedCount > 0 ? .orange : .foregroundOutside
     }
 
     private var countColor: Color {
-        if BarikStyle.current.isTUI { return .foregroundOutside }
+        if BarikStyle.current.isTUI { return BarikStyle.current.foreground }
         return manager.outdatedCount > 0 ? .orange : .foregroundOutside
     }
 }

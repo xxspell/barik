@@ -15,10 +15,14 @@ struct TickTickWidget: View {
         DisplayMode(rawValue: configProvider.config["display-mode"]?.stringValue?.lowercased() ?? "badge") ?? .badge
     }
 
+    private var outsideTextColor: Color {
+        BarikStyle.current.isTUI ? BarikStyle.current.foreground : .foregroundOutside
+    }
+
     private var rotatingItemTextColor: Color {
-        guard let item = manager.rotatingBarItem else { return .foregroundOutside }
+        guard let item = manager.rotatingBarItem else { return outsideTextColor }
         let accent = accentColor(for: item)
-        return shouldTintRotatingItemText ? accent.opacity(0.92) : .foregroundOutside
+        return shouldTintRotatingItemText ? accent.opacity(0.92) : outsideTextColor
     }
 
     private var shouldTintRotatingItemText: Bool {
@@ -46,7 +50,7 @@ struct TickTickWidget: View {
             }
         }
         .padding(.horizontal, shouldShowRotatingItem ? 0 : 1)
-        .foregroundStyle(.foregroundOutside)
+        .foregroundStyle(outsideTextColor)
         .shadow(color: .foregroundShadowOutside, radius: BarikStyle.current.isTUI ? 0 : 3)
         .experimentalConfiguration(
             horizontalPadding: shouldShowRotatingItem ? 6 : 15,
@@ -108,7 +112,7 @@ struct TickTickWidget: View {
                     .renderingMode(.template)
                     .scaledToFit()
                     .frame(width: tui ? 14 : 16, height: tui ? 14 : 16)
-                    .foregroundStyle(.foregroundOutside)
+                    .foregroundStyle(outsideTextColor)
                     .opacity(manager.isAuthenticated ? 1.0 : 0.6)
                     .offset(x: shouldShowRotatingItem ? -2 : 0)
 
@@ -128,7 +132,7 @@ struct TickTickWidget: View {
             if tui && manager.isAuthenticated && manager.totalPendingCount > 0 {
                 Text("\(min(manager.totalPendingCount, 99))")
                     .barikFont(size: 12, weight: .semibold)
-                    .foregroundStyle(.foregroundOutside)
+                    .foregroundStyle(outsideTextColor)
             }
         }
     }
@@ -140,11 +144,11 @@ struct TickTickWidget: View {
                 return Color(red: 0.97, green: 0.42, blue: 0.39)
             }
             if priority == .none {
-                return .foregroundOutside
+                return outsideTextColor
             }
-            return Color(hex: priority.color) ?? .foregroundOutside
+            return Color(hex: priority.color) ?? outsideTextColor
         case .habit:
-            return .foregroundOutside
+            return outsideTextColor
         }
     }
 }

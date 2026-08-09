@@ -29,15 +29,17 @@ struct WeatherWidget: View {
     }
 
     var body: some View {
+        let isTUI = BarikStyle.current.isTUI
+
         HStack(spacing: 4) {
             if let weather = weatherManager.currentWeather {
                 Image(systemName: weather.symbolName)
-                    .symbolRenderingMode(.multicolor)
+                    .symbolRenderingMode(isTUI ? .monochrome : .multicolor)
                 Text(weather.temperature)
                     .barikFont(size: 13, weight: .semibold)
             } else {
                 Image(systemName: "cloud.sun")
-                    .symbolRenderingMode(.multicolor)
+                    .symbolRenderingMode(isTUI ? .monochrome : .multicolor)
                 if weatherManager.isLoading {
                     ProgressView()
                         .scaleEffect(0.5)
@@ -45,10 +47,10 @@ struct WeatherWidget: View {
             }
         }
         .barikTextStyle(.headline)
-        .imageScale(BarikStyle.current.isTUI ? .small : .medium)
-        .foregroundStyle(.primary)
-        .saturation(BarikStyle.current.isTUI ? 0 : 1)
-        .shadow(radius: BarikStyle.current.isTUI ? 0 : 3)
+        .imageScale(isTUI ? .small : .medium)
+        .foregroundStyle(isTUI ? BarikStyle.current.foreground : .primary)
+        .saturation(isTUI ? 0 : 1)
+        .shadow(radius: isTUI ? 0 : 3)
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))

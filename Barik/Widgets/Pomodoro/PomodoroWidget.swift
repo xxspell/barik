@@ -18,13 +18,17 @@ struct PomodoroWidget: View {
         ) ?? .timer
     }
 
+    private var outsideTextColor: Color {
+        BarikStyle.current.isTUI ? BarikStyle.current.foreground : .foregroundOutside
+    }
+
     private var iconColor: Color {
         if BarikStyle.current.isTUI {
             switch manager.phase {
             case .focus, .focusPaused, .waitingForBreak:
                 return BarikStyle.current.accent
             default:
-                return .foregroundOutside
+                return BarikStyle.current.foreground
             }
         }
         switch manager.phase {
@@ -96,7 +100,7 @@ struct PomodoroWidget: View {
 
             Text(manager.widgetLabel ?? "00:00")
                 .barikFont(size: 12, weight: .semibold, design: .rounded)
-                .foregroundStyle(.foregroundOutside)
+                .foregroundStyle(outsideTextColor)
                 .opacity(manager.widgetLabel == nil ? 0 : 1)
                 .frame(width: manager.widgetLabel == nil ? 0 : timerLabelWidth, alignment: .leading)
                 .clipped()
@@ -113,7 +117,7 @@ struct PomodoroWidget: View {
                     .renderingMode(.template)
                     .scaledToFit()
                     .frame(width: timerIconSize, height: timerIconSize)
-                    .foregroundStyle(.foregroundOutside.opacity(0.45))
+                    .foregroundStyle(outsideTextColor.opacity(0.45))
             } else {
                 ForEach(0..<min(manager.statistics.todayCount, 8), id: \.self) { _ in
                     Image("PomodoroIcon")
@@ -127,7 +131,7 @@ struct PomodoroWidget: View {
                 if manager.statistics.todayCount > 8 {
                     Text("+\(manager.statistics.todayCount - 8)")
                         .barikFont(size: 10, weight: .bold, design: .rounded)
-                        .foregroundStyle(.foregroundOutside.opacity(0.8))
+                        .foregroundStyle(outsideTextColor.opacity(0.8))
                         .padding(.leading, 1)
                 }
             }
