@@ -45,10 +45,10 @@ struct BarikStyle {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         nsColor.getRed(&r, green: &g, blue: &b, alpha: &a)
         let luminance = 0.299 * r + 0.587 * g + 0.114 * b
-        guard luminance > 0.6 else { return base }
+        guard luminance > 0.5 else { return base }
 
-        let t = min((luminance - 0.6) / 0.4, 1.0)
-        let darkenFactor = t * 0.35
+        let t = min((luminance - 0.5) / 0.5, 1.0)
+        let darkenFactor = t * 0.55
 
         var h: CGFloat = 0, s: CGFloat = 0, brightness: CGFloat = 0, a2: CGFloat = 0
         nsColor.getHue(&h, saturation: &s, brightness: &brightness, alpha: &a2)
