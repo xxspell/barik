@@ -144,6 +144,8 @@ struct AnimatedNSImageRepresentable: NSViewRepresentable {
 /// reached here.
 struct AnimatedWebImage: View {
     let url: URL?
+    /// Must stay `nil` for GIFs: a non-nil value makes `ImageLoader` call
+    /// `NSImage.resized(to:)`, which flattens a GIF to its current frame.
     let targetSize: CGSize?
 
     @StateObject private var loader: ImageLoader
