@@ -5,10 +5,10 @@
 ### Added
 - Add a redesigned Displays screen: an Available Widgets palette on the left and one Active column per monitor on the right, wired together with a custom drag-and-drop so adding, reordering, and moving widgets between monitors is a single drag instead of a modal "Open Catalog" detour
 
-  ![Widget Configurator drag and drop](resources/changelog/0.14.0/settings-section-displays.gif)
+  ![Widget Configurator drag and drop](https://raw.githubusercontent.com/xxspell/barik/main/resources/changelog/0.14.0/settings-section-displays.gif)
 - Add live widget editing directly on the real menu bar: an "Edit widgets on the bar" toggle in Settings → Displays puts every widget in a dashed, draggable state — reorder or remove widgets in place, and drag one from one monitor's bar to another's; press Esc anywhere to exit
 
-  ![Live-editing widgets on the bar](resources/changelog/0.14.0/bar-live-edit-mode.gif)
+  ![Live-editing widgets on the bar](https://raw.githubusercontent.com/xxspell/barik/main/resources/changelog/0.14.0/bar-live-edit-mode.gif)
 - Add even distribution for multiple `spacer` widgets: with two or more spacers configured, the widgets between them now center on evenly spaced points across the bar instead of drifting off-center when the surrounding widgets are uneven in number
 - Make the Settings window freely resizable with a dark titlebar/background chrome matching the rest of the app, and group its sidebar into General/Widgets/Usage/About sections
 
@@ -28,7 +28,7 @@
 
 ## 0.13.0
 
-![Header](resources/changelog/0.13.0/tui-style-header.png)
+![Header](https://raw.githubusercontent.com/xxspell/barik/main/resources/changelog/0.13.0/tui-style-header.png)
 
 ### Added
 - Add TUI style: a compact, monospaced alternative bar look with glass/flat chip chrome, configurable via `style = "tui"` and a new `[tui]` config section
