@@ -3,16 +3,26 @@ import SwiftUI
 
 struct BannerButtonStyle: ButtonStyle {
     let color: Color
-    
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundColor(.white)
-            .padding(.vertical, 5)
-            .padding(.horizontal, 10)
-            .background(
-                configuration.isPressed ? color.opacity(0.7) : color
-            )
-            .clipShape(.capsule)
+        let style = BarikStyle.current
+        let fill = configuration.isPressed ? color.opacity(0.7) : color
+
+        if style.isTUI {
+            configuration.label
+                .foregroundColor(.white)
+                .padding(.horizontal, BarikStyle.tuiChipHPadding)
+                .frame(height: BarikStyle.tuiChipHeight)
+                .background(fill)
+                .clipShape(RoundedRectangle(cornerRadius: style.chipCornerRadius, style: .continuous))
+        } else {
+            configuration.label
+                .foregroundColor(.white)
+                .padding(.vertical, 5)
+                .padding(.horizontal, 10)
+                .background(fill)
+                .clipShape(.capsule)
+        }
     }
 }
 
