@@ -37,9 +37,9 @@ struct CodexUsageWidget: View {
                 .frame(width: 13, height: 13)
             Text(tuiUsageText)
                 .barikFont(size: 12, weight: .medium, design: .monospaced)
-                .foregroundStyle(usageManager.usageData.primaryPercentage >= 0.6 ? BarikStyle.current.accent : Color.foregroundOutside)
+                .foregroundStyle(usageManager.usageData.primaryPercentage >= 0.6 ? BarikStyle.current.accent : BarikStyle.current.foreground)
         }
-        .foregroundStyle(.foregroundOutside)
+        .foregroundStyle(BarikStyle.current.foreground)
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))

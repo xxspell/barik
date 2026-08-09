@@ -96,7 +96,7 @@ struct CLIProxyUsageWidget: View {
         let sized = AnyView(stack.frame(width: showRing ? (BarikStyle.current.isTUI ? 16 : 30) : nil, height: showRing ? (BarikStyle.current.isTUI ? 16 : 28) : nil))
         let styled = AnyView(
             sized
-                .foregroundStyle(.foregroundOutside)
+                .foregroundStyle(BarikStyle.current.isTUI ? BarikStyle.current.foreground : .foregroundOutside)
                 .shadow(color: .foregroundShadowOutside, radius: 3)
                 .experimentalConfiguration(cornerRadius: 15)
                 .frame(maxHeight: .infinity)
@@ -176,8 +176,9 @@ struct CLIProxyUsageWidget: View {
                         Text(quotaPercentageText)
                             .barikFont(size: 12, weight: .medium)
                             .foregroundStyle(
-                                (BarikStyle.current.isTUI && normalizedProgress(quotaSummary.percentage) <= warnThreshold)
-                                    ? BarikStyle.current.accent : Color.foregroundOutside
+                                BarikStyle.current.isTUI
+                                    ? (normalizedProgress(quotaSummary.percentage) <= warnThreshold ? BarikStyle.current.accent : BarikStyle.current.foreground)
+                                    : Color.foregroundOutside
                             )
                     } else if usageManager.fetchFailed {
                         Image(systemName: "exclamationmark.circle.fill")

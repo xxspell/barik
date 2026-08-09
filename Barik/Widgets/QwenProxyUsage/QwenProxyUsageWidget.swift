@@ -86,7 +86,7 @@ struct QwenProxyUsageWidget: View {
             widgetContent
         }
         .frame(width: showRing ? (BarikStyle.current.isTUI ? 16 : 28) : nil, height: showRing ? (BarikStyle.current.isTUI ? 16 : 28) : nil)
-        .foregroundStyle(.foregroundOutside)
+        .foregroundStyle(BarikStyle.current.isTUI ? BarikStyle.current.foreground : .foregroundOutside)
         .shadow(color: .foregroundShadowOutside, radius: BarikStyle.current.isTUI ? 0 : 3)
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
@@ -133,7 +133,7 @@ struct QwenProxyUsageWidget: View {
                     if usageManager.usageData.isAvailable {
                         Text("\(healthyCount)")
                             .barikFont(size: 12, weight: .medium)
-                            .foregroundStyle(.foregroundOutside)
+                            .foregroundStyle(BarikStyle.current.isTUI ? BarikStyle.current.foreground : .foregroundOutside)
                     } else if usageManager.fetchFailed {
                         Image(systemName: "exclamationmark.circle.fill")
                             .barikFont(size: 10)

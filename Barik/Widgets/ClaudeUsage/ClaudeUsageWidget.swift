@@ -38,7 +38,7 @@ struct ClaudeUsageWidget: View {
             tuiUsageView
                 .barikFont(size: 12, weight: .medium, design: .monospaced)
         }
-        .foregroundStyle(.foregroundOutside)
+        .foregroundStyle(BarikStyle.current.foreground)
         .experimentalConfiguration(cornerRadius: 15)
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))
