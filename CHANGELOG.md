@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.15.0
+
+### Fixed
+- Fix TUI style text, icons, and accent color staying white/invisible in light theme — foreground, dim, and accent now adapt to light/dark appearance across every widget (usage rings, Pomodoro, Focus, Homebrew, Shortcuts, Keyboard Layout, Weather, TickTick, and more)
+- Fix the "What's New" and update banners to use the same chip height and corner radius as the rest of the TUI bar instead of a mismatched capsule
+- Fix Now Playing's TUI text/icon staying dimmed even while a track is actively playing
+- Strengthen TUI accent darkening in light theme so pale accent colors stay legible against the glass chip background
+- Fix GIFs in the in-app changelog viewer not animating
+
 ## 0.14.0
 
 ### Added
