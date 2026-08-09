@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.14.0
+
+### Added
+- Add a redesigned Displays screen: an Available Widgets palette on the left and one Active column per monitor on the right, wired together with a custom drag-and-drop so adding, reordering, and moving widgets between monitors is a single drag instead of a modal "Open Catalog" detour
+- Add live widget editing directly on the real menu bar: an "Edit widgets on the bar" toggle in Settings → Displays puts every widget in a dashed, draggable state — reorder or remove widgets in place, and drag one from one monitor's bar to another's; press Esc anywhere to exit
+- Add even distribution for multiple `spacer` widgets: with two or more spacers configured, the widgets between them now center on evenly spaced points across the bar instead of drifting off-center when the surrounding widgets are uneven in number
+- Make the Settings window freely resizable with a dark titlebar/background chrome matching the rest of the app, and group its sidebar into General/Widgets/Usage/About sections
+
+### Fixed
+- Fix the live bar's edit-mode toggle so it can no longer make the menu bar panel steal keyboard focus from other apps outside of edit mode
+- Fix dragging a widget past a `spacer` on the live bar, which previously could get stuck because the spacer's own drop-target area stretched across most of the bar
+- Fix undersized custom icons (Pomodoro, Codex, Claude, Qwen, TickTick) and cramped long widget names in the Displays widget catalog, and replace the Codex icon with a crisper, theme-tinted vector icon
+
 ## 0.13.1
 
 ### Fixed
