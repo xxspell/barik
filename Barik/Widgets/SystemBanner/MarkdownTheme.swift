@@ -109,15 +109,76 @@ extension Theme {
         }
 }
 
+/// An `NSViewRepresentable` wrapping `NSImageView` so that multi-frame GIF
+/// `NSImage`s animate using their embedded per-frame delays. For a
+/// single-frame image (PNG/JPG) `animates = true` is a no-op, so the same
+/// view works for both without needing to sniff the image format.
+struct AnimatedNSImageRepresentable: NSViewRepresentable {
+    let image: NSImage?
+
+    func makeNSView(context: Context) -> NSImageView {
+        let imageView = NSImageView()
+        imageView.animates = true
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.image = image
+        return imageView
+    }
+
+    func updateNSView(_ nsView: NSImageView, context: Context) {
+        if nsView.image !== image {
+            nsView.image = image
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSImageView, context: Context) -> CGSize? {
+        guard let image = nsView.image else { return nil }
+        return image.size
+    }
+}
+
+/// A thin wrapper that owns an `ImageLoader` (unmodified, shared with the
+/// rest of the app) and feeds its loaded `NSImage?` into
+/// `AnimatedNSImageRepresentable`. Unlike `FadeAnimatedCachedImage`, it has
+/// no cross-fade-on-url-change transition: for a markdown image element the
+/// `url` is fixed for the element's lifetime, so that code path is never
+/// reached here.
+struct AnimatedWebImage: View {
+    let url: URL?
+    let targetSize: CGSize?
+
+    @StateObject private var loader: ImageLoader
+    @State private var displayedImage: NSImage?
+
+    init(url: URL?, targetSize: CGSize? = nil) {
+        self.url = url
+        self.targetSize = targetSize
+        _loader = StateObject(wrappedValue: ImageLoader(url: url, targetSize: targetSize))
+    }
+
+    var body: some View {
+        Group {
+            if let displayedImage {
+                AnimatedNSImageRepresentable(image: displayedImage)
+            } else {
+                Color.clear
+            }
+        }
+        .onAppear { loader.load() }
+        .onReceive(loader.$image) { newImage in
+            displayedImage = newImage
+        }
+        .onChange(of: url) { _, newURL in
+            loader.url = newURL
+            loader.load()
+        }
+    }
+}
+
 struct WebImageProvider: ImageProvider {
   func makeImage(url: URL?) -> some View {
     ResizeToFit {
-        FadeAnimatedCachedImage(url: url) { image in
-            image
-                .resizable()
-                .interpolation(.high)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        }
+        AnimatedWebImage(url: url)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
   }
 }
