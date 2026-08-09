@@ -42,7 +42,7 @@ struct BarikStyle {
     var fontDesign: Font.Design { isTUI ? .monospaced : .default }
 
     var foreground: Color { Color("TUI Foreground") }
-    var dim: Color { Color.foregroundOutside.opacity(dimOpacity) }
+    var dim: Color { foreground.opacity(dimOpacity) }
     var chipCornerRadius: CGFloat { 8 }
 
     /// Fill for a TUI chip's glass/flat background. `isExporting` swaps
