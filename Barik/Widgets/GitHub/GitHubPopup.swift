@@ -18,7 +18,7 @@ struct GitHubPopup: View {
                 statsView(login: login)
             }
         }
-        .frame(width: 340)
+        .frame(width: 300)
         .background(Color.black)
         .overlay(alignment: .bottomTrailing) {
             HStack(spacing: 3) {
@@ -462,6 +462,22 @@ struct GitHubPopup: View {
         }
     }
 
+    // MARK: - Streak Risk
+
+    private var streakWarningHour: Int {
+        configProvider.config["streak-warning-hour"]?.intValue ?? 18
+    }
+
+    private var isPastWarningHour: Bool {
+        Calendar.current.component(.hour, from: Date()) >= streakWarningHour
+    }
+
+    private var streakColor: Color {
+        if manager.data.streakDays == 0 { return .red }
+        if manager.data.commitsToday == 0 && isPastWarningHour { return .orange }
+        return .green
+    }
+
     // MARK: - Metrics Grid
 
     private var metricsGrid: some View {
@@ -471,7 +487,7 @@ struct GitHubPopup: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(spacing: 8) {
-                metricRow(icon: "flame.fill", label: "Streak", value: "\(manager.data.streakDays) days", color: .orange)
+                metricRow(icon: "flame.fill", label: "Streak", value: "\(manager.data.streakDays) days", color: streakColor)
                 metricRow(icon: "checkmark.circle", label: "Today", value: "\(manager.data.commitsToday) commits", color: .green)
                 metricRow(icon: "exclamationmark.circle", label: "Issues", value: "\(manager.data.openIssues)", color: .yellow)
                 metricRow(icon: "arrow.triangle.pull", label: "PRs", value: "\(manager.data.openPRs)", color: .blue)
