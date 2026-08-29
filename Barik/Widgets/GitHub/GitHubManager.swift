@@ -243,9 +243,20 @@ final class GitHubManager: ObservableObject {
             var newData = data
             var anySucceeded = false
             var lastError: String?
+            var rateLimitError: String?
+
+            // Launch all four requests concurrently up front. Awaiting each
+            // `async let` binding below only blocks on that specific result —
+            // the underlying network calls are already in flight together.
+            async let graphQLResult = fetchGraphQL(token: token)
+            async let issuesResult = fetchSearchCount(token: token, query: "is:issue is:open user:\(login)")
+            async let prsResult = fetchSearchCount(
+                token: token, query: "is:pr is:open (author:\(login) OR review-requested:\(login))"
+            )
+            async let notificationsResult = fetchNotificationCount(token: token)
 
             do {
-                let (days, stars) = try await fetchGraphQL(token: token)
+                let (days, stars) = try await graphQLResult
                 let (streak, commitsToday) = GitHubStreakCalculator.calculate(days: days)
                 newData.contributionDays = days
                 newData.totalStars = stars
@@ -254,30 +265,48 @@ final class GitHubManager: ObservableObject {
                 newData.login = login
                 anySucceeded = true
             } catch {
-                lastError = handleFetchError(error)
+                let message = handleFetchError(error)
+                if case GitHubAPIError.rateLimited = error { rateLimitError = message } else { lastError = message }
             }
 
             do {
-                newData.openIssues = try await fetchSearchCount(token: token, query: "is:issue is:open user:\(login)")
+                newData.openIssues = try await issuesResult
                 anySucceeded = true
             } catch {
-                lastError = handleFetchError(error)
+                let message = handleFetchError(error)
+                if case GitHubAPIError.rateLimited = error { rateLimitError = message } else { lastError = message }
             }
 
             do {
-                newData.openPRs = try await fetchSearchCount(
-                    token: token, query: "is:pr is:open (author:\(login) OR review-requested:\(login))"
-                )
+                newData.openPRs = try await prsResult
                 anySucceeded = true
             } catch {
-                lastError = handleFetchError(error)
+                let message = handleFetchError(error)
+                if case GitHubAPIError.rateLimited = error { rateLimitError = message } else { lastError = message }
             }
 
             do {
-                newData.unreadNotifications = try await fetchNotificationCount(token: token)
+                newData.unreadNotifications = try await notificationsResult
                 anySucceeded = true
             } catch {
-                lastError = handleFetchError(error)
+                let message = handleFetchError(error)
+                if case GitHubAPIError.rateLimited = error { rateLimitError = message } else { lastError = message }
+            }
+
+            // A rate-limit signal is more actionable than a generic failure
+            // from another concurrent call in the same pass, so it takes
+            // priority when both occurred.
+            let finalErrorMessage = rateLimitError ?? lastError
+
+            // If any of the four calls 401'd, `handleFetchError` already
+            // signed out and reset `authState`/`data`. The other calls were
+            // already in flight with the stale token/login and may still
+            // have "succeeded" — discard their results instead of writing
+            // stale data back right after a sign-out.
+            guard case .signedIn = authState else {
+                fetchFailed = true
+                errorMessage = finalErrorMessage
+                return
             }
 
             if anySucceeded {
@@ -287,7 +316,7 @@ final class GitHubManager: ObservableObject {
             }
 
             fetchFailed = !anySucceeded
-            errorMessage = lastError
+            errorMessage = finalErrorMessage
         }
     }
 
