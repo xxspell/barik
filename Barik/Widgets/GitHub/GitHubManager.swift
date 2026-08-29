@@ -146,6 +146,21 @@ final class GitHubManager: ObservableObject {
     }
 
     func refresh() {
+        if let rateLimitedUntil {
+            if Date() < rateLimitedUntil {
+                // Still rate-limited: keep the rate-limit message visible instead of
+                // letting a plain "Updated Xm ago" footer silently replace it with no
+                // fetch having actually happened.
+                let formatter = DateFormatter()
+                formatter.timeStyle = .short
+                errorMessage = "Rate limited, retry at \(formatter.string(from: rateLimitedUntil))"
+                fetchFailed = true
+                return
+            }
+            // Window elapsed: clear the stale gate so it doesn't linger.
+            self.rateLimitedUntil = nil
+        }
+
         fetchFailed = false
         errorMessage = nil
         fetchData()
@@ -197,12 +212,15 @@ final class GitHubManager: ObservableObject {
                 Self.saveKey(token, key: Self.tokenKey)
                 try await fetchLogin(token: token)
             } catch GitHubDeviceFlowError.expired {
+                logger.debug("GitHub device flow code expired")
                 errorMessage = "Code expired, try again"
                 authState = .signedOut
             } catch GitHubDeviceFlowError.accessDenied {
+                logger.debug("GitHub device flow authorization denied by user")
                 errorMessage = "Authorization denied"
                 authState = .signedOut
             } catch {
+                logger.error("GitHub sign-in failed: \(error.localizedDescription, privacy: .public)")
                 errorMessage = error.localizedDescription
                 authState = .signedOut
             }
@@ -330,6 +348,8 @@ final class GitHubManager: ObservableObject {
                 weeks { contributionDays { date contributionCount } }
               }
             }
+            # Only sums stars from the first 100 owned repos (GraphQL page size) —
+            # an intentional budget cap, not a bug.
             repositories(first: 100, ownerAffiliations: OWNER, isFork: false) {
               nodes { stargazerCount }
             }
@@ -379,6 +399,8 @@ final class GitHubManager: ObservableObject {
         return try JSONDecoder().decode(GitHubSearchResponse.self, from: responseData).totalCount
     }
 
+    // Capped at 50 for a menu-bar glance — not paginated; a user with more unread
+    // notifications will see a flat 50.
     private func fetchNotificationCount(token: String) async throws -> Int {
         var request = URLRequest(url: URL(string: "https://api.github.com/notifications?participating=false&per_page=50")!)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -405,16 +427,20 @@ final class GitHubManager: ObservableObject {
     private func handleFetchError(_ error: Error) -> String {
         switch error {
         case GitHubAPIError.unauthorized:
+            logger.error("GitHub fetch unauthorized (401) — signing out")
             signOut()
             return "Sign-in expired, please reconnect"
         case GitHubAPIError.rateLimited(let resetAt):
+            logger.debug("GitHub fetch rate limited until \(resetAt, privacy: .public)")
             rateLimitedUntil = resetAt
             let formatter = DateFormatter()
             formatter.timeStyle = .short
             return "Rate limited, retry at \(formatter.string(from: resetAt))"
         case GitHubAPIError.http(let code):
+            logger.debug("GitHub fetch failed with HTTP \(code, privacy: .public)")
             return "HTTP \(code)"
         default:
+            logger.error("GitHub fetch failed: \(error.localizedDescription, privacy: .public)")
             return error.localizedDescription
         }
     }

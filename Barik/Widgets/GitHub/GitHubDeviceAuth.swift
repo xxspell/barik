@@ -48,7 +48,9 @@ final class GitHubDeviceFlow {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        request.httpBody = "client_id=\(clientId)&scope=\(scope)".data(using: .utf8)
+        let encodedClientId = clientId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? clientId
+        let encodedScope = scope.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? scope
+        request.httpBody = "client_id=\(encodedClientId)&scope=\(encodedScope)".data(using: .utf8)
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
@@ -70,7 +72,9 @@ final class GitHubDeviceFlow {
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-            request.httpBody = "client_id=\(clientId)&device_code=\(deviceCode)&grant_type=urn:ietf:params:oauth:grant-type:device_code".data(using: .utf8)
+            let encodedClientId = clientId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? clientId
+            let encodedDeviceCode = deviceCode.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? deviceCode
+            request.httpBody = "client_id=\(encodedClientId)&device_code=\(encodedDeviceCode)&grant_type=urn:ietf:params:oauth:grant-type:device_code".data(using: .utf8)
 
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
