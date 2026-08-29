@@ -72,7 +72,10 @@ final class GitHubDeviceFlow {
             request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             request.httpBody = "client_id=\(clientId)&device_code=\(deviceCode)&grant_type=urn:ietf:params:oauth:grant-type:device_code".data(using: .utf8)
 
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                throw GitHubDeviceFlowError.invalidResponse
+            }
             let decoded = try JSONDecoder().decode(GitHubAccessTokenResponse.self, from: data)
 
             if let token = decoded.accessToken {
