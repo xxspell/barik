@@ -105,6 +105,8 @@ private struct SettingsDetailView: View {
                     PomodoroSettingsView()
                 case .ticktick:
                     TickTickSettingsView()
+                case .github:
+                    GitHubSettingsView()
                 case .shortcuts:
                     ShortcutsSettingsView()
                 case .systemMonitor:
@@ -1635,6 +1637,7 @@ private let displayWidgetDefinitions: [DisplayWidgetDefinition] = [
     .init(id: "default.nowplaying", title: settingsLocalized("settings.section.now_playing"), description: settingsLocalized("settings.displays.catalog.widget.now_playing.description"), icon: "music.note", allowsMultiple: false),
     .init(id: "default.homebrew", title: settingsLocalized("settings.displays.catalog.widget.homebrew.title"), description: settingsLocalized("settings.displays.catalog.widget.homebrew.description"), icon: "shippingbox.fill", allowsMultiple: false),
     .init(id: "default.ticktick", title: settingsLocalized("settings.section.ticktick"), description: settingsLocalized("settings.displays.catalog.widget.ticktick.description"), icon: "TickTickIcon", iconIsAsset: true, allowsMultiple: false),
+    .init(id: "default.github", title: "GitHub", description: "Commit streak, open issues/PRs, and notifications from your GitHub account.", icon: "chevron.left.forwardslash.chevron.right", allowsMultiple: false),
     .init(id: "spacer", title: settingsLocalized("settings.displays.catalog.widget.spacer.title"), description: settingsLocalized("settings.displays.catalog.widget.spacer.description"), icon: "arrow.left.and.right", allowsMultiple: true),
     .init(id: "divider", title: settingsLocalized("settings.displays.catalog.widget.divider.title"), description: settingsLocalized("settings.displays.catalog.widget.divider.description"), icon: "line.diagonal", allowsMultiple: true)
 ]
@@ -6213,6 +6216,167 @@ private struct TickTickSettingsView: View {
 
     private func fieldIdentifier(_ field: SettingsFieldKey) -> String {
         "\(field.tablePath).\(field.key)"
+    }
+}
+
+private struct GitHubSettingsView: View {
+    @ObservedObject private var configManager = ConfigManager.shared
+    @ObservedObject private var manager = GitHubManager.shared
+
+    @State private var clientId = ""
+    @State private var includePrivate = true
+    @State private var streakWarningHour = 18.0
+    @State private var refreshInterval = 1800.0
+    @State private var isApplyingConfigSnapshot = false
+    @State private var clientIdTask: Task<Void, Never>?
+
+    private let widgetID = "default.github"
+    private let tablePath = "widgets.default.github"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            SettingsHeaderView(
+                title: "GitHub",
+                description: "Commit streak, issues, PRs, and notifications from your GitHub account."
+            )
+
+            SettingsCardView("Connection") {
+                DebouncedTextSettingRow(
+                    title: "OAuth Client ID",
+                    description: "From a GitHub OAuth App with Device Flow enabled (github.com/settings/developers).",
+                    text: $clientId
+                )
+                .onChange(of: clientId) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    scheduleClientIdWrite(newValue: newValue)
+                }
+            }
+
+            SettingsCardView(
+                "Widget",
+                actionTitle: settingsLocalized("settings.action.reset"),
+                action: resetWidgetDefaults
+            ) {
+                ToggleRow(
+                    title: "Include private repos",
+                    description: "Count private repositories in issues, PRs, and stars.",
+                    isOn: $includePrivate
+                )
+                .onChange(of: includePrivate) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: tablePath,
+                        key: "include-private",
+                        newValueLiteral: newValue ? "true" : "false"
+                    )
+                }
+
+                SliderSettingRow(
+                    title: "Streak warning hour",
+                    description: "Local hour after which a missing commit today turns the streak icon orange.",
+                    value: $streakWarningHour,
+                    range: 0...23,
+                    step: 1,
+                    valueFormat: { "\(Int($0)):00" }
+                )
+                .onChange(of: streakWarningHour) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: tablePath,
+                        key: "streak-warning-hour",
+                        newValueLiteral: String(Int(newValue))
+                    )
+                }
+
+                SliderSettingRow(
+                    title: "Refresh interval",
+                    description: "How often to poll the GitHub API in the background.",
+                    value: $refreshInterval,
+                    range: 300...3600,
+                    step: 300,
+                    valueFormat: { "\(Int($0 / 60))m" }
+                )
+                .onChange(of: refreshInterval) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: tablePath,
+                        key: "refresh-interval",
+                        newValueLiteral: String(Int(newValue))
+                    )
+                }
+            }
+
+            SettingsCardView("Account") {
+                ProxyUsageStatusView(
+                    title: accountTitle,
+                    description: accountDescription,
+                    isHealthy: isSignedIn,
+                    refreshAction: { manager.refresh() }
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(24)
+        .onAppear(perform: loadFromConfig)
+        .onReceive(configManager.$config) { _ in loadFromConfig() }
+        .onDisappear { clientIdTask?.cancel() }
+    }
+
+    private var isSignedIn: Bool {
+        if case .signedIn = manager.authState { return true }
+        return false
+    }
+
+    private var accountTitle: String {
+        if case .signedIn(let login) = manager.authState { return "@\(login)" }
+        return "Not connected"
+    }
+
+    private var accountDescription: String {
+        if case .signedIn = manager.authState {
+            return manager.fetchFailed ? (manager.errorMessage ?? "Fetch failed") : "Connected"
+        }
+        return "Sign in from the GitHub popup in the menu bar."
+    }
+
+    private func loadFromConfig() {
+        isApplyingConfigSnapshot = true
+
+        let config = configManager.globalWidgetConfig(for: widgetID)
+        clientId = config["client-id"]?.stringValue ?? ""
+        includePrivate = config["include-private"]?.boolValue ?? true
+        streakWarningHour = Double(config["streak-warning-hour"]?.intValue ?? 18)
+        refreshInterval = Double(config["refresh-interval"]?.intValue ?? 1800)
+
+        isApplyingConfigSnapshot = false
+    }
+
+    private func scheduleClientIdWrite(newValue: String) {
+        clientIdTask?.cancel()
+        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        clientIdTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+
+            if trimmed.isEmpty {
+                ConfigManager.shared.removeConfigValue(tablePath: tablePath, key: "client-id")
+            } else {
+                ConfigManager.shared.updateConfigValue(tablePath: tablePath, key: "client-id", newValue: trimmed)
+            }
+        }
+    }
+
+    private func resetWidgetDefaults() {
+        isApplyingConfigSnapshot = true
+        includePrivate = true
+        streakWarningHour = 18
+        refreshInterval = 1800
+        isApplyingConfigSnapshot = false
+
+        ConfigManager.shared.updateConfigLiteralValue(tablePath: tablePath, key: "include-private", newValueLiteral: "true")
+        ConfigManager.shared.updateConfigLiteralValue(tablePath: tablePath, key: "streak-warning-hour", newValueLiteral: "18")
+        ConfigManager.shared.updateConfigLiteralValue(tablePath: tablePath, key: "refresh-interval", newValueLiteral: "1800")
     }
 }
 
