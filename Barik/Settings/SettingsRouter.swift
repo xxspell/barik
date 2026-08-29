@@ -41,6 +41,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case codexUsage
     case pomodoro
     case ticktick
+    case github
     case shortcuts
     case systemMonitor
     case widgetExport
@@ -81,6 +82,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return String(localized: "settings.section.pomodoro")
         case .ticktick:
             return String(localized: "settings.section.ticktick")
+        case .github:
+            return "GitHub"
         case .shortcuts:
             return String(localized: "settings.section.shortcuts")
         case .systemMonitor:
@@ -128,6 +131,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return "PomodoroIcon"
         case .ticktick:
             return "TickTickIcon"
+        case .github:
+            return "chevron.left.forwardslash.chevron.right"
         case .shortcuts:
             return "square.stack.3d.up"
         case .systemMonitor:
@@ -157,7 +162,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .general, .appearance, .displays:
             return .general
         case .spaces, .time, .weather, .network, .nowPlaying, .pomodoro,
-             .ticktick, .shortcuts, .systemMonitor, .gotify, .other:
+             .ticktick, .shortcuts, .systemMonitor, .gotify, .other, .github:
             return .widgets
         case .cliProxyUsage, .qwenProxyUsage, .claudeUsage, .codexUsage:
             return .usage
