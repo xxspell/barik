@@ -343,8 +343,11 @@ struct GitHubPopup: View {
                         .foregroundStyle(.white.opacity(0.6))
                 }
             } else {
-                let weeks = groupContributionsIntoWeeks(manager.data.contributionDays)
-                let maxContributions = manager.data.contributionDays.map { $0.count }.max() ?? 1
+                let recentDays = manager.data.contributionDays
+                    .sorted { $0.date < $1.date }
+                    .suffix(84)
+                let weeks = groupContributionsIntoWeeks(Array(recentDays))
+                let maxContributions = recentDays.map { $0.count }.max() ?? 1
 
                 VStack(spacing: 2) {
                     ForEach(0..<7, id: \.self) { dayIndex in
