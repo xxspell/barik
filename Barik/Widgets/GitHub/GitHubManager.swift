@@ -33,6 +33,44 @@ struct GitHubData {
     var isAvailable: Bool = false
 }
 
+// MARK: - Metrics
+
+/// The set of metrics the bar widget/settings can show, in their default order.
+enum GitHubMetric: String, CaseIterable {
+    case streak
+    case issues
+    case prs
+    case notifications
+    case stars
+    case commitsToday = "commits-today"
+
+    var title: String {
+        switch self {
+        case .streak: return "Streak"
+        case .issues: return "Issues"
+        case .prs: return "Pull Requests"
+        case .notifications: return "Notifications"
+        case .stars: return "Stars"
+        case .commitsToday: return "Commits Today"
+        }
+    }
+
+    var systemImageName: String {
+        switch self {
+        case .streak: return "flame.fill"
+        case .issues: return "smallcircle.filled.circle"
+        case .prs: return "arrow.triangle.branch"
+        case .notifications: return "bell"
+        case .stars: return "star.fill"
+        case .commitsToday: return "checkmark.circle"
+        }
+    }
+}
+
+extension GitHubMetric: Identifiable {
+    var id: String { rawValue }
+}
+
 // MARK: - Streak Calculator
 
 enum GitHubStreakCalculator {
@@ -115,10 +153,12 @@ final class GitHubManager: ObservableObject {
     @Published private(set) var fetchFailed = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var rateLimitedUntil: Date?
+    @Published private(set) var isFetching = false
 
     private var refreshTimer: Timer?
     private var currentConfig: ConfigData = [:]
     private var pollTask: Task<Void, Never>?
+    private var fetchGeneration = 0
 
     private static let tokenKey = "barik-github-token"
     private static let loginKey = "barik-github-login"
@@ -257,7 +297,24 @@ final class GitHubManager: ObservableObject {
         guard case .signedIn(let login) = authState, let token = Self.loadKey(Self.tokenKey) else { return }
         if let rateLimitedUntil, Date() < rateLimitedUntil { return }
 
+        // Multiple triggers (timer, manual refresh, wake, widget re-appear)
+        // can call fetchData() while a previous call is still in flight.
+        // Without this guard, an older/slower call finishing after a newer
+        // one would silently overwrite fresher data with stale results.
+        fetchGeneration += 1
+        let generation = fetchGeneration
+        isFetching = true
+
         Task {
+            defer {
+                // Only the latest generation clears the spinner — an older
+                // call finishing after a newer one started must not hide
+                // the fact that the newer fetch is still in flight.
+                if generation == fetchGeneration {
+                    isFetching = false
+                }
+            }
+
             var newData = data
             var anySucceeded = false
             var lastError: String?
@@ -266,11 +323,14 @@ final class GitHubManager: ObservableObject {
             // Launch all four requests concurrently up front. Awaiting each
             // `async let` binding below only blocks on that specific result —
             // the underlying network calls are already in flight together.
+            // GitHub's search API only supports OR between values of the SAME
+            // qualifier — "author:x OR review-requested:x" (with or without
+            // parens) is rejected with a 422. Query the two qualifiers
+            // separately and sum them instead.
             async let graphQLResult = fetchGraphQL(token: token)
             async let issuesResult = fetchSearchCount(token: token, query: "is:issue is:open user:\(login)")
-            async let prsResult = fetchSearchCount(
-                token: token, query: "is:pr is:open (author:\(login) OR review-requested:\(login))"
-            )
+            async let authoredPRsResult = fetchSearchCount(token: token, query: "is:pr is:open author:\(login)")
+            async let reviewRequestedPRsResult = fetchSearchCount(token: token, query: "is:pr is:open review-requested:\(login)")
             async let notificationsResult = fetchNotificationCount(token: token)
 
             do {
@@ -295,12 +355,25 @@ final class GitHubManager: ObservableObject {
                 if case GitHubAPIError.rateLimited = error { rateLimitError = message } else { lastError = message }
             }
 
+            var prTotal = 0
+            var prSucceeded = false
             do {
-                newData.openPRs = try await prsResult
-                anySucceeded = true
+                prTotal += try await authoredPRsResult
+                prSucceeded = true
             } catch {
                 let message = handleFetchError(error)
                 if case GitHubAPIError.rateLimited = error { rateLimitError = message } else { lastError = message }
+            }
+            do {
+                prTotal += try await reviewRequestedPRsResult
+                prSucceeded = true
+            } catch {
+                let message = handleFetchError(error)
+                if case GitHubAPIError.rateLimited = error { rateLimitError = message } else { lastError = message }
+            }
+            if prSucceeded {
+                newData.openPRs = prTotal
+                anySucceeded = true
             }
 
             do {
@@ -315,6 +388,11 @@ final class GitHubManager: ObservableObject {
             // from another concurrent call in the same pass, so it takes
             // priority when both occurred.
             let finalErrorMessage = rateLimitError ?? lastError
+
+            // A newer fetchData() call superseded this one while it was in
+            // flight — discard this pass entirely rather than let a slow,
+            // stale response clobber the newer result (or its error state).
+            guard generation == fetchGeneration else { return }
 
             // If any of the four calls 401'd, `handleFetchError` already
             // signed out and reset `authState`/`data`. The other calls were
