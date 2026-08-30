@@ -179,6 +179,16 @@ final class ConfigManager: ObservableObject {
             # show-label = true          # show quota percentage near the icon
             # refresh-interval = 300     # seconds between automatic refreshes (min 15)
 
+            # GitHub widget — commit streak, issues, PRs, notifications, stars
+            # Uncomment and configure to enable (requires a GitHub OAuth App with
+            # Device Flow enabled — create one at github.com/settings/developers):
+            # [widgets.default.github]
+            # client-id = "your-oauth-app-client-id"
+            # metrics = ["streak", "issues", "prs", "notifications"]
+            # include-private = true      # count private repos in issues/PRs/stars
+            # streak-warning-hour = 18    # local hour after which no commit today turns the icon orange
+            # refresh-interval = 1800     # seconds between automatic refreshes
+
             [widgets.default.system-monitor]
             show-icon = false
             use-metric-icons = false

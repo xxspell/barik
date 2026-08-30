@@ -105,6 +105,8 @@ private struct SettingsDetailView: View {
                     PomodoroSettingsView()
                 case .ticktick:
                     TickTickSettingsView()
+                case .github:
+                    GitHubSettingsView()
                 case .shortcuts:
                     ShortcutsSettingsView()
                 case .systemMonitor:
@@ -1635,6 +1637,7 @@ private let displayWidgetDefinitions: [DisplayWidgetDefinition] = [
     .init(id: "default.nowplaying", title: settingsLocalized("settings.section.now_playing"), description: settingsLocalized("settings.displays.catalog.widget.now_playing.description"), icon: "music.note", allowsMultiple: false),
     .init(id: "default.homebrew", title: settingsLocalized("settings.displays.catalog.widget.homebrew.title"), description: settingsLocalized("settings.displays.catalog.widget.homebrew.description"), icon: "shippingbox.fill", allowsMultiple: false),
     .init(id: "default.ticktick", title: settingsLocalized("settings.section.ticktick"), description: settingsLocalized("settings.displays.catalog.widget.ticktick.description"), icon: "TickTickIcon", iconIsAsset: true, allowsMultiple: false),
+    .init(id: "default.github", title: "GitHub", description: "Commit streak, open issues/PRs, and notifications from your GitHub account.", icon: "chevron.left.forwardslash.chevron.right", allowsMultiple: false),
     .init(id: "spacer", title: settingsLocalized("settings.displays.catalog.widget.spacer.title"), description: settingsLocalized("settings.displays.catalog.widget.spacer.description"), icon: "arrow.left.and.right", allowsMultiple: true),
     .init(id: "divider", title: settingsLocalized("settings.displays.catalog.widget.divider.title"), description: settingsLocalized("settings.displays.catalog.widget.divider.description"), icon: "line.diagonal", allowsMultiple: true)
 ]
@@ -6213,6 +6216,334 @@ private struct TickTickSettingsView: View {
 
     private func fieldIdentifier(_ field: SettingsFieldKey) -> String {
         "\(field.tablePath).\(field.key)"
+    }
+}
+
+private struct GitHubMetricRow: View {
+    let metric: GitHubMetric
+    let isEnabled: Bool
+    let isDragging: Bool
+    let onToggle: (Bool) -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+                .padding(.vertical, 8)
+
+            Image(systemName: metric.systemImageName)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+
+            Text(metric.title)
+                .font(.subheadline.weight(.semibold))
+
+            Spacer(minLength: 8)
+
+            Toggle(
+                "",
+                isOn: Binding(get: { isEnabled }, set: onToggle)
+            )
+            .labelsHidden()
+            .toggleStyle(.switch)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(isDragging ? 0.07 : 0.03))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .scaleEffect(isDragging ? 0.985 : 1)
+        .opacity(isDragging ? 0.72 : (isEnabled ? 1 : 0.5))
+    }
+}
+
+private struct GitHubSettingsView: View {
+    @ObservedObject private var configManager = ConfigManager.shared
+    @ObservedObject private var manager = GitHubManager.shared
+
+    @State private var clientId = ""
+    @State private var includePrivate = true
+    @State private var streakWarningHour = 18.0
+    @State private var refreshInterval = 1800.0
+    @State private var metricsOrder: [String] = []
+    @State private var metricSelections: [String: Bool] = [:]
+    @State private var pendingArrayWrites: [String: [String]] = [:]
+    @State private var isApplyingConfigSnapshot = false
+    @State private var clientIdTask: Task<Void, Never>?
+
+    private static let defaultVisibleMetrics = ["streak", "issues", "prs", "notifications"]
+
+    private let widgetID = "default.github"
+    private let tablePath = "widgets.default.github"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            SettingsHeaderView(
+                title: "GitHub",
+                description: "Commit streak, issues, PRs, and notifications from your GitHub account."
+            )
+
+            SettingsCardView("Connection") {
+                DebouncedTextSettingRow(
+                    title: "OAuth Client ID",
+                    description: "From a GitHub OAuth App with Device Flow enabled (github.com/settings/developers).",
+                    text: $clientId
+                )
+                .onChange(of: clientId) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    scheduleClientIdWrite(newValue: newValue)
+                }
+            }
+
+            SettingsCardView(
+                "Widget",
+                actionTitle: settingsLocalized("settings.action.reset"),
+                action: resetWidgetDefaults
+            ) {
+                ToggleRow(
+                    title: "Include private repos",
+                    description: "Count private repositories in issues, PRs, and stars.",
+                    isOn: $includePrivate
+                )
+                .onChange(of: includePrivate) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: tablePath,
+                        key: "include-private",
+                        newValueLiteral: newValue ? "true" : "false"
+                    )
+                }
+
+                SliderSettingRow(
+                    title: "Streak warning hour",
+                    description: "Local hour after which a missing commit today turns the streak icon orange.",
+                    value: $streakWarningHour,
+                    range: 0...23,
+                    step: 1,
+                    valueFormat: { "\(Int($0)):00" }
+                )
+                .onChange(of: streakWarningHour) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: tablePath,
+                        key: "streak-warning-hour",
+                        newValueLiteral: String(Int(newValue))
+                    )
+                }
+
+                SliderSettingRow(
+                    title: "Refresh interval",
+                    description: "How often to poll the GitHub API in the background.",
+                    value: $refreshInterval,
+                    range: 300...3600,
+                    step: 300,
+                    valueFormat: { "\(Int($0 / 60))m" }
+                )
+                .onChange(of: refreshInterval) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    ConfigManager.shared.updateConfigLiteralValue(
+                        tablePath: tablePath,
+                        key: "refresh-interval",
+                        newValueLiteral: String(Int(newValue))
+                    )
+                }
+            }
+
+            SettingsCardView(
+                "Menu Bar Metrics",
+                actionTitle: settingsLocalized("settings.action.reset"),
+                action: resetMetricDefaults
+            ) {
+                ReorderableListEditor(
+                    groupID: "github-metrics",
+                    items: metricsOrder.compactMap(GitHubMetric.init(rawValue:)),
+                    onMove: moveMetric
+                ) { metric, _, isDragging in
+                    GitHubMetricRow(
+                        metric: metric,
+                        isEnabled: metricSelections[metric.rawValue] ?? Self.defaultVisibleMetrics.contains(metric.rawValue),
+                        isDragging: isDragging,
+                        onToggle: { newValue in
+                            metricSelections[metric.rawValue] = newValue
+                            persistMetricSelection()
+                        }
+                    )
+                }
+            }
+
+            SettingsCardView("Account") {
+                ProxyUsageStatusView(
+                    title: accountTitle,
+                    description: accountDescription,
+                    isHealthy: isSignedIn,
+                    refreshAction: { manager.refresh() }
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(24)
+        .onAppear(perform: loadFromConfig)
+        .onReceive(configManager.$config) { _ in loadFromConfig() }
+        .onDisappear { clientIdTask?.cancel() }
+    }
+
+    private var isSignedIn: Bool {
+        if case .signedIn = manager.authState { return true }
+        return false
+    }
+
+    private var accountTitle: String {
+        if case .signedIn(let login) = manager.authState { return "@\(login)" }
+        return "Not connected"
+    }
+
+    private var accountDescription: String {
+        if case .signedIn = manager.authState {
+            return manager.fetchFailed ? (manager.errorMessage ?? "Fetch failed") : "Connected"
+        }
+        return "Sign in from the GitHub popup in the menu bar."
+    }
+
+    private func loadFromConfig() {
+        isApplyingConfigSnapshot = true
+
+        let config = configManager.globalWidgetConfig(for: widgetID)
+        clientId = config["client-id"]?.stringValue ?? ""
+        includePrivate = config["include-private"]?.boolValue ?? true
+        streakWarningHour = Double(config["streak-warning-hour"]?.intValue ?? 18)
+        refreshInterval = Double(config["refresh-interval"]?.intValue ?? 1800)
+
+        let metricsField = SettingsFieldKey(tablePath: tablePath, key: "metrics")
+        let resolvedMetrics = resolvedStringArrayValue(
+            for: metricsField,
+            incoming: config["metrics"]?.stringArrayValue ?? Self.defaultVisibleMetrics,
+            current: selectedGitHubMetrics()
+        )
+        metricsOrder = mergedMetricsOrder(fromVisible: resolvedMetrics)
+        metricSelections = Dictionary(uniqueKeysWithValues: GitHubMetric.allCases.map { metric in
+            (metric.rawValue, resolvedMetrics.contains(metric.rawValue))
+        })
+
+        isApplyingConfigSnapshot = false
+    }
+
+    private func moveMetric(from source: Int, to destination: Int) {
+        guard metricsOrder.indices.contains(source) else { return }
+        var order = metricsOrder
+        let item = order.remove(at: source)
+        let boundedDestination = max(0, min(destination, order.count))
+        order.insert(item, at: boundedDestination)
+        metricsOrder = order
+        persistMetricSelection()
+    }
+
+    /// Reconstructs the full metric order (visible + hidden) from the newly
+    /// resolved visible-metrics array, mirroring SystemMonitorSettingsView's
+    /// approach: a hidden metric keeps its position, a drag/toggle only
+    /// reshuffles the currently-visible slots.
+    private func mergedMetricsOrder(fromVisible visibleOrder: [String]) -> [String] {
+        let previousOrder = metricsOrder.isEmpty
+            ? GitHubMetric.allCases.map(\.rawValue)
+            : metricsOrder
+        var remainingVisible = visibleOrder
+        var result: [String] = []
+        for id in previousOrder {
+            if visibleOrder.contains(id) {
+                guard !remainingVisible.isEmpty else { continue }
+                result.append(remainingVisible.removeFirst())
+            } else {
+                result.append(id)
+            }
+        }
+        result.append(contentsOf: remainingVisible)
+        return result
+    }
+
+    private func selectedGitHubMetrics() -> [String] {
+        let orderedIDs = metricsOrder.isEmpty
+            ? GitHubMetric.allCases.map(\.rawValue)
+            : metricsOrder
+        let selected = orderedIDs.filter { metricSelections[$0] ?? Self.defaultVisibleMetrics.contains($0) }
+        return selected.isEmpty ? Self.defaultVisibleMetrics : selected
+    }
+
+    private func persistMetricSelection() {
+        guard !isApplyingConfigSnapshot else { return }
+        let field = SettingsFieldKey(tablePath: tablePath, key: "metrics")
+        let value = selectedGitHubMetrics()
+        pendingArrayWrites[fieldIdentifier(field)] = value
+        ConfigManager.shared.updateConfigStringArrayValue(
+            tablePath: tablePath,
+            key: "metrics",
+            newValue: value
+        )
+    }
+
+    private func resetMetricDefaults() {
+        let defaults = GitHubMetric.allCases.map(\.rawValue)
+        metricsOrder = defaults
+        metricSelections = Dictionary(uniqueKeysWithValues: GitHubMetric.allCases.map {
+            ($0.rawValue, Self.defaultVisibleMetrics.contains($0.rawValue))
+        })
+        let field = SettingsFieldKey(tablePath: tablePath, key: "metrics")
+        pendingArrayWrites[fieldIdentifier(field)] = Self.defaultVisibleMetrics
+        ConfigManager.shared.updateConfigStringArrayValue(
+            tablePath: tablePath,
+            key: "metrics",
+            newValue: Self.defaultVisibleMetrics
+        )
+    }
+
+    private func resolvedStringArrayValue(for field: SettingsFieldKey, incoming: [String], current: [String]) -> [String] {
+        let fieldID = fieldIdentifier(field)
+        if let pendingValue = pendingArrayWrites[fieldID] {
+            if incoming == pendingValue {
+                pendingArrayWrites.removeValue(forKey: fieldID)
+                return incoming
+            }
+            return current
+        }
+        return incoming
+    }
+
+    private func fieldIdentifier(_ field: SettingsFieldKey) -> String {
+        "\(field.tablePath).\(field.key)"
+    }
+
+    private func scheduleClientIdWrite(newValue: String) {
+        clientIdTask?.cancel()
+        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        clientIdTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+
+            if trimmed.isEmpty {
+                ConfigManager.shared.removeConfigValue(tablePath: tablePath, key: "client-id")
+            } else {
+                ConfigManager.shared.updateConfigValue(tablePath: tablePath, key: "client-id", newValue: trimmed)
+            }
+        }
+    }
+
+    private func resetWidgetDefaults() {
+        isApplyingConfigSnapshot = true
+        includePrivate = true
+        streakWarningHour = 18
+        refreshInterval = 1800
+        isApplyingConfigSnapshot = false
+
+        ConfigManager.shared.updateConfigLiteralValue(tablePath: tablePath, key: "include-private", newValueLiteral: "true")
+        ConfigManager.shared.updateConfigLiteralValue(tablePath: tablePath, key: "streak-warning-hour", newValueLiteral: "18")
+        ConfigManager.shared.updateConfigLiteralValue(tablePath: tablePath, key: "refresh-interval", newValueLiteral: "1800")
     }
 }
 

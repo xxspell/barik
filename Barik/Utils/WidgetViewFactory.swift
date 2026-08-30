@@ -32,6 +32,10 @@ enum WidgetViewFactory {
             QwenProxyUsageWidget()
                 .environmentObject(config)
 
+        case "default.github":
+            GitHubWidget()
+                .environmentObject(config)
+
         case "default.cliproxy-usage":
             CLIProxyUsageWidget()
                 .environmentObject(config)
