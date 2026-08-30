@@ -20,9 +20,13 @@ struct GitHubWidget: View {
 
     private var streakColor: Color {
         let style = BarikStyle.current
-        if style.isTUI { return style.foreground }
-        if manager.data.streakDays == 0 { return .red }
-        if manager.data.commitsToday == 0 && isPastWarningHour { return .orange }
+        let broken = manager.data.streakDays == 0
+        let atRisk = manager.data.commitsToday == 0 && isPastWarningHour
+        if style.isTUI {
+            return (broken || atRisk) ? style.accent : style.foreground
+        }
+        if broken { return .red }
+        if atRisk { return .orange }
         return .foregroundOutside
     }
 
@@ -56,33 +60,33 @@ struct GitHubWidget: View {
     private func metricView(for metric: String) -> some View {
         switch metric {
         case "streak":
-            HStack(spacing: 2) {
-                Image(systemName: "flame.fill").foregroundStyle(streakColor)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Image(systemName: "flame.fill").font(.system(size: 11)).foregroundStyle(streakColor)
                 Text("\(manager.data.streakDays)").barikFont(size: 12, weight: .medium)
             }
         case "issues":
-            HStack(spacing: 2) {
-                Image(systemName: "exclamationmark.circle")
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Image(systemName: "smallcircle.filled.circle").font(.system(size: 11))
                 Text("\(manager.data.openIssues)").barikFont(size: 12, weight: .medium)
             }
         case "prs":
-            HStack(spacing: 2) {
-                Image(systemName: "arrow.triangle.pull")
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Image(systemName: "arrow.triangle.branch").font(.system(size: 11))
                 Text("\(manager.data.openPRs)").barikFont(size: 12, weight: .medium)
             }
         case "notifications":
-            HStack(spacing: 2) {
-                Image(systemName: manager.data.unreadNotifications > 0 ? "bell.badge.fill" : "bell")
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Image(systemName: manager.data.unreadNotifications > 0 ? "bell.badge.fill" : "bell").font(.system(size: 11))
                 Text("\(manager.data.unreadNotifications)").barikFont(size: 12, weight: .medium)
             }
         case "stars":
-            HStack(spacing: 2) {
-                Image(systemName: "star.fill")
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Image(systemName: "star.fill").font(.system(size: 11))
                 Text("\(manager.data.totalStars)").barikFont(size: 12, weight: .medium)
             }
         case "commits-today":
-            HStack(spacing: 2) {
-                Image(systemName: "checkmark.circle")
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Image(systemName: "checkmark.circle").font(.system(size: 11))
                 Text("\(manager.data.commitsToday)").barikFont(size: 12, weight: .medium)
             }
         default:

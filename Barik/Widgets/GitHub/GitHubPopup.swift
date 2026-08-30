@@ -4,7 +4,6 @@ struct GitHubPopup: View {
     @EnvironmentObject var configProvider: ConfigProvider
     @ObservedObject private var manager = GitHubManager.shared
 
-    @State private var controlsHovered = false
     @State private var showCopiedNotification = false
 
     var body: some View {
@@ -20,24 +19,6 @@ struct GitHubPopup: View {
         }
         .frame(width: 300)
         .background(Color.black)
-        .overlay(alignment: .bottomTrailing) {
-            HStack(spacing: 3) {
-                RoutedSettingsLink(section: .github) {
-                    Image(systemName: "gearshape.fill")
-                        .foregroundColor(.white.opacity(0.5))
-                        .frame(width: 13, height: 10)
-                }
-                .buttonStyle(GitHubPopupControlButtonStyle())
-            }
-            .padding(.trailing, 12)
-            .padding(.bottom, 10)
-            .opacity(controlsHovered ? 1 : 0)
-        }
-        .onHover { hovering in
-            withAnimation(.easeIn(duration: 0.2)) {
-                controlsHovered = hovering
-            }
-        }
     }
 
     // MARK: - Sign-In Screen
@@ -79,6 +60,8 @@ struct GitHubPopup: View {
                 manager.startSignIn()
             }) {
                 HStack(spacing: 6) {
+                    Spacer()
+
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 14))
 
@@ -234,21 +217,11 @@ struct GitHubPopup: View {
 
                 Spacer()
 
-                VStack(alignment: .trailing, spacing: 4) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.clockwise")
-                            .barikPopupFont(size: 10)
-
-                        Text("Updated \(formattedTimeSince(manager.data.lastUpdated))")
-                            .barikPopupFont(size: 10)
-                            .foregroundStyle(.white.opacity(0.5))
-                    }
-
-                    if manager.fetchFailed, let errorMessage = manager.errorMessage {
-                        Text(errorMessage)
-                            .barikPopupFont(size: 10)
-                            .foregroundStyle(.orange)
-                    }
+                if manager.fetchFailed, let errorMessage = manager.errorMessage {
+                    Text(errorMessage)
+                        .barikPopupFont(size: 10)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.trailing)
                 }
             }
             .padding(.horizontal, 20)
@@ -268,22 +241,40 @@ struct GitHubPopup: View {
 
             Divider().background(Color.white.opacity(0.1))
 
-            HStack(spacing: 8) {
+            HStack {
+                Text("Updated \(formattedTimeSince(manager.data.lastUpdated))")
+                    .barikPopupFont(size: 11)
+                    .foregroundStyle(.white.opacity(0.4))
+
+                Spacer()
+
                 Button(action: {
                     manager.refresh()
                 }) {
-                    HStack(spacing: 4) {
+                    if manager.isFetching {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                            .frame(width: 12, height: 12)
+                    } else {
                         Image(systemName: "arrow.clockwise")
-                            .barikPopupFont(size: 11)
-
-                        Text("Refresh")
                             .barikPopupFont(size: 12)
+                            .foregroundStyle(.white.opacity(0.6))
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.08))
-                    .cornerRadius(4)
-                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(manager.isFetching)
+                .onHover { hovering in
+                    if hovering && !manager.isFetching {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+
+                RoutedSettingsLink(section: .github) {
+                    Image(systemName: "gearshape.fill")
+                        .barikPopupFont(size: 12)
+                        .foregroundStyle(.white.opacity(0.6))
                 }
                 .buttonStyle(.plain)
                 .onHover { hovering in
@@ -297,19 +288,9 @@ struct GitHubPopup: View {
                 Button(action: {
                     manager.signOut()
                 }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.left.square")
-                            .barikPopupFont(size: 11)
-
-                        Text("Sign Out")
-                            .barikPopupFont(size: 12)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(Color.red.opacity(0.1))
-                    .cornerRadius(4)
-                    .foregroundStyle(.red.opacity(0.8))
-                    .contentShape(Rectangle())
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .barikPopupFont(size: 12)
+                        .foregroundStyle(.red.opacity(0.7))
                 }
                 .buttonStyle(.plain)
                 .onHover { hovering in
@@ -321,7 +302,7 @@ struct GitHubPopup: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
         }
         .frame(minHeight: 400)
     }
@@ -349,28 +330,36 @@ struct GitHubPopup: View {
                 let weeks = groupContributionsIntoWeeks(Array(recentDays))
                 let maxContributions = recentDays.map { $0.count }.max() ?? 1
 
-                VStack(spacing: 2) {
-                    ForEach(0..<7, id: \.self) { dayIndex in
-                        HStack(spacing: 2) {
-                            ForEach(0..<weeks.count, id: \.self) { weekIndex in
-                                let week = weeks[weekIndex]
-                                if dayIndex < week.count {
-                                    let day = week[dayIndex]
-                                    Rectangle()
-                                        .fill(contributionColor(count: day.count, max: maxContributions))
-                                        .frame(width: 8, height: 8)
-                                        .cornerRadius(2)
-                                } else {
-                                    Rectangle()
-                                        .fill(Color.clear)
-                                        .frame(width: 8, height: 8)
+                HStack {
+                    Spacer(minLength: 0)
+
+                    VStack(spacing: 3) {
+                        ForEach(0..<7, id: \.self) { dayIndex in
+                            HStack(spacing: 3) {
+                                ForEach(0..<weeks.count, id: \.self) { weekIndex in
+                                    let week = weeks[weekIndex]
+                                    if dayIndex < week.count {
+                                        let day = week[dayIndex]
+                                        Rectangle()
+                                            .fill(contributionColor(count: day.count, max: maxContributions))
+                                            .frame(width: 12, height: 12)
+                                            .cornerRadius(3)
+                                    } else {
+                                        Rectangle()
+                                            .fill(Color.clear)
+                                            .frame(width: 12, height: 12)
+                                    }
                                 }
                             }
                         }
                     }
+
+                    Spacer(minLength: 0)
                 }
 
                 HStack(spacing: 4) {
+                    Spacer()
+
                     Text("Less")
                         .barikPopupFont(size: 9)
                         .foregroundStyle(.white.opacity(0.5))
@@ -492,8 +481,8 @@ struct GitHubPopup: View {
             VStack(spacing: 8) {
                 metricRow(icon: "flame.fill", label: "Streak", value: "\(manager.data.streakDays) days", color: streakColor)
                 metricRow(icon: "checkmark.circle", label: "Today", value: "\(manager.data.commitsToday) commits", color: .green)
-                metricRow(icon: "exclamationmark.circle", label: "Issues", value: "\(manager.data.openIssues)", color: .yellow)
-                metricRow(icon: "arrow.triangle.pull", label: "PRs", value: "\(manager.data.openPRs)", color: .blue)
+                metricRow(icon: "smallcircle.filled.circle", label: "Issues", value: "\(manager.data.openIssues)", color: .yellow)
+                metricRow(icon: "arrow.triangle.branch", label: "PRs", value: "\(manager.data.openPRs)", color: .blue)
                 metricRow(icon: "bell", label: "Notifications", value: "\(manager.data.unreadNotifications)", color: .cyan)
                 metricRow(icon: "star.fill", label: "Stars", value: "\(manager.data.totalStars)", color: .yellow)
             }
@@ -524,34 +513,3 @@ struct GitHubPopup: View {
     }
 }
 
-// MARK: - Button Style
-
-private struct GitHubPopupControlButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(
-                GitHubPopupControlButtonBody(configuration: configuration)
-            )
-    }
-}
-
-private struct GitHubPopupControlButtonBody: View {
-    let configuration: GitHubPopupControlButtonStyle.Configuration
-    @State private var isHovered = false
-
-    var body: some View {
-        configuration.label
-            .padding(8)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(
-                        configuration.isPressed
-                            ? Color.white.opacity(0.18)
-                            : (isHovered ? Color.gray.opacity(0.4) : Color.clear)
-                    )
-            )
-            .onHover { hovering in
-                isHovered = hovering
-            }
-    }
-}
