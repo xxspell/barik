@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.16.0
+
+![Header](https://raw.githubusercontent.com/xxspell/barik/main/resources/changelog/0.16.0/github-widget-header.png)
+
+### Added
+- Add a GitHub widget: sign in with GitHub via OAuth Device Flow (no client secret needed) and see your commit streak, open issues/PRs, unread notifications, star count, and today's commit count right in the menu bar
+- Add a GitHub popup with a contribution heatmap, per-metric breakdown, and one-tap refresh/sign-out
+- Add streak risk coloring: the flame icon turns orange once a configurable local hour passes with no commit today, and red once the streak is broken — today itself is never counted as a break while it's still in progress
+- Add drag-and-drop metric ordering and visibility toggles for the GitHub widget in Settings, reusing the same reorderable list used by Displays and System Monitor
+- Add a loading indicator on the popup's refresh button so a fetch in progress is visible instead of silently no-oping on repeated taps
+
+### Fixed
+- Fix a GitHub search-API quirk that made the open-PR count always show 0 (GitHub rejects `OR` between different search qualifiers even when parenthesized)
+- Fix a race where an older, slower background refresh could finish after a newer one and silently overwrite fresh data with stale results
+
 ## 0.15.0
 
 ### Fixed
