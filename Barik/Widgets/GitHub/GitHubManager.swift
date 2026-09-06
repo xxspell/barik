@@ -161,6 +161,8 @@ final class GitHubManager: ObservableObject {
     private var fetchGeneration = 0
 
     private static let tokenKey = "barik-github-token"
+    private static let refreshTokenKey = "barik-github-refresh-token"
+    private static let tokenExpiryKey = "barik-github-token-expiry"
     private static let loginKey = "barik-github-login"
 
     private init() {
@@ -246,11 +248,11 @@ final class GitHubManager: ObservableObject {
             do {
                 let code = try await flow.requestCode()
                 authState = .deviceFlowPending(userCode: code.userCode, verificationURI: code.verificationUri)
-                let token = try await flow.pollForToken(
+                let result = try await flow.pollForToken(
                     deviceCode: code.deviceCode, interval: code.interval, expiresIn: code.expiresIn
                 )
-                Self.saveKey(token, key: Self.tokenKey)
-                try await fetchLogin(token: token)
+                Self.saveTokenResult(result)
+                try await fetchLogin(token: result.accessToken)
             } catch GitHubDeviceFlowError.expired {
                 logger.debug("GitHub device flow code expired")
                 errorMessage = "Code expired, try again"
@@ -270,9 +272,56 @@ final class GitHubManager: ObservableObject {
     func signOut() {
         pollTask?.cancel()
         Self.deleteKey(Self.tokenKey)
+        Self.deleteKey(Self.refreshTokenKey)
+        Self.deleteKey(Self.tokenExpiryKey)
         Self.deleteKey(Self.loginKey)
         authState = .signedOut
         data = GitHubData()
+    }
+
+    /// Persists a token exchange result. `refreshToken`/`expiresIn` are only present
+    /// for GitHub Apps with token expiration enabled — absent for classic OAuth Apps.
+    private static func saveTokenResult(_ result: GitHubTokenResult) {
+        saveKey(result.accessToken, key: tokenKey)
+        if let refreshToken = result.refreshToken {
+            saveKey(refreshToken, key: refreshTokenKey)
+        } else {
+            deleteKey(refreshTokenKey)
+        }
+        if let expiresIn = result.expiresIn {
+            let expiry = Date().addingTimeInterval(TimeInterval(expiresIn))
+            saveKey(String(expiry.timeIntervalSince1970), key: tokenExpiryKey)
+        } else {
+            deleteKey(tokenExpiryKey)
+        }
+    }
+
+    /// Returns a token usable for a request, refreshing it first if it's expired or
+    /// about to expire. Returns nil (after signing out) if no usable token remains —
+    /// e.g. the refresh token itself expired or was revoked.
+    private func validAccessToken() async -> String? {
+        guard let token = Self.loadKey(Self.tokenKey) else { return nil }
+        guard let refreshToken = Self.loadKey(Self.refreshTokenKey),
+              let expiryInterval = Self.loadKey(Self.tokenExpiryKey).flatMap(Double.init)
+        else {
+            // No expiry metadata: a classic OAuth App token, which doesn't expire.
+            return token
+        }
+
+        let expiry = Date(timeIntervalSince1970: expiryInterval)
+        guard Date() > expiry.addingTimeInterval(-60) else { return token }
+
+        guard let clientId = currentConfig["client-id"]?.stringValue, !clientId.isEmpty else { return token }
+
+        do {
+            let flow = GitHubDeviceFlow(clientId: clientId, scope: scopes)
+            let result = try await flow.refreshAccessToken(refreshToken: refreshToken)
+            Self.saveTokenResult(result)
+            return result.accessToken
+        } catch {
+            logger.error("GitHub token refresh failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     private func fetchLogin(token: String) async throws {
@@ -294,7 +343,7 @@ final class GitHubManager: ObservableObject {
     // MARK: Fetch
 
     private func fetchData() {
-        guard case .signedIn(let login) = authState, let token = Self.loadKey(Self.tokenKey) else { return }
+        guard case .signedIn(let login) = authState else { return }
         if let rateLimitedUntil, Date() < rateLimitedUntil { return }
 
         // Multiple triggers (timer, manual refresh, wake, widget re-appear)
@@ -314,6 +363,17 @@ final class GitHubManager: ObservableObject {
                     isFetching = false
                 }
             }
+
+            // Refreshes an about-to-expire token before use so routine 8-hour
+            // GitHub App token expiry doesn't surface as a sign-in error.
+            guard let token = await validAccessToken() else {
+                guard generation == fetchGeneration else { return }
+                signOut()
+                fetchFailed = true
+                errorMessage = "Sign-in expired, please reconnect"
+                return
+            }
+            guard generation == fetchGeneration else { return }
 
             var newData = data
             var anySucceeded = false

@@ -18,12 +18,28 @@ struct GitHubDeviceCodeResponse: Decodable {
 
 private struct GitHubAccessTokenResponse: Decodable {
     let accessToken: String?
+    let refreshToken: String?
+    let expiresIn: Int?
+    let refreshTokenExpiresIn: Int?
     let error: String?
 
     enum CodingKeys: String, CodingKey {
         case accessToken = "access_token"
+        case refreshToken = "refresh_token"
+        case expiresIn = "expires_in"
+        case refreshTokenExpiresIn = "refresh_token_expires_in"
         case error
     }
+}
+
+/// A GitHub App with "Expire user authorization tokens" enabled returns a
+/// short-lived access token alongside a long-lived refresh token. Classic
+/// OAuth Apps (and GitHub Apps without expiration enabled) omit `refresh_token`
+/// and `expires_in` entirely — the access token is then non-expiring.
+struct GitHubTokenResult {
+    let accessToken: String
+    let refreshToken: String?
+    let expiresIn: Int?
 }
 
 enum GitHubDeviceFlowError: Error {
@@ -60,7 +76,7 @@ final class GitHubDeviceFlow {
     }
 
     /// Polls until the user approves the code, the code expires, or access is denied.
-    func pollForToken(deviceCode: String, interval: Int, expiresIn: Int) async throws -> String {
+    func pollForToken(deviceCode: String, interval: Int, expiresIn: Int) async throws -> GitHubTokenResult {
         let deadline = Date().addingTimeInterval(TimeInterval(expiresIn))
         var currentInterval = interval
 
@@ -83,7 +99,9 @@ final class GitHubDeviceFlow {
             let decoded = try JSONDecoder().decode(GitHubAccessTokenResponse.self, from: data)
 
             if let token = decoded.accessToken {
-                return token
+                return GitHubTokenResult(
+                    accessToken: token, refreshToken: decoded.refreshToken, expiresIn: decoded.expiresIn
+                )
             }
 
             switch decoded.error {
@@ -100,5 +118,27 @@ final class GitHubDeviceFlow {
         }
 
         throw GitHubDeviceFlowError.expired
+    }
+
+    /// Exchanges a refresh token for a new access token. Only meaningful for GitHub
+    /// Apps with "Expire user authorization tokens" enabled — see `GitHubTokenResult`.
+    func refreshAccessToken(refreshToken: String) async throws -> GitHubTokenResult {
+        var request = URLRequest(url: URL(string: "https://github.com/login/oauth/access_token")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        let encodedClientId = clientId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? clientId
+        let encodedRefreshToken = refreshToken.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? refreshToken
+        request.httpBody = "client_id=\(encodedClientId)&refresh_token=\(encodedRefreshToken)&grant_type=refresh_token".data(using: .utf8)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw GitHubDeviceFlowError.invalidResponse
+        }
+        let decoded = try JSONDecoder().decode(GitHubAccessTokenResponse.self, from: data)
+        guard let token = decoded.accessToken else {
+            throw GitHubDeviceFlowError.invalidResponse
+        }
+        return GitHubTokenResult(accessToken: token, refreshToken: decoded.refreshToken, expiresIn: decoded.expiresIn)
     }
 }
