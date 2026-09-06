@@ -132,6 +132,13 @@ struct AnimatedNSImageRepresentable: NSViewRepresentable {
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSImageView, context: Context) -> CGSize? {
         guard let image = nsView.image else { return nil }
+        // A concrete proposal comes from `ResizeToFit` placing us at its already
+        // aspect-scaled-to-fit size — honor it. Only fall back to the image's
+        // native size when the proposal is unspecified, which is how
+        // `ResizeToFit.sizeThatFits` probes for the natural aspect ratio.
+        if let width = proposal.width, let height = proposal.height {
+            return CGSize(width: width, height: height)
+        }
         return image.size
     }
 }
