@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.16.2
+
+### Fixed
+- Fix images in the in-app changelog viewer (e.g. release header screenshots) rendering zoomed in and cropped instead of scaled to fit the popup
+
 ## 0.16.1
 
 ### Fixed
