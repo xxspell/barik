@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.16.1
+
+### Fixed
+- Fix the GitHub widget signing out with "Sign-in expired, please reconnect" every few hours: access tokens issued by GitHub Apps with token expiration enabled are now refreshed automatically in the background using the refresh token, instead of forcing a full re-login each time they expire
+
 ## 0.16.0
 
 ![Header](https://raw.githubusercontent.com/xxspell/barik/main/resources/changelog/0.16.0/github-widget-header.png)
