@@ -35,6 +35,9 @@ struct ClaudeUsageWidget: View {
                 .renderingMode(.template)
                 .scaledToFit()
                 .frame(width: 13, height: 13)
+                .overlay(alignment: .topTrailing) {
+                    resetBadge
+                }
             tuiUsageView
                 .barikFont(size: 12, weight: .medium, design: .monospaced)
         }
@@ -82,6 +85,9 @@ struct ClaudeUsageWidget: View {
             drainableIcon
         }
         .frame(width: BarikStyle.current.isTUI ? 16 : 28, height: BarikStyle.current.isTUI ? 16 : 28)
+        .overlay(alignment: .topTrailing) {
+            resetBadge
+        }
         .foregroundStyle(.foregroundOutside)
         .shadow(color: .foregroundShadowOutside, radius: BarikStyle.current.isTUI ? 0 : 3)
         .experimentalConfiguration(cornerRadius: 15)
@@ -134,6 +140,21 @@ struct ClaudeUsageWidget: View {
             }
         }
         .animation(.easeOut(duration: 0.8), value: weeklyRemaining)
+    }
+
+    @ViewBuilder
+    private var resetBadge: some View {
+        if usageManager.usageData.resetAvailable {
+            Circle()
+                .fill(Color.orange)
+                .frame(width: 9, height: 9)
+                .overlay(
+                    Text("!")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundColor(.white)
+                )
+                .offset(x: 2, y: -2)
+        }
     }
 
     @ViewBuilder
