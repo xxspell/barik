@@ -28,6 +28,19 @@ private struct ClaudeUsageResponse: Codable {
         case cedarEmber = "cedar_ember"
     }
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // five_hour / seven_day are documented API fields; keep strict
+        // decoding so genuine malformation still throws as before.
+        fiveHour = try container.decodeIfPresent(UsageBucket.self, forKey: .fiveHour)
+        sevenDay = try container.decodeIfPresent(UsageBucket.self, forKey: .sevenDay)
+        // cedar_ember is a reverse-engineered, undocumented block whose
+        // shape may change without warning. A decode error anywhere in
+        // this sub-tree must not affect fiveHour/sevenDay above, so it is
+        // isolated behind try? and simply resolves to nil.
+        cedarEmber = (try? container.decodeIfPresent(CedarEmberBlock.self, forKey: .cedarEmber)) ?? nil
+    }
+
     struct UsageBucket: Codable {
         let utilization: Double
         let resetsAt: String?
