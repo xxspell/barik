@@ -11,6 +11,10 @@ struct ClaudeUsagePopup: View {
             } else if usageManager.usageData.isAvailable {
                 titleBar
                 Divider().background(Color.white.opacity(0.2))
+                if usageManager.usageData.resetAvailable {
+                    resetBanner
+                    Divider().background(Color.white.opacity(0.2))
+                }
                 rateLimitSection(
                     icon: "clock",
                     title: localized("5-Hour Window"),
@@ -132,6 +136,48 @@ struct ClaudeUsagePopup: View {
         if percentage >= 0.8 { return .red }
         if percentage >= 0.6 { return .orange }
         return .white
+    }
+
+    private var resetBanner: some View {
+        Button(action: {
+            NSWorkspace.shared.open(URL(string: "https://claude.ai/settings/usage")!)
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .barikPopupFont(size: 12)
+                    .foregroundColor(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(localized("Available limit reset"))
+                        .barikPopupFont(size: 12, weight: .medium)
+                    if let expiresAt = usageManager.usageData.resetExpiresAt {
+                        Text(
+                            String(
+                                format: localized("Expires %@"),
+                                locale: .autoupdatingCurrent,
+                                resetTimeString(expiresAt)
+                            )
+                        )
+                            .barikPopupFont(size: 11)
+                            .opacity(0.5)
+                    }
+                }
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .barikPopupFont(size: 10)
+                    .opacity(0.4)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
     }
 
     private func resetTimeString(_ date: Date) -> String {
