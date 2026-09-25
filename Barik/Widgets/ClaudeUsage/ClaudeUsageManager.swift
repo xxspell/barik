@@ -12,15 +12,20 @@ struct ClaudeUsageData {
     var plan: String = "Pro"
     var lastUpdated: Date = Date()
     var isAvailable: Bool = false
+
+    var resetAvailable: Bool = false
+    var resetExpiresAt: Date? = nil
 }
 
 private struct ClaudeUsageResponse: Codable {
     let fiveHour: UsageBucket?
     let sevenDay: UsageBucket?
+    let cedarEmber: CedarEmberBlock?
 
     enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
         case sevenDay = "seven_day"
+        case cedarEmber = "cedar_ember"
     }
 
     struct UsageBucket: Codable {
@@ -30,6 +35,25 @@ private struct ClaudeUsageResponse: Codable {
         enum CodingKeys: String, CodingKey {
             case utilization
             case resetsAt = "resets_at"
+        }
+    }
+
+    struct CedarEmberBlock: Codable {
+        let eligible: Bool?
+        let grants: [Grant]?
+
+        struct Grant: Codable {
+            let resetsLeft: Int?
+            let endsAt: String?
+            let usableNow: Bool?
+            let blocking: Bool?
+
+            enum CodingKeys: String, CodingKey {
+                case resetsLeft = "resets_left"
+                case endsAt = "ends_at"
+                case usableNow = "usable_now"
+                case blocking
+            }
         }
     }
 }
@@ -143,6 +167,10 @@ final class ClaudeUsageManager: ObservableObject {
                 data.lastUpdated = Date()
                 data.isAvailable = true
 
+                let resetInfo = Self.resetInfo(from: response.cedarEmber)
+                data.resetAvailable = resetInfo.available
+                data.resetExpiresAt = resetInfo.expiresAt
+
                 fetchFailed = false
                 errorMessage = nil
                 usageData = data
@@ -184,7 +212,7 @@ final class ClaudeUsageManager: ObservableObject {
     }
 
     private func fetchUsageFromAPI(token: String) async -> FetchResult {
-        guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage") else {
+        guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1") else {
             return .failed
         }
 
@@ -192,7 +220,7 @@ final class ClaudeUsageManager: ObservableObject {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        request.setValue("claude-code/2.1.69", forHTTPHeaderField: "User-Agent")
+        request.setValue("claude-cli/2.1.280 (external, cli)", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 10
 
         do {
@@ -247,5 +275,17 @@ final class ClaudeUsageManager: ObservableObject {
 
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: rawValue)
+    }
+
+    nonisolated private static func resetInfo(
+        from cedarEmber: ClaudeUsageResponse.CedarEmberBlock?
+    ) -> (available: Bool, expiresAt: Date?) {
+        guard let grants = cedarEmber?.grants else { return (false, nil) }
+        let usable = grants.filter {
+            ($0.usableNow ?? false) && !($0.blocking ?? false) && ($0.resetsLeft ?? 0) > 0
+        }
+        guard !usable.isEmpty else { return (false, nil) }
+        let expiry = usable.compactMap { $0.endsAt.flatMap(Self.parseISODate) }.min()
+        return (true, expiry)
     }
 }
