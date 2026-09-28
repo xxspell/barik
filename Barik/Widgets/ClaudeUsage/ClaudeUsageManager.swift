@@ -258,17 +258,10 @@ final class ClaudeUsageManager: ObservableObject {
     }
 
     private func readKeychainCredentials() -> (accessToken: String, plan: String)? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "Claude Code-credentials",
-            kSecReturnData as String: true,
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        guard let data = Self.runSecurityFindGenericPassword(service: "Claude Code-credentials") else {
+            return nil
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let oauth = json["claudeAiOauth"] as? [String: Any],
               let token = oauth["accessToken"] as? String else {
             return nil
@@ -276,6 +269,41 @@ final class ClaudeUsageManager: ObservableObject {
 
         let plan = oauth["subscriptionType"] as? String ?? "pro"
         return (token, plan)
+    }
+
+    // Reads the item via the `security` CLI (the same tool Claude Code
+    // itself uses to write it) instead of Security.framework directly,
+    // so the read is attributed to that trusted system binary's identity
+    // rather than Barik's own code signature. Sidesteps Keychain ACL
+    // prompts tied to Barik's own (rebuild-unstable, ad-hoc-signed)
+    // signature. See docs/superpowers/specs/2026-09-26-claude-keychain-security-cli-design.md.
+    nonisolated private static func runSecurityFindGenericPassword(service: String) -> Data? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        process.arguments = ["find-generic-password", "-s", service, "-w"]
+
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0, !outputData.isEmpty else {
+            return nil
+        }
+
+        var trimmed = outputData
+        if trimmed.last == 0x0A {
+            trimmed.removeLast()
+        }
+        return trimmed
     }
 
     nonisolated private static func parseISODate(_ rawValue: String) -> Date? {
