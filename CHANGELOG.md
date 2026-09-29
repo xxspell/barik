@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.17.0
+
+### Added
+- Add a badge and popup banner to the Claude Usage widget when a manual limit reset is available on your account, with a link to activate it on claude.ai
+
+### Fixed
+- Fix Barik losing Keychain access to your Claude Code credentials and repeatedly prompting for your password: reads now go through the same trusted system tool Claude Code itself uses to store them, instead of a path tied to Barik's own (rebuild-unstable) signature
+- Fix a theoretical crash in Claude usage parsing if Anthropic changes the shape of the (undocumented) limit-reset data — a malformed reset block can no longer affect the regular usage percentages
+
 ## 0.16.2
 
 ### Fixed
