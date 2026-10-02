@@ -1,9 +1,15 @@
 import AppKit
 import Combine
 import Foundation
+import OSLog
 
 class SpacesViewModel: ObservableObject {
     static let shared = SpacesViewModel()
+
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "barik",
+        category: "SpacesViewModel"
+    )
 
     @Published var spaces: [AnySpace] = []
     private var refreshTimer: Timer?
@@ -11,6 +17,8 @@ class SpacesViewModel: ObservableObject {
     private var yabaiProvider: YabaiSpacesProvider?
     private var yabaiSignalMonitor: YabaiSignalMonitor?
     private var workspaceObservers: [NSObjectProtocol] = []
+    private var appLaunchObserver: NSObjectProtocol?
+    private var providerDetectionTimer: Timer?
     private var screenParametersObserver: NSObjectProtocol?
     private let loadQueue = DispatchQueue(
         label: "barik.spaces.load",
@@ -20,6 +28,46 @@ class SpacesViewModel: ObservableObject {
     private var pendingReload = false
 
     init() {
+        detectProvider()
+        registerAppLaunchObserver()
+        startMonitoringOrScheduleDetection()
+    }
+
+    /// Starts monitoring when a provider is resolved; otherwise schedules
+    /// periodic re-detection until a window manager is found.
+    private func startMonitoringOrScheduleDetection() {
+        if provider != nil {
+            startMonitoring()
+        } else {
+            scheduleProviderDetection()
+        }
+    }
+
+    /// yabai/aerospace can launch after Barik (login-item race), so while no
+    /// provider is resolved we keep re-checking until one is found.
+    private func scheduleProviderDetection() {
+        providerDetectionTimer?.invalidate()
+        providerDetectionTimer = Timer.scheduledTimer(
+            withTimeInterval: 2.0,
+            repeats: true
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.detectProvider()
+            guard self.provider != nil else { return }
+            self.providerDetectionTimer?.invalidate()
+            self.providerDetectionTimer = nil
+            self.startMonitoring()
+        }
+    }
+
+    /// Resolves the window-manager provider the first time a window manager
+    /// is seen running. Called at init and again when yabai/aerospace launch
+    /// later: the two race with Barik as login items and Barik can start a
+    /// few seconds before yabai, in which case a one-shot init check leaves
+    /// `provider == nil` and the widget empty for the whole session.
+    private func detectProvider() {
+        guard provider == nil else { return }
+
         let runningApps = NSWorkspace.shared.runningApplications.compactMap {
             $0.localizedName?.lowercased()
         }
@@ -33,12 +81,38 @@ class SpacesViewModel: ObservableObject {
                 self?.yabaiProvider?.handleSignal(event)
                 self?.loadSpaces()
             }
+            logger.info("spaces provider resolved: yabai")
         } else if runningApps.contains("aerospace") {
             provider = AnySpacesProvider(AerospaceSpacesProvider())
-        } else {
-            provider = nil
+            logger.info("spaces provider resolved: aerospace")
         }
-        startMonitoring()
+    }
+
+    /// While no provider is resolved, watches for a window manager launching
+    /// and starts monitoring at that point, instead of staying empty for the
+    /// whole session.
+    private func registerAppLaunchObserver() {
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+        appLaunchObserver = workspaceCenter.addObserver(
+            forName: NSWorkspace.didLaunchApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self, self.provider == nil else { return }
+            guard
+                let app = note.object as? NSRunningApplication,
+                let name = app.localizedName?.lowercased(),
+                name == "yabai" || name == "aerospace"
+            else { return }
+            self.logger.info(
+                "window manager launched, resolving spaces provider: \(name, privacy: .public)"
+            )
+            self.detectProvider()
+            guard self.provider != nil else { return }
+            self.providerDetectionTimer?.invalidate()
+            self.providerDetectionTimer = nil
+            self.startMonitoring()
+        }
     }
 
     deinit {
@@ -65,12 +139,19 @@ class SpacesViewModel: ObservableObject {
     private func stopMonitoring() {
         refreshTimer?.invalidate()
         refreshTimer = nil
+        providerDetectionTimer?.invalidate()
+        providerDetectionTimer = nil
         yabaiSignalMonitor?.stop()
         let workspaceCenter = NSWorkspace.shared.notificationCenter
         for observer in workspaceObservers {
             workspaceCenter.removeObserver(observer)
         }
         workspaceObservers.removeAll()
+
+        if let appLaunchObserver {
+            workspaceCenter.removeObserver(appLaunchObserver)
+            self.appLaunchObserver = nil
+        }
 
         if let screenParametersObserver {
             NotificationCenter.default.removeObserver(screenParametersObserver)
