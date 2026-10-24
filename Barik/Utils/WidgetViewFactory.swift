@@ -56,6 +56,10 @@ enum WidgetViewFactory {
             CodexUsageWidget()
                 .environmentObject(config)
 
+        case "default.bambuddy":
+            BambuddyWidget()
+                .environmentObject(config)
+
         case "default.system-monitor", "default.cpuram":
             SystemMonitorWidget()
                 .environmentObject(config)

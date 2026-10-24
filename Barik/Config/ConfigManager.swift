@@ -189,6 +189,17 @@ final class ConfigManager: ObservableObject {
             # streak-warning-hour = 18    # local hour after which no commit today turns the icon orange
             # refresh-interval = 1800     # seconds between automatic refreshes
 
+            # Bambuddy widget — monitors your Bambu Lab 3D printers via Bambuddy self-hosted server
+            # Uncomment and configure to enable:
+            # [widgets.default.bambuddy]
+            # base-url = "http://192.168.1.100:8000"  # Your Bambuddy server URL
+            # api-key = "your-api-key"                # API key from Bambuddy Settings → API Keys
+            # show-icon = true
+            # show-progress = true
+            # show-printer-count = false
+            # display-mode = "auto"    # "auto", "progress", "count", "icon"
+            # refresh-interval = 30    # seconds between updates (min 10)
+
             [widgets.default.system-monitor]
             show-icon = false
             use-metric-icons = false

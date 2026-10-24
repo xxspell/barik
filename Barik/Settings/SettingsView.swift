@@ -101,6 +101,8 @@ private struct SettingsDetailView: View {
                     ClaudeUsageSettingsView()
                 case .codexUsage:
                     CodexUsageSettingsView()
+                case .bambuddy:
+                    BambuddySettingsView()
                 case .pomodoro:
                     PomodoroSettingsView()
                 case .ticktick:
@@ -1622,6 +1624,7 @@ private let displayWidgetDefinitions: [DisplayWidgetDefinition] = [
     .init(id: "default.spaces", title: settingsLocalized("settings.section.spaces"), description: settingsLocalized("settings.displays.catalog.widget.spaces.description"), icon: "square.3.layers.3d", allowsMultiple: false),
     .init(id: "default.claude-usage", title: settingsLocalized("settings.section.claude_usage"), description: settingsLocalized("settings.displays.catalog.widget.claude_usage.description"), icon: "ClaudeIcon", iconIsAsset: true, allowsMultiple: false),
     .init(id: "default.codex-usage", title: settingsLocalized("settings.section.codex_usage"), description: settingsLocalized("settings.displays.catalog.widget.codex_usage.description"), icon: "CodexIcon", iconIsAsset: true, allowsMultiple: false),
+    .init(id: "default.bambuddy", title: settingsLocalized("settings.section.bambuddy"), description: settingsLocalized("settings.displays.catalog.widget.bambuddy.description"), icon: "square.stack.3d.up.fill", allowsMultiple: false),
     .init(id: "default.system-monitor", title: settingsLocalized("settings.section.system_monitor"), description: settingsLocalized("settings.displays.catalog.widget.system_monitor.description"), icon: "cpu", allowsMultiple: false),
     .init(id: "default.network", title: settingsLocalized("settings.section.network"), description: settingsLocalized("settings.displays.catalog.widget.network.description"), icon: "wifi", allowsMultiple: false),
     .init(id: "default.focus", title: settingsLocalized("settings.displays.catalog.widget.focus.title"), description: settingsLocalized("settings.displays.catalog.widget.focus.description"), icon: "moon.circle", allowsMultiple: false),
@@ -9015,5 +9018,475 @@ private struct WidgetExportView: View {
 
     private func reveal(_ folder: URL) {
         NSWorkspace.shared.activateFileViewerSelecting([folder])
+    }
+}
+
+private struct BambuddySettingsView: View {
+    @ObservedObject private var configManager = ConfigManager.shared
+    @ObservedObject private var settingsStore = SettingsStore.shared
+    @ObservedObject private var manager = BambuddyManager.shared
+    
+    @State private var baseURL = ""
+    @State private var apiKey = ""
+    @State private var showIcon = true
+    @State private var showProgress = true
+    @State private var showPrinterCount = false
+    @State private var showTimeRemaining = true
+    @State private var showLayerProgress = true
+    @State private var displayMode = BambuddyDisplayMode.auto
+    @State private var refreshInterval = 30.0
+    @State private var isTestingConnection = false
+    @State private var connectionTestResult: ConnectionTestResult = .none
+    @State private var isApplyingConfigSnapshot = false
+    
+    @State private var baseURLWriteTask: Task<Void, Never>?
+    @State private var apiKeyWriteTask: Task<Void, Never>?
+    @State private var pendingStringWrites: [String: String] = [:]
+
+    private let bambuddyTable = "widgets.default.bambuddy"
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "barik",
+        category: "BambuddySettingsView"
+    )
+    
+    enum ConnectionTestResult: Equatable {
+        case none
+        case success
+        case failure(String)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            SettingsHeaderView(
+                title: settingsLocalized("settings.bambuddy.header.title"),
+                description: settingsLocalized("settings.bambuddy.header.description")
+            )
+            
+            // Connection Settings
+            SettingsCardView(
+                settingsLocalized("settings.bambuddy.card.connection"),
+                actionTitle: settingsLocalized("settings.action.reset"),
+                action: resetConnectionDefaults
+            ) {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Base URL
+                    DebouncedTextSettingRow(
+                        title: settingsLocalized("settings.bambuddy.field.base_url.title"),
+                        description: settingsLocalized("settings.bambuddy.field.base_url.description"),
+                        text: $baseURL
+                    )
+                    .onChange(of: baseURL) { _, newValue in
+                        guard !isApplyingConfigSnapshot else { return }
+                        connectionTestResult = .none
+                        scheduleStringWrite(
+                            task: &baseURLWriteTask,
+                            field: .init(tablePath: bambuddyTable, key: "base-url"),
+                            value: newValue
+                        )
+                    }
+
+                    // API Key
+                    SecureTextSettingRow(
+                        title: settingsLocalized("settings.bambuddy.field.api_key.title"),
+                        description: settingsLocalized("settings.bambuddy.field.api_key.description"),
+                        text: $apiKey
+                    )
+                    .onChange(of: apiKey) { _, newValue in
+                        guard !isApplyingConfigSnapshot else { return }
+                        connectionTestResult = .none
+                        scheduleStringWrite(
+                            task: &apiKeyWriteTask,
+                            field: .init(tablePath: bambuddyTable, key: "api-key"),
+                            value: newValue
+                        )
+                    }
+                    
+                    // Test Connection Button
+                    HStack(spacing: 12) {
+                        Button {
+                            testConnection()
+                        } label: {
+                            HStack(spacing: 6) {
+                                if isTestingConnection {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                } else {
+                                    Image(systemName: "network")
+                                }
+                                Text(settingsLocalized("settings.bambuddy.action.test_connection"))
+                            }
+                            .font(.system(size: 12, weight: .semibold))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isTestingConnection || baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        
+                        connectionTestStatusView
+                        
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            
+            // Display Settings
+            SettingsCardView(
+                settingsLocalized("settings.bambuddy.card.display"),
+                actionTitle: settingsLocalized("settings.action.reset"),
+                action: resetDisplayDefaults
+            ) {
+                ToggleRow(
+                    title: settingsLocalized("settings.bambuddy.field.show_icon.title"),
+                    description: settingsLocalized("settings.bambuddy.field.show_icon.description"),
+                    isOn: Binding(
+        get: { showIcon },
+                        set: { newValue in
+                            showIcon = newValue
+                            settingsStore.setBool(newValue, for: .init(tablePath: bambuddyTable, key: "show-icon"))
+                        }
+                    )
+                )
+
+                ToggleRow(
+                    title: settingsLocalized("settings.bambuddy.field.show_progress.title"),
+                    description: settingsLocalized("settings.bambuddy.field.show_progress.description"),
+                    isOn: Binding(
+                        get: { showProgress },
+                        set: { newValue in
+                            showProgress = newValue
+                            settingsStore.setBool(newValue, for: .init(tablePath: bambuddyTable, key: "show-progress"))
+                        }
+                    )
+                )
+
+                ToggleRow(
+                    title: settingsLocalized("settings.bambuddy.field.show_printer_count.title"),
+                    description: settingsLocalized("settings.bambuddy.field.show_printer_count.description"),
+                    isOn: Binding(
+                        get: { showPrinterCount },
+                        set: { newValue in
+                            showPrinterCount = newValue
+                            settingsStore.setBool(newValue, for: .init(tablePath: bambuddyTable, key: "show-printer-count"))
+                        }
+                    )
+                )
+
+                ToggleRow(
+                    title: settingsLocalized("settings.bambuddy.field.show_time_remaining.title"),
+                    description: settingsLocalized("settings.bambuddy.field.show_time_remaining.description"),
+                    isOn: Binding(
+                        get: { showTimeRemaining },
+                        set: { newValue in
+                            showTimeRemaining = newValue
+                            settingsStore.setBool(newValue, for: .init(tablePath: bambuddyTable, key: "show-time-remaining"))
+                        }
+                    )
+                )
+
+                ToggleRow(
+                    title: settingsLocalized("settings.bambuddy.field.show_layer_progress.title"),
+                    description: settingsLocalized("settings.bambuddy.field.show_layer_progress.description"),
+                    isOn: Binding(
+                        get: { showLayerProgress },
+                        set: { newValue in
+                            showLayerProgress = newValue
+                            settingsStore.setBool(newValue, for: .init(tablePath: bambuddyTable, key: "show-layer-progress"))
+                        }
+                    )
+                )
+
+                SegmentedPickerRow(
+                    title: settingsLocalized("settings.bambuddy.field.display_mode.title"),
+                    description: settingsLocalized("settings.bambuddy.field.display_mode.description"),
+                    selection: Binding(
+                        get: { displayMode },
+                        set: { newValue in
+                            displayMode = newValue
+                            settingsStore.setString(newValue.rawValue, for: .init(tablePath: bambuddyTable, key: "display-mode"))
+                        }
+                    ),
+                    options: BambuddyDisplayMode.allCases,
+                    titleForOption: { $0.title }
+                )
+            }
+            
+            // Advanced Settings
+            SettingsCardView(
+                settingsLocalized("settings.bambuddy.card.advanced"),
+                actionTitle: settingsLocalized("settings.action.reset"),
+                action: resetAdvancedDefaults
+            ) {
+                SliderSettingRow(
+                    title: settingsLocalized("settings.bambuddy.field.refresh_interval.title"),
+                    description: settingsLocalized("settings.bambuddy.field.refresh_interval.description"),
+                    value: $refreshInterval,
+                    range: 10...300,
+                    step: 5,
+                    valueFormat: { "\(Int($0))s" }
+                )
+                .onChange(of: refreshInterval) { _, newValue in
+                    guard !isApplyingConfigSnapshot else { return }
+                    settingsStore.setInt(Int(newValue.rounded()), for: .init(tablePath: bambuddyTable, key: "refresh-interval"))
+                }
+            }
+            
+            // Status
+            SettingsCardView(settingsLocalized("settings.card.status")) {
+                VStack(alignment: .leading, spacing: 10) {
+                    if manager.printers.isEmpty && !manager.isConfigured {
+                        Text(settingsLocalized("settings.bambuddy.status.not_configured"))
+                            .font(.headline)
+                            .foregroundStyle(.orange)
+                    } else if manager.printers.isEmpty {
+                        Text(settingsLocalized("settings.bambuddy.status.no_printers"))
+                            .font(.headline)
+                            .foregroundStyle(.yellow)
+                    } else {
+                        HStack(spacing: 16) {
+                            statusItem(
+                                label: settingsLocalized("settings.bambuddy.status.total_printers"),
+                                value: "\(manager.printers.count)",
+                                color: .white
+                            )
+                            
+                            statusItem(
+                                label: settingsLocalized("settings.bambuddy.status.online"),
+                                value: "\(manager.onlinePrinters.count)",
+                                color: .green
+                            )
+                            
+                            statusItem(
+                                label: settingsLocalized("settings.bambuddy.status.printing"),
+                                value: "\(manager.activePrinters.count)",
+                                color: .blue
+                            )
+                            
+                            if manager.anyPrinterHasErrors {
+                                statusItem(
+                                    label: settingsLocalized("settings.bambuddy.status.with_errors"),
+                                    value: "\(manager.printers.filter { $0.hasErrors }.count)",
+                                    color: manager.anyPrinterHasCriticalErrors ? .red : .orange
+                                )
+                            }
+                        }
+                        
+                        if let lastRefresh = manager.lastRefresh {
+                            Text(String(format: settingsLocalized("settings.bambuddy.status.last_refresh"), RelativeDateTimeFormatter().localizedString(for: lastRefresh, relativeTo: Date())))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        if let lastError = manager.lastError {
+                            Text(lastError)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                                .lineLimit(2)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(24)
+        .onAppear(perform: loadFromConfig)
+        .onReceive(configManager.$config) { _ in
+            loadFromConfig()
+        }
+    }
+    
+    private var connectionTestStatusView: some View {
+        Group {
+            switch connectionTestResult {
+            case .none:
+                EmptyView()
+            case .success:
+                Label(settingsLocalized("settings.bambuddy.connection.success"), systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.green)
+                    .transition(.opacity.combined(with: .scale))
+            case .failure(let message):
+                Label(message, systemImage: "xmark.circle.fill")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.red)
+                    .transition(.opacity.combined(with: .scale))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: connectionTestResult)
+    }
+    
+    private func statusItem(label: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(color)
+        }
+    }
+    
+    // MARK: - Configuration
+    
+    private func loadFromConfig() {
+        isApplyingConfigSnapshot = true
+        
+        let config = configManager.globalWidgetConfig(for: "default.bambuddy")
+
+        baseURL = resolvedStringValue(
+            for: .init(tablePath: bambuddyTable, key: "base-url"),
+            incoming: config["base-url"]?.stringValue ?? "",
+            current: baseURL
+        )
+        apiKey = resolvedStringValue(
+            for: .init(tablePath: bambuddyTable, key: "api-key"),
+            incoming: config["api-key"]?.stringValue ?? "",
+            current: apiKey
+        )
+        showIcon = config["show-icon"]?.boolValue ?? true
+        showProgress = config["show-progress"]?.boolValue ?? true
+        showPrinterCount = config["show-printer-count"]?.boolValue ?? false
+        showTimeRemaining = config["show-time-remaining"]?.boolValue ?? true
+        showLayerProgress = config["show-layer-progress"]?.boolValue ?? true
+        displayMode = BambuddyDisplayMode(rawValue: config["display-mode"]?.stringValue ?? "auto") ?? .auto
+        refreshInterval = Double(config["refresh-interval"]?.intValue ?? 30)
+        
+        isApplyingConfigSnapshot = false
+    }
+    
+    private func resetConnectionDefaults() {
+        isApplyingConfigSnapshot = true
+        baseURL = ""
+        apiKey = ""
+        isApplyingConfigSnapshot = false
+        
+        settingsStore.setString("", for: .init(tablePath: bambuddyTable, key: "base-url"))
+        settingsStore.setString("", for: .init(tablePath: bambuddyTable, key: "api-key"))
+        connectionTestResult = .none
+    }
+    
+    private func resetDisplayDefaults() {
+        isApplyingConfigSnapshot = true
+        showIcon = true
+        showProgress = true
+        showPrinterCount = false
+        showTimeRemaining = true
+        showLayerProgress = true
+        displayMode = .auto
+        isApplyingConfigSnapshot = false
+
+        settingsStore.setBool(true, for: .init(tablePath: bambuddyTable, key: "show-icon"))
+        settingsStore.setBool(true, for: .init(tablePath: bambuddyTable, key: "show-progress"))
+        settingsStore.setBool(false, for: .init(tablePath: bambuddyTable, key: "show-printer-count"))
+        settingsStore.setBool(true, for: .init(tablePath: bambuddyTable, key: "show-time-remaining"))
+        settingsStore.setBool(true, for: .init(tablePath: bambuddyTable, key: "show-layer-progress"))
+        settingsStore.setString("auto", for: .init(tablePath: bambuddyTable, key: "display-mode"))
+    }
+    
+    private func resetAdvancedDefaults() {
+        isApplyingConfigSnapshot = true
+        refreshInterval = 30
+        isApplyingConfigSnapshot = false
+        
+        settingsStore.setInt(30, for: .init(tablePath: bambuddyTable, key: "refresh-interval"))
+    }
+    
+    private func testConnection() {
+        guard !baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            connectionTestResult = .failure(settingsLocalized("settings.bambuddy.connection.enter_url"))
+            return
+        }
+        
+        isTestingConnection = true
+        connectionTestResult = .none
+        
+        Task {
+            let result = await performConnectionTest(baseURL: baseURL, apiKey: apiKey)
+            
+            await MainActor.run {
+                self.isTestingConnection = false
+                self.connectionTestResult = result
+            }
+        }
+    }
+    
+    private func performConnectionTest(baseURL: String, apiKey: String) async -> ConnectionTestResult {
+        let url = URL(string: "\(baseURL)/api/v1/printers/")!
+        var request = URLRequest(url: url)
+        request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        request.timeoutInterval = 10
+        
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return .failure(settingsLocalized("settings.bambuddy.connection.invalid_response"))
+            }
+            
+            switch httpResponse.statusCode {
+            case 200:
+                return .success
+            case 401:
+                return .failure(settingsLocalized("settings.bambuddy.connection.unauthorized"))
+            case 404:
+                return .failure(settingsLocalized("settings.bambuddy.connection.not_found"))
+            default:
+                return .failure(String(format: settingsLocalized("settings.bambuddy.connection.http_error"), httpResponse.statusCode))
+            }
+        } catch {
+            return .failure(error.localizedDescription)
+        }
+    }
+    
+    // MARK: - Debounced Writes
+
+    private func scheduleStringWrite(task: inout Task<Void, Never>?, field: SettingsFieldKey, value: String) {
+        guard value != settingsStore.stringValue(field) else {
+            task?.cancel()
+            return
+        }
+
+        task?.cancel()
+        pendingStringWrites[fieldIdentifier(field)] = value
+        task = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            settingsStore.setString(value, for: field)
+        }
+    }
+
+    private func resolvedStringValue(
+        for field: SettingsFieldKey,
+        incoming: String,
+        current: String
+    ) -> String {
+        let fieldID = fieldIdentifier(field)
+        if let pendingValue = pendingStringWrites[fieldID] {
+            if incoming == pendingValue {
+                pendingStringWrites.removeValue(forKey: fieldID)
+                return incoming
+            }
+            return current
+        }
+        return incoming
+    }
+
+    private func fieldIdentifier(_ field: SettingsFieldKey) -> String {
+        "\(field.tablePath).\(field.key)"
+    }
+}
+
+// MARK: - Display Mode
+
+private enum BambuddyDisplayMode: String, CaseIterable {
+    case auto = "auto"
+    case progressOnly = "progress"
+    case countOnly = "count"
+    case iconOnly = "icon"
+    
+    var title: String {
+        switch self {
+        case .auto: return settingsLocalized("bambuddy.display_mode.auto")
+        case .progressOnly: return settingsLocalized("bambuddy.display_mode.progress")
+        case .countOnly: return settingsLocalized("bambuddy.display_mode.count")
+        case .iconOnly: return settingsLocalized("bambuddy.display_mode.icon")
+        }
     }
 }
