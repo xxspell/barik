@@ -30,6 +30,24 @@ struct ClaudeUsagePopup: View {
                     resetDate: usageManager.usageData.weeklyResetDate,
                     resetPrefix: localized("Resets %@")
                 )
+                ForEach(usageManager.usageData.scopedLimits) { limit in
+                    Divider().background(Color.white.opacity(0.2))
+                    rateLimitSection(
+                        icon: "sparkles",
+                        title: String(format: localized("Weekly · %@"), limit.name),
+                        percentage: limit.percentage,
+                        resetDate: limit.resetDate,
+                        resetPrefix: localized("Resets %@")
+                    )
+                }
+                if !usageManager.usageData.surfaceBreakdown.isEmpty {
+                    Divider().background(Color.white.opacity(0.2))
+                    surfaceBreakdownSection
+                }
+                if let extraUsage = usageManager.usageData.extraUsage {
+                    Divider().background(Color.white.opacity(0.2))
+                    extraUsageSection(extraUsage)
+                }
                 Divider().background(Color.white.opacity(0.2))
                 footerSection
             } else if usageManager.fetchFailed {
@@ -130,6 +148,66 @@ struct ClaudeUsagePopup: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
+    }
+
+    private var surfaceBreakdownSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(localized("This week by surface"))
+                .barikPopupFont(size: 13, weight: .medium)
+
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 6) {
+                ForEach(usageManager.usageData.surfaceBreakdown) { share in
+                    GridRow {
+                        Text(share.name)
+                            .barikPopupFont(size: 11)
+                            .opacity(0.6)
+                            .lineLimit(1)
+                            .fixedSize()
+
+                        GeometryReader { geometry in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color.gray.opacity(0.3))
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color.white.opacity(0.85))
+                                    .frame(
+                                        // Keep tiny shares visible as a dot.
+                                        width: max(4, geometry.size.width * min(share.percentage, 1.0))
+                                    )
+                                    .animation(.easeOut(duration: 0.3), value: share.percentage)
+                            }
+                        }
+                        .frame(height: 4)
+
+                        Text("\(Int((min(share.percentage, 1.0) * 100).rounded()))%")
+                            .barikPopupFont(size: 11, weight: .medium)
+                            .monospacedDigit()
+                            .gridColumnAlignment(.trailing)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+    }
+
+    private func extraUsageSection(_ extraUsage: ClaudeUsageData.ExtraUsage) -> some View {
+        HStack {
+            Text(localized("Extra usage"))
+                .barikPopupFont(size: 13, weight: .medium)
+            Spacer()
+            Text(extraUsageStatus(extraUsage))
+                .barikPopupFont(size: 11)
+                .opacity(0.6)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+    }
+
+    private func extraUsageStatus(_ extraUsage: ClaudeUsageData.ExtraUsage) -> String {
+        guard extraUsage.isEnabled else { return localized("Off") }
+        guard let utilization = extraUsage.utilization else { return localized("On") }
+        return "\(localized("On")) · \(Int((min(utilization, 1.0) * 100).rounded()))%"
     }
 
     private func progressColor(for percentage: Double) -> Color {

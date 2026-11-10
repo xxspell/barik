@@ -15,17 +15,48 @@ struct ClaudeUsageData {
 
     var resetAvailable: Bool = false
     var resetExpiresAt: Date? = nil
+
+    /// Extra weekly limits scoped to a model or surface (e.g. "Fable").
+    var scopedLimits: [ScopedLimit] = []
+    /// Share of this week's usage per surface (Claude Code, Chats, ...).
+    var surfaceBreakdown: [SurfaceShare] = []
+    var extraUsage: ExtraUsage? = nil
+
+    struct ScopedLimit: Identifiable {
+        let id: Int
+        let name: String
+        let percentage: Double
+        let resetDate: Date?
+    }
+
+    struct SurfaceShare: Identifiable {
+        let id: String
+        let name: String
+        let percentage: Double
+    }
+
+    struct ExtraUsage {
+        let isEnabled: Bool
+        /// 0...1, nil when the API does not report it.
+        let utilization: Double?
+    }
 }
 
-private struct ClaudeUsageResponse: Codable {
+private struct ClaudeUsageResponse: Decodable {
     let fiveHour: UsageBucket?
     let sevenDay: UsageBucket?
     let cedarEmber: CedarEmberBlock?
+    let limits: [LimitEntry]?
+    let sevenDayBreakdown: BreakdownBlock?
+    let extraUsage: ExtraUsageBlock?
 
     enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
         case sevenDay = "seven_day"
         case cedarEmber = "cedar_ember"
+        case limits
+        case sevenDayBreakdown = "seven_day_breakdown"
+        case extraUsage = "extra_usage"
     }
 
     init(from decoder: Decoder) throws {
@@ -39,6 +70,74 @@ private struct ClaudeUsageResponse: Codable {
         // this sub-tree must not affect fiveHour/sevenDay above, so it is
         // isolated behind try? and simply resolves to nil.
         cedarEmber = (try? container.decodeIfPresent(CedarEmberBlock.self, forKey: .cedarEmber)) ?? nil
+        // Same isolation for the other undocumented blocks: if their shape
+        // changes, the matching popup section just disappears.
+        limits = (try? container.decodeIfPresent([LimitEntry].self, forKey: .limits)) ?? nil
+        sevenDayBreakdown = (try? container.decodeIfPresent(BreakdownBlock.self, forKey: .sevenDayBreakdown)) ?? nil
+        extraUsage = (try? container.decodeIfPresent(ExtraUsageBlock.self, forKey: .extraUsage)) ?? nil
+    }
+
+    struct LimitEntry: Decodable {
+        let kind: String?
+        let percent: Double?
+        let resetsAt: String?
+        let scopeName: String?
+
+        enum CodingKeys: String, CodingKey {
+            case kind, percent, scope
+            case resetsAt = "resets_at"
+        }
+
+        enum ScopeKeys: String, CodingKey {
+            case model, surface
+        }
+
+        struct Named: Decodable {
+            let displayName: String?
+
+            enum CodingKeys: String, CodingKey {
+                case displayName = "display_name"
+            }
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            kind = try? container.decodeIfPresent(String.self, forKey: .kind)
+            percent = try? container.decodeIfPresent(Double.self, forKey: .percent)
+            resetsAt = try? container.decodeIfPresent(String.self, forKey: .resetsAt)
+
+            // `scope` is null for unscoped limits; `surface` has only been
+            // observed as null, so its shape is a guess.
+            let scope = try? container.nestedContainer(keyedBy: ScopeKeys.self, forKey: .scope)
+            let model = (try? scope?.decodeIfPresent(Named.self, forKey: .model)) ?? nil
+            let surface = (try? scope?.decodeIfPresent(Named.self, forKey: .surface)) ?? nil
+            scopeName = model?.displayName ?? surface?.displayName
+        }
+    }
+
+    struct BreakdownBlock: Decodable {
+        let rows: [Row]?
+
+        struct Row: Decodable {
+            let key: String?
+            let displayName: String?
+            let percent: Double?
+
+            enum CodingKeys: String, CodingKey {
+                case key, percent
+                case displayName = "display_name"
+            }
+        }
+    }
+
+    struct ExtraUsageBlock: Decodable {
+        let isEnabled: Bool?
+        let utilization: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case isEnabled = "is_enabled"
+            case utilization
+        }
     }
 
     struct UsageBucket: Codable {
@@ -51,11 +150,11 @@ private struct ClaudeUsageResponse: Codable {
         }
     }
 
-    struct CedarEmberBlock: Codable {
+    struct CedarEmberBlock: Decodable {
         let eligible: Bool?
         let grants: [Grant]?
 
-        struct Grant: Codable {
+        struct Grant: Decodable {
             let resetsLeft: Int?
             let endsAt: String?
             let usableNow: Bool?
@@ -66,6 +165,25 @@ private struct ClaudeUsageResponse: Codable {
                 case endsAt = "ends_at"
                 case usableNow = "usable_now"
                 case blocking
+            }
+
+            // Field-by-field tolerance: one field changing type must not
+            // drop the whole grant (and with it the reset banner).
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                resetsLeft = try? container.decodeIfPresent(Int.self, forKey: .resetsLeft)
+                endsAt = try? container.decodeIfPresent(String.self, forKey: .endsAt)
+                usableNow = try? container.decodeIfPresent(Bool.self, forKey: .usableNow)
+
+                // `blocking` used to be a Bool and is now a list of the
+                // limits blocking the grant; an empty list means "not blocked".
+                if let flag = try? container.decode(Bool.self, forKey: .blocking) {
+                    blocking = flag
+                } else if let list = try? container.nestedUnkeyedContainer(forKey: .blocking) {
+                    blocking = !list.isAtEnd
+                } else {
+                    blocking = nil
+                }
             }
         }
     }
@@ -184,6 +302,17 @@ final class ClaudeUsageManager: ObservableObject {
                 data.resetAvailable = resetInfo.available
                 data.resetExpiresAt = resetInfo.expiresAt
 
+                data.scopedLimits = Self.scopedLimits(from: response.limits)
+                data.surfaceBreakdown = Self.surfaceBreakdown(from: response.sevenDayBreakdown)
+                data.extraUsage = response.extraUsage.flatMap { block in
+                    block.isEnabled.map {
+                        ClaudeUsageData.ExtraUsage(
+                            isEnabled: $0,
+                            utilization: block.utilization.map { $0 / 100 }
+                        )
+                    }
+                }
+
                 fetchFailed = false
                 errorMessage = nil
                 usageData = data
@@ -225,7 +354,7 @@ final class ClaudeUsageManager: ObservableObject {
     }
 
     private func fetchUsageFromAPI(token: String) async -> FetchResult {
-        guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1") else {
+        guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage?cedar_ember=1") else {
             return .failed
         }
 
@@ -316,6 +445,44 @@ final class ClaudeUsageManager: ObservableObject {
 
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: rawValue)
+    }
+
+    nonisolated private static func scopedLimits(
+        from limits: [ClaudeUsageResponse.LimitEntry]?
+    ) -> [ClaudeUsageData.ScopedLimit] {
+        guard let limits else { return [] }
+        return limits.enumerated().compactMap { index, entry in
+            guard entry.kind == "weekly_scoped",
+                  let name = entry.scopeName, !name.isEmpty,
+                  let percent = entry.percent else {
+                return nil
+            }
+            return ClaudeUsageData.ScopedLimit(
+                id: index,
+                name: name,
+                percentage: percent / 100,
+                resetDate: entry.resetsAt.flatMap(Self.parseISODate)
+            )
+        }
+    }
+
+    nonisolated private static func surfaceBreakdown(
+        from block: ClaudeUsageResponse.BreakdownBlock?
+    ) -> [ClaudeUsageData.SurfaceShare] {
+        guard let rows = block?.rows else { return [] }
+        var seen = Set<String>()
+        return rows.compactMap { row in
+            guard let name = row.displayName ?? row.key,
+                  let percent = row.percent, percent > 0,
+                  seen.insert(row.key ?? name).inserted else {
+                return nil
+            }
+            return ClaudeUsageData.SurfaceShare(
+                id: row.key ?? name,
+                name: name,
+                percentage: percent / 100
+            )
+        }
     }
 
     nonisolated private static func resetInfo(
