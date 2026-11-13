@@ -2939,6 +2939,7 @@ private struct SpacesSettingsView: View {
     @State private var alwaysDisplayAppNamesTask: Task<Void, Never>?
 
     private let spacesTable = "widgets.default.spaces"
+    private var isTUIStyle: Bool { configManager.config.style == "tui" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -3088,6 +3089,13 @@ private struct SpacesSettingsView: View {
                     )
                 }
 
+                if isTUIStyle {
+                    Text("The TUI style shows windows as text, so icon desaturation isn’t used.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 SliderSettingRow(
                     title: settingsLocalized("settings.spaces.field.icon_desaturation.title"),
                     description: settingsLocalized("settings.spaces.field.icon_desaturation.description"),
@@ -3096,6 +3104,7 @@ private struct SpacesSettingsView: View {
                     step: 1,
                     valueFormat: { "\(Int($0))%" }
                 )
+                .disabled(isTUIStyle)
                 .onChange(of: iconDesaturation) { _, newValue in
                     guard !isApplyingConfigSnapshot else { return }
                     setIntValue(
