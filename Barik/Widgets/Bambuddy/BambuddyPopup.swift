@@ -29,7 +29,7 @@ struct BambuddyPopup: View {
             header
 
             Divider()
-                .background(Color.white.opacity(0.15))
+                .background(Color.white.opacity(0.1))
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: cardSpacing) {
@@ -47,7 +47,7 @@ struct BambuddyPopup: View {
             }
 
             Divider()
-                .background(Color.white.opacity(0.12))
+                .background(Color.white.opacity(0.1))
 
             footer
         }
@@ -171,7 +171,7 @@ struct BambuddyPopup: View {
                     HStack(spacing: 6) {
                         Text(printer.printer.name)
                             .barikPopupFont(size: 12, weight: .semibold)
-                            .foregroundStyle(.white.opacity(0.96))
+                            .foregroundStyle(.white)
                             .lineLimit(1)
 
                         if !isOnline {
@@ -192,7 +192,7 @@ struct BambuddyPopup: View {
                         if !model.isEmpty {
                             Label(model, systemImage: "cpu")
                                 .barikPopupFont(size: 10, weight: .medium)
-                                .foregroundStyle(.white.opacity(0.45))
+                                .foregroundStyle(.white.opacity(0.4))
                                 .lineLimit(1)
                                 .fixedSize()
                         }
@@ -200,7 +200,7 @@ struct BambuddyPopup: View {
                         if let location = printer.printer.location, !location.isEmpty {
                             Label(location, systemImage: "location.fill")
                                 .barikPopupFont(size: 10, weight: .medium)
-                                .foregroundStyle(.white.opacity(0.45))
+                                .foregroundStyle(.white.opacity(0.4))
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
@@ -228,7 +228,7 @@ struct BambuddyPopup: View {
                         if showLayerProgress, let layer = printer.status?.layerNum, let total = printer.status?.totalLayers, total > 0 {
                             Text(String(format: String(localized: "bambuddy.layer"), layer, total))
                                 .barikPopupFont(size: 10, weight: .medium, design: .monospaced)
-                                .foregroundStyle(.white.opacity(0.4))
+                                .foregroundStyle(.white.opacity(0.35))
                         }
                     }
                 }
@@ -282,14 +282,14 @@ struct BambuddyPopup: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(isSelected ? 0.08 : 0.045))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(isSelected ? 0.07 : 0.03))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(
-                    isSelected ? Color.bambuddyAccent.opacity(0.45) : Color.white.opacity(0.06),
-                    lineWidth: isSelected ? 1.5 : 1
+                    isSelected ? Color.bambuddyAccent.opacity(0.4) : Color.clear,
+                    lineWidth: 1
                 )
         )
         .contentShape(Rectangle())
@@ -355,7 +355,7 @@ struct BambuddyPopup: View {
 
             Text(label)
                 .barikPopupFont(size: 10, weight: .medium)
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(.white.opacity(0.45))
 
             Text(value)
                 .barikPopupFont(size: 11, weight: .semibold, design: .monospaced)
@@ -364,7 +364,7 @@ struct BambuddyPopup: View {
             if let target = target {
                 Text("/\(target)")
                     .barikPopupFont(size: 10, weight: .medium, design: .monospaced)
-                    .foregroundStyle(.white.opacity(0.35))
+                    .foregroundStyle(.white.opacity(0.3))
             }
         }
     }
@@ -399,7 +399,7 @@ struct BambuddyPopup: View {
 
                 Text(String(localized: "bambuddy.hms_errors"))
                     .barikPopupFont(size: 10, weight: .semibold)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.white.opacity(0.6))
 
                 Spacer(minLength: 0)
             }
@@ -419,7 +419,7 @@ struct BambuddyPopup: View {
                         } else {
                             Text(error.fullCode ?? error.code)
                                 .barikPopupFont(size: 10, weight: .medium, design: .monospaced)
-                                .foregroundStyle(.white.opacity(0.7))
+                                .foregroundStyle(.white.opacity(0.6))
                         }
 
                         if let code = error.fullCode ?? error.code as String? {
@@ -436,7 +436,7 @@ struct BambuddyPopup: View {
             if errors.count > 3 {
                 Text(String(format: String(localized: "bambuddy.and_more_errors"), errors.count - 3))
                     .barikPopupFont(size: 10, weight: .medium)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.white.opacity(0.45))
                     .padding(.leading, 14)
             }
         }
@@ -548,7 +548,7 @@ struct BambuddyPopup: View {
 
                 Text(String(localized: "bambuddy.not_configured_description"))
                     .barikPopupFont(size: 11)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.white.opacity(0.5))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -586,7 +586,7 @@ struct BambuddyPopup: View {
 
                 Text(String(localized: "bambuddy.no_printers_description"))
                     .barikPopupFont(size: 11)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.white.opacity(0.5))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
