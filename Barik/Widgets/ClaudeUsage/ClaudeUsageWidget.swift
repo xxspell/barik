@@ -3,6 +3,7 @@ import SwiftUI
 struct ClaudeUsageWidget: View {
     @EnvironmentObject var configProvider: ConfigProvider
     @ObservedObject private var usageManager = ClaudeUsageManager.shared
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var widgetFrame: CGRect = .zero
 
@@ -145,14 +146,16 @@ struct ClaudeUsageWidget: View {
     @ViewBuilder
     private var resetBadge: some View {
         if usageManager.usageData.resetAvailable {
-            Circle()
-                .fill(Color.orange)
-                .frame(width: 9, height: 9)
-                .overlay(
-                    Text("!")
-                        .font(.system(size: 7, weight: .bold))
-                        .foregroundColor(.white)
+            // SF Symbol instead of a 7pt Text("!") so the glyph stays crisp;
+            // white on orange is unreadable on a light bar, so the glyph
+            // goes dark there.
+            Image(systemName: "exclamationmark.circle.fill")
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(
+                    colorScheme == .light ? Color.black.opacity(0.85) : Color.white,
+                    Color.orange
                 )
+                .font(.system(size: 9, weight: .bold))
                 .offset(x: 2, y: -2)
         }
     }
