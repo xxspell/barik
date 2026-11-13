@@ -37,6 +37,38 @@ private extension NSScreen {
     }
 }
 
+/// Label for a window inside a space, shared by the default and TUI views:
+/// when a space holds several windows of the same app the window title is
+/// shown (to tell them apart), unless that app is listed in
+/// `always-display-app-name-for`; otherwise the app name.
+func spacesWindowLabel(for window: AnyWindow, in space: AnySpace, alwaysAppNameFor: [String]) -> String {
+    let sameAppCount = space.windows.filter { $0.appName == window.appName }.count
+    if sameAppCount > 1 && !alwaysAppNameFor.contains(where: { $0 == window.appName }) {
+        return window.title
+    }
+    return window.appName ?? ""
+}
+
+/// Expands the `window.hover-tooltip` template for a window.
+func spacesTooltipText(for window: AnyWindow, template: String) -> String {
+    let replacements: [String: String] = [
+        "{app}": window.appName ?? "",
+        "{title}": window.title,
+        "{pid}": window.pid.map(String.init) ?? "",
+        "{id}": String(window.id),
+        "{state}": window.isHidden ? "hidden" : "visible",
+    ]
+
+    let text = replacements.reduce(into: template) { partial, entry in
+        partial = partial.replacingOccurrences(of: entry.key, with: entry.value)
+    }
+
+    return text
+        .replacingOccurrences(of: "  ", with: " ")
+        .replacingOccurrences(of: "()", with: "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
 struct SpacesWidget: View {
     let monitorID: String
 
@@ -57,10 +89,6 @@ struct SpacesWidget: View {
         SpacesVisualStyle(rawValue: spaceConfig["visual-style"]?.stringValue ?? SpacesVisualStyle.standard.rawValue) ?? .standard
     }
     private var showOutline: Bool { spaceConfig["show-outline"]?.boolValue ?? false }
-
-    private var windowConfig: ConfigData { config["window"]?.dictionaryValue ?? [:] }
-    private var showWindowTitle: Bool { windowConfig["show-title"]?.boolValue ?? true }
-    private var windowTitleMaxLength: Int { windowConfig["title"]?.dictionaryValue?["max-length"]?.intValue ?? 50 }
 
     private var providerFilteredSpaces: [AnySpace] {
         guard showOnlyCurrentDisplaySpaces else { return viewModel.spaces }
@@ -86,35 +114,16 @@ struct SpacesWidget: View {
     }
 
     private var tuiBody: some View {
-        let style = BarikStyle.current
-        return HStack(spacing: 6) {
-            ForEach(visibleSpaces) { space in
-                Text(space.id)
-                    .barikFont(size: 12, weight: space.isFocused ? .bold : .regular)
-                    .foregroundStyle(space.isFocused ? style.accent : style.dim)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        viewModel.switchToSpace(space, needWindowFocus: true)
-                    }
-            }
-
-            if showWindowTitle, let focused = focusedSpace,
-               let window = focused.windows.first(where: { $0.isFocused }) ?? focused.windows.first {
-                Text(tuiWindowTitle(for: window))
-                    .barikFont(size: 12, weight: .regular)
-                    .foregroundStyle(style.dim)
-                    .lineLimit(1)
-            }
-        }
+        TUISpacesView(
+            spaces: visibleSpaces,
+            focusedSpace: focusedSpace,
+            displayMode: displayMode,
+            visualStyle: visualStyle,
+            showOutline: showOutline
+        )
         .experimentalConfiguration(horizontalPadding: 5, cornerRadius: 10)
         .animation(.smooth(duration: 0.3), value: viewModel.spaces)
         .environmentObject(viewModel)
-    }
-
-    private func tuiWindowTitle(for window: AnyWindow) -> String {
-        let raw = (window.appName?.isEmpty == false ? window.appName! : window.title)
-        let maxLen = windowTitleMaxLength
-        return raw.count > maxLen ? String(raw.prefix(maxLen - 1)) + "…" : raw
     }
 
     private var defaultBody: some View {
@@ -397,9 +406,7 @@ private struct WindowView: View {
     var body: some View {
         let titleMaxLength = maxLength
         let size: CGFloat = 21
-        let sameAppCount = space.windows.filter { $0.appName == window.appName }
-            .count
-        let title = sameAppCount > 1 && !alwaysDisplayAppTitleFor.contains { $0 == window.appName } ? window.title : (window.appName ?? "")
+        let title = spacesWindowLabel(for: window, in: space, alwaysAppNameFor: alwaysDisplayAppTitleFor)
         let spaceIsFocused = space.windows.contains { $0.isFocused }
         HStack {
             ZStack {
@@ -568,23 +575,7 @@ private extension WindowView {
 
     var hoverTooltipText: String {
         guard showHoverTooltip else { return "" }
-
-        let replacements: [String: String] = [
-            "{app}": window.appName ?? "",
-            "{title}": window.title,
-            "{pid}": window.pid.map(String.init) ?? "",
-            "{id}": String(window.id),
-            "{state}": window.isHidden ? "hidden" : "visible",
-        ]
-
-        let text = replacements.reduce(into: hoverTooltipTemplate) { partial, entry in
-            partial = partial.replacingOccurrences(of: entry.key, with: entry.value)
-        }
-
-        return text
-            .replacingOccurrences(of: "  ", with: " ")
-            .replacingOccurrences(of: "()", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return spacesTooltipText(for: window, template: hoverTooltipTemplate)
     }
 
     var iconShape: AnyShape {
@@ -611,23 +602,7 @@ private extension CompactWindowIconView {
 
     var hoverTooltipText: String {
         guard showHoverTooltip else { return "" }
-
-        let replacements: [String: String] = [
-            "{app}": window.appName ?? "",
-            "{title}": window.title,
-            "{pid}": window.pid.map(String.init) ?? "",
-            "{id}": String(window.id),
-            "{state}": window.isHidden ? "hidden" : "visible",
-        ]
-
-        let text = replacements.reduce(into: hoverTooltipTemplate) { partial, entry in
-            partial = partial.replacingOccurrences(of: entry.key, with: entry.value)
-        }
-
-        return text
-            .replacingOccurrences(of: "  ", with: " ")
-            .replacingOccurrences(of: "()", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return spacesTooltipText(for: window, template: hoverTooltipTemplate)
     }
 
     var iconShape: AnyShape {
@@ -681,12 +656,12 @@ private struct HoverTooltipBubble: View {
     }
 }
 
-private final class HoverCardPanel: NSPanel {
+fileprivate final class HoverCardPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }
 
-private final class HoverCardPanelController {
+final class HoverCardPanelController {
     static let shared = HoverCardPanelController()
 
     private let panel: HoverCardPanel
