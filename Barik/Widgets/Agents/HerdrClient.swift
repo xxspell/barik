@@ -34,18 +34,29 @@ final class HerdrClient: @unchecked Sendable {
     func subscribe(_ request: Data) -> AsyncThrowingStream<Data, Error> {
         AsyncThrowingStream { continuation in
             let handle = FDHandle()
-            continuation.onTermination = { _ in handle.shutdownAndClose() }
+            continuation.onTermination = { _ in handle.terminate() }
             queue.async { [self] in
+                // The reader thread is the only closer of the fd, so the number
+                // it reads/writes can never have been recycled by another connection.
+                defer { handle.closeFromReader() }
                 do {
                     let fd = try openConnection(timeout: nil)
-                    guard handle.set(fd) else { return } // already terminated; set() closed it
+                    guard handle.set(fd) else { // terminated before connect finished
+                        continuation.finish()
+                        return
+                    }
                     try writeAll(fd, request)
                     var pending = Data()
                     var buf = [UInt8](repeating: 0, count: 4096)
                     while true {
                         let n = buf.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
-                        if n < 0 && errno == EINTR { continue }
-                        if n <= 0 { break }
+                        if n < 0 {
+                            if errno == EINTR { continue }
+                            let e = errno
+                            if handle.isTerminated { break }
+                            throw HerdrClientError.connectFailed(e)
+                        }
+                        if n == 0 { break }
                         pending.append(contentsOf: buf[0..<n])
                         while let nl = pending.firstIndex(of: 0x0A) {
                             let line = Data(pending[pending.startIndex..<nl])
@@ -54,11 +65,10 @@ final class HerdrClient: @unchecked Sendable {
                         }
                     }
                     if !pending.isEmpty { continuation.yield(pending) }
-                    handle.shutdownAndClose()
                     continuation.finish()
                 } catch {
-                    handle.shutdownAndClose()
-                    continuation.finish(throwing: error)
+                    if handle.isTerminated { continuation.finish() }
+                    else { continuation.finish(throwing: error) }
                 }
             }
         }
@@ -143,13 +153,16 @@ final class HerdrClient: @unchecked Sendable {
     }
 }
 
-/// Owns a subscription fd so stream termination can unblock a pending read.
+/// Owns a subscription fd. Only the reader thread closes it; termination just
+/// shuts the socket down (under the lock, while live) to unblock a pending read.
 private final class FDHandle: @unchecked Sendable {
     private let lock = NSLock()
     private var fd: Int32 = -1
     private var terminated = false
 
-    /// Returns false (and closes fd) if termination already happened.
+    var isTerminated: Bool { lock.lock(); defer { lock.unlock() }; return terminated }
+
+    /// Returns false (and closes the fd, called from the reader) if termination already happened.
     func set(_ newFD: Int32) -> Bool {
         lock.lock(); defer { lock.unlock() }
         if terminated { close(newFD); return false }
@@ -157,12 +170,14 @@ private final class FDHandle: @unchecked Sendable {
         return true
     }
 
-    func shutdownAndClose() {
+    func terminate() {
         lock.lock(); defer { lock.unlock() }
         terminated = true
-        guard fd >= 0 else { return }
-        shutdown(fd, SHUT_RDWR)
-        close(fd)
-        fd = -1
+        if fd >= 0 { shutdown(fd, SHUT_RDWR) }
+    }
+
+    func closeFromReader() {
+        lock.lock(); defer { lock.unlock() }
+        if fd >= 0 { close(fd); fd = -1 }
     }
 }
