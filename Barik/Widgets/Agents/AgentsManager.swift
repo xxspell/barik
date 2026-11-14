@@ -270,19 +270,27 @@ final class AgentsManager: ObservableObject {
         }
         setConnection(.fallbackPolling(reason: reason))
         let interval = config.fallbackInterval
+        let socketPath = config.socketPath
         pollTask = Task { [weak self] in
+            var backoff = PollBackoff()
             while !Task.isCancelled {
-                do {
-                    let list = try await HerdrCLI.agentList(executable: exe)
-                    guard !Task.isCancelled, let self else { return }
-                    self.apply(list, emit: self.baseline.admit())
-                    self.setConnection(.fallbackPolling(reason: self.fallbackReason))
-                } catch {
-                    guard !Task.isCancelled, let self else { return }
-                    self.baseline.invalidate() // the store goes stale during the outage
-                    self.setConnection(.disconnected(reason: "herdr CLI failed"))
+                // While herdr is clearly down only the socket file is checked; the CLI isn't spawned.
+                if !backoff.shouldSkipPoll(socketExists: FileManager.default.fileExists(atPath: socketPath)) {
+                    do {
+                        let list = try await HerdrCLI.agentList(executable: exe)
+                        guard !Task.isCancelled, let self else { return }
+                        backoff.succeeded()
+                        self.apply(list, emit: self.baseline.admit())
+                        self.setConnection(.fallbackPolling(reason: self.fallbackReason))
+                    } catch {
+                        guard !Task.isCancelled, let self else { return }
+                        backoff.failed()
+                        self.baseline.invalidate() // the store goes stale during the outage
+                        self.setConnection(.disconnected(reason: "herdr CLI failed"))
+                    }
                 }
-                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                let delay = backoff.delay(interval: interval)
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }
         }
     }

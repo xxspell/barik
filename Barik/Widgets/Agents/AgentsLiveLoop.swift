@@ -169,6 +169,9 @@ final class AgentsLiveLoop: @unchecked Sendable {
             }
         }
 
+        // Statuses may change between the initial list and the subscription taking effect:
+        // take one more list once it has started.
+        gapFillPending = true
         openStream(initial.map(\.paneID))
 
         // AsyncStream iteration ends (returns nil) when this task is cancelled.
@@ -228,4 +231,24 @@ struct SnapshotBaseline: Equatable {
         defer { isFresh = true }
         return isFresh
     }
+}
+
+/// Pacing of fallback CLI polls: the configured interval while polls succeed, then 2 → 4 → 8 → 16 → 30 s
+/// (never below the interval) after consecutive failures; reset by the first success.
+struct PollBackoff: Equatable {
+    static let steps: [TimeInterval] = [2, 4, 8, 16, 30]
+    private(set) var failures = 0
+
+    var lastFailed: Bool { failures > 0 }
+
+    mutating func succeeded() { failures = 0 }
+    mutating func failed() { failures += 1 }
+
+    func delay(interval: TimeInterval) -> TimeInterval {
+        guard failures > 0 else { return interval }
+        return Swift.max(interval, Self.steps[Swift.min(failures, Self.steps.count) - 1])
+    }
+
+    /// herdr is clearly down (socket gone and the last poll failed): don't spawn the CLI this round.
+    func shouldSkipPoll(socketExists: Bool) -> Bool { lastFailed && !socketExists }
 }
