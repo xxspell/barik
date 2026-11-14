@@ -172,9 +172,11 @@ struct AgentStore {
                 a.statusSince = prev.statusSince
             } else {
                 let suppressed = isDebounced(a.paneID, into: a.status, now: now)
-                a.statusSince = emit ? now : nil
+                // A pane that first shows up already done finished at an unknown time: no toast, no age.
+                let alreadyDone = prev == nil && a.status == .done
+                a.statusSince = emit && !alreadyDone ? now : nil
                 entered[a.paneID, default: [:]][a.status] = now
-                if emit && !suppressed {
+                if emit && !suppressed && !alreadyDone {
                     transitions.append(AgentTransition(agent: a, from: prev?.status, to: a.status))
                 }
             }
@@ -319,15 +321,25 @@ struct ToastItem: Identifiable, Equatable {
 
 struct ToastQueue {
     var maxVisible = 3
-    /// All queued items, newest first (visible + hidden).
+    /// All queued items, newest first (visible + hidden + pending removal).
     private var items: [ToastItem] = []
+    /// Blocked items whose agent stopped being blocked, by item id → when that was first seen.
+    /// They are hidden but kept, so a status flap (blocked → working → blocked within the store's
+    /// debounce, which suppresses the second transition) doesn't lose the toast.
+    private var pendingRemoval: [String: Date] = [:]
 
-    var visible: [ToastItem] { Array(items.prefix(Swift.max(0, maxVisible))) }
-    var overflow: Int { Swift.max(0, items.count - Swift.max(0, maxVisible)) }
-    /// Every queued item, newest first, including the ones hidden behind the "+N" overflow.
-    var all: [ToastItem] { items }
-    /// Whether any queued item (visible or hidden) is a done toast that can still auto-expire.
-    var hasDone: Bool { items.contains { $0.kind == .done } }
+    private var presented: [ToastItem] { items.filter { pendingRemoval[$0.id] == nil } }
+
+    var visible: [ToastItem] { Array(presented.prefix(Swift.max(0, maxVisible))) }
+    var overflow: Int { Swift.max(0, presented.count - Swift.max(0, maxVisible)) }
+    /// Every presented item, newest first, including the ones hidden behind the "+N" overflow.
+    var all: [ToastItem] { presented }
+    /// Whether any presented item (visible or hidden) is a done toast that can still auto-expire.
+    var hasDone: Bool { presented.contains { $0.kind == .done } }
+    /// When the earliest pending-removal item is due to be dropped, if any.
+    func pendingDeadline(graceInterval: TimeInterval = 3) -> Date? {
+        pendingRemoval.values.min().map { $0.addingTimeInterval(graceInterval) }
+    }
 
     @discardableResult
     mutating func push(_ t: AgentTransition, notifyOn: Set<AgentStatus>, now: Date) -> Bool {
@@ -339,29 +351,49 @@ struct ToastQueue {
         default: return false
         }
         guard notifyOn.contains(t.to) else { return false }
-        items.removeAll { $0.agent.paneID == t.agent.paneID }
+        removeAll { $0.agent.paneID == t.agent.paneID }
         items.insert(ToastItem(id: "\(t.agent.paneID)#\(suffix)", agent: t.agent, kind: kind, createdAt: now), at: 0)
         return true
     }
 
     mutating func dismiss(id: String) {
-        items.removeAll { $0.id == id }
+        removeAll { $0.id == id }
     }
 
-    mutating func reconcile(with agents: [AgentSession]) {
+    /// Drops items whose pane is gone (at once) or whose status no longer matches. A blocked item
+    /// that merely changed status is hidden first and dropped only after `graceInterval` without
+    /// returning to blocked; if it does return in time it reappears as it was.
+    mutating func reconcile(with agents: [AgentSession], now: Date = Date(), graceInterval: TimeInterval = 3) {
         let byPane = Dictionary(agents.map { ($0.paneID, $0) }, uniquingKeysWith: { a, _ in a })
+        var pending: [String: Date] = [:]
         items = items.compactMap { item in
             guard let current = byPane[item.agent.paneID] else { return nil }
             let wanted: AgentStatus = item.kind == .blocked ? .blocked : .done
-            guard current.status == wanted else { return nil }
-            var kept = item
-            kept.agent = current
-            return kept
+            if current.status == wanted {
+                var kept = item
+                kept.agent = current
+                return kept
+            }
+            guard item.kind == .blocked else { return nil }
+            let since = pendingRemoval[item.id] ?? now
+            guard now.timeIntervalSince(since) < graceInterval else { return nil }
+            pending[item.id] = since
+            return item
         }
+        pendingRemoval = pending
     }
 
+    /// Removes done items older than `autohide`; `autohide <= 0` means done toasts stay until dismissed.
     mutating func expireDone(now: Date, autohide: TimeInterval, pausedIDs: Set<String>) {
-        items.removeAll { $0.kind == .done && !pausedIDs.contains($0.id) && now.timeIntervalSince($0.createdAt) >= autohide }
+        guard autohide > 0 else { return }
+        removeAll { $0.kind == .done && !pausedIDs.contains($0.id) && now.timeIntervalSince($0.createdAt) >= autohide }
+    }
+
+    private mutating func removeAll(where shouldRemove: (ToastItem) -> Bool) {
+        let gone = Set(items.filter(shouldRemove).map(\.id))
+        guard !gone.isEmpty else { return }
+        items.removeAll { gone.contains($0.id) }
+        pendingRemoval = pendingRemoval.filter { !gone.contains($0.key) }
     }
 }
 

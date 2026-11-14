@@ -15,6 +15,8 @@ final class AgentToastController {
     private static let retireDelay: TimeInterval = 0.6
     /// A done toast expires on the 1 s tick at which this much (or less) of its time is left.
     private static let expireTolerance: TimeInterval = 0.3
+    /// How long a blocked toast survives its agent leaving "blocked" (matches the store's debounce).
+    private static let blockedGrace: TimeInterval = 3
 
     private struct StatusMark {
         let status: AgentStatus
@@ -44,6 +46,8 @@ final class AgentToastController {
     private var retiring: [AgentToastPanel] = []
     private var placementWork: DispatchWorkItem?
     private var expireTimer: Timer?
+    /// One-shot check that drops blocked items whose grace period ran out.
+    private var graceWork: DispatchWorkItem?
     private var expireTimerStart = Date()
     private var previewTask: Task<Void, Never>?
     private var previewTargets: [String] = []
@@ -132,9 +136,34 @@ final class AgentToastController {
         doneIn = doneIn.filter { live.contains(Self.pane(ofItemID: $0.key)) }
 
         let wasEmpty = queue.all.isEmpty
-        queue.reconcile(with: agents + (testAgent.map { [$0] } ?? []))
+        reconcile(agents)
         if wasEmpty && queue.all.isEmpty && panels.isEmpty { return }
         sync()
+    }
+
+    private func reconcile(_ agents: [AgentSession]) {
+        let now = Date()
+        queue.reconcile(with: agents + (testAgent.map { [$0] } ?? []), now: now, graceInterval: Self.blockedGrace)
+        scheduleGraceCheck(now: now)
+    }
+
+    /// A blocked item hidden by a status change is dropped once its grace runs out, unless the agent
+    /// came back to blocked meanwhile; one one-shot check per pending deadline, no standing timer.
+    private func scheduleGraceCheck(now: Date) {
+        graceWork?.cancel()
+        graceWork = nil
+        guard let deadline = queue.pendingDeadline(graceInterval: Self.blockedGrace) else { return }
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.graceWork = nil
+                self.reconcile(self.manager.agents)
+                self.sync()
+            }
+        }
+        graceWork = work
+        // A hair past the deadline so the check doesn't land just before it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, deadline.timeIntervalSince(now)) + 0.05, execute: work)
     }
 
     private func handle(_ t: AgentTransition) {
@@ -281,8 +310,12 @@ final class AgentToastController {
         let visible = queue.visible
         let all = queue.all
         let now = Date()
-        for item in all where item.kind == .done && countdowns[item.id] == nil {
-            countdowns[item.id] = countdown(for: item, now: now)
+        if autohides {
+            for item in all where item.kind == .done && countdowns[item.id] == nil {
+                countdowns[item.id] = countdown(for: item, now: now)
+            }
+        } else if !countdowns.isEmpty {
+            countdowns = [:] // done-autohide <= 0: done toasts stay, no countdown line
         }
         let visibleDoneIn = doneIn.filter { id, _ in all.contains { $0.id == id } }
         for panel in panels.values {
@@ -315,6 +348,9 @@ final class AgentToastController {
 
     // MARK: Done auto-hide
 
+    /// `done-autohide <= 0` means done toasts stay until dismissed.
+    private var autohides: Bool { manager.config.doneAutohide > 0 }
+
     private func effectiveElapsed(_ item: ToastItem, now: Date) -> TimeInterval {
         let paused = (pausedTotal[item.id] ?? 0) + (pauseStart[item.id].map { now.timeIntervalSince($0) } ?? 0)
         return now.timeIntervalSince(item.createdAt) - paused
@@ -334,7 +370,7 @@ final class AgentToastController {
     }
 
     private func updateExpireTimer() {
-        let needed = queue.hasDone
+        let needed = queue.hasDone && autohides
         if needed, expireTimer == nil {
             let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.tick() }
@@ -350,6 +386,12 @@ final class AgentToastController {
     }
 
     private func tick() {
+        guard autohides else {
+            // Auto-hide was turned off while done toasts were up.
+            updateExpireTimer()
+            updateModels()
+            return
+        }
         let now = Date()
         let autohide = manager.config.doneAutohide
         let keep = queue.all.filter {
@@ -595,7 +637,7 @@ final class AgentToastController {
         }
         let changed = now.symmetricDifference(hovered)
         hovered = now
-        for item in queue.all where item.kind == .done && changed.contains(item.id) {
+        for item in queue.all where autohides && item.kind == .done && changed.contains(item.id) {
             countdowns[item.id] = countdown(for: item, now: t)
         }
         updateModels()
