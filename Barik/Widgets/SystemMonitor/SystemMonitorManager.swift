@@ -65,6 +65,8 @@ private struct SystemMonitorSnapshot: Equatable {
     var systemLoad: Double = 0
     var idleLoad: Double = 100
     var loadAverage: Double = 0
+    var loadAverage5m: Double = 0
+    var loadAverage15m: Double = 0
     var cpuCoreCount: Int = 0
 
     var ramUsage: Double = 0
@@ -87,6 +89,10 @@ private struct SystemMonitorSnapshot: Equatable {
     var diskVolumeName: String = "/"
 
     var gpuLoad: Double?
+    var gpuRendererLoad: Double?
+    var gpuTilerLoad: Double?
+    var gpuInUseMemoryBytes: Double?
+    var fps: Double?
     var cpuTemperature: Double?
     var gpuTemperature: Double?
 
@@ -96,6 +102,9 @@ private struct SystemMonitorSnapshot: Equatable {
     var totalDownloadedBytes: UInt64 = 0
     var activeNetworkInterface: String = ""
     var networkLinkIsUp: Bool = false
+
+    var diskReadBps: Double = 0
+    var diskWriteBps: Double = 0
 }
 
 @MainActor
@@ -109,6 +118,8 @@ final class SystemMonitorManager: ObservableObject {
     var systemLoad: Double { snapshot.systemLoad }
     var idleLoad: Double { snapshot.idleLoad }
     var loadAverage: Double { snapshot.loadAverage }
+    var loadAverage5m: Double { snapshot.loadAverage5m }
+    var loadAverage15m: Double { snapshot.loadAverage15m }
     var cpuCoreCount: Int { snapshot.cpuCoreCount }
 
     var ramUsage: Double { snapshot.ramUsage }
@@ -131,6 +142,10 @@ final class SystemMonitorManager: ObservableObject {
     var diskVolumeName: String { snapshot.diskVolumeName }
 
     var gpuLoad: Double? { snapshot.gpuLoad }
+    var gpuRendererLoad: Double? { snapshot.gpuRendererLoad }
+    var gpuTilerLoad: Double? { snapshot.gpuTilerLoad }
+    var gpuInUseMemoryBytes: Double? { snapshot.gpuInUseMemoryBytes }
+    var fps: Double? { snapshot.fps }
     var cpuTemperature: Double? { snapshot.cpuTemperature }
     var gpuTemperature: Double? { snapshot.gpuTemperature }
 
@@ -141,11 +156,30 @@ final class SystemMonitorManager: ObservableObject {
     var activeNetworkInterface: String { snapshot.activeNetworkInterface }
     var networkLinkIsUp: Bool { snapshot.networkLinkIsUp }
 
+    var diskReadBps: Double { snapshot.diskReadBps }
+    var diskWriteBps: Double { snapshot.diskWriteBps }
+
+    // MARK: - History
+
+    /// Chart window width in samples; charts read left-padded series of this length.
+    let historyCapacity = 120
+    /// Samples collected so far, clamped to the capacity, so charts can scale
+    /// their time axis while the ring is still filling up.
+    private(set) var historyFilledCount = 0
+
+    func series(_ keyPath: KeyPath<SystemMonitorSample, Double>) -> [Double] {
+        history.series(keyPath)
+    }
+
+    private var history = SystemMonitorHistory(capacity: 120)
+
     private var timer: Timer?
     private var previousCPUTicks: (user: UInt32, system: UInt32, idle: UInt32, nice: UInt32)?
     private var previousNetworkData: [String: (ibytes: UInt64, obytes: UInt64)] = [:]
     private var lastNetworkUpdate = Date()
     private var lastValidCPUTemperature: Double?
+    private var previousDiskBytes: (read: UInt64, written: UInt64, at: Date)?
+    private let fpsReader = FPSReader()
 
     private init() {
         startMonitoring()
@@ -166,15 +200,15 @@ final class SystemMonitorManager: ObservableObject {
     }
 
     func refresh() {
-        Task.detached(priority: .utility) { [weak self] in
-            guard let self else { return }
-
+        let fpsReader = self.fpsReader
+        Task.detached(priority: .utility) {
             let currentState = await MainActor.run {
                 (
                     previousCPUTicks: self.previousCPUTicks,
                     previousNetworkData: self.previousNetworkData,
                     lastNetworkUpdate: self.lastNetworkUpdate,
                     lastValidCPUTemperature: self.lastValidCPUTemperature,
+                    previousDiskBytes: self.previousDiskBytes,
                     snapshot: self.snapshot
                 )
             }
@@ -184,7 +218,9 @@ final class SystemMonitorManager: ObservableObject {
             let diskSnapshot = Self.readDiskUsage()
             let gpuSnapshot = Self.readGPUStats()
             let rawCPUTemperature = Self.readCPUTemperature()
-            let loadAverage = Self.readLoadAverage()
+            let loadAverages = Self.readLoadAverage()
+            let diskActivity = Self.readDiskActivity(previous: currentState.previousDiskBytes)
+            let fps = fpsReader.read()
             let cpuCoreCount = Self.readCPUCoreCount()
             let networkSnapshot = Self.readNetworkActivity(
                 previous: currentState.previousNetworkData,
@@ -201,7 +237,9 @@ final class SystemMonitorManager: ObservableObject {
                     nextSnapshot.systemLoad = cpuSnapshot.systemLoad
                     nextSnapshot.idleLoad = cpuSnapshot.idleLoad
                 }
-                nextSnapshot.loadAverage = loadAverage
+                nextSnapshot.loadAverage = loadAverages.minute1
+                nextSnapshot.loadAverage5m = loadAverages.minute5
+                nextSnapshot.loadAverage15m = loadAverages.minute15
                 nextSnapshot.cpuCoreCount = cpuCoreCount
 
                 if let ramSnapshot {
@@ -228,6 +266,10 @@ final class SystemMonitorManager: ObservableObject {
                 }
 
                 nextSnapshot.gpuLoad = gpuSnapshot.load
+                nextSnapshot.gpuRendererLoad = gpuSnapshot.rendererLoad
+                nextSnapshot.gpuTilerLoad = gpuSnapshot.tilerLoad
+                nextSnapshot.gpuInUseMemoryBytes = gpuSnapshot.inUseMemoryBytes
+                nextSnapshot.fps = fps
                 nextSnapshot.gpuTemperature = gpuSnapshot.temperature
                 let resolvedCPUTemperature = Self.stabilizedCPUTemperature(
                     rawCPUTemperature,
@@ -248,6 +290,32 @@ final class SystemMonitorManager: ObservableObject {
                     nextSnapshot.activeNetworkInterface = networkSnapshot.activeInterface
                     nextSnapshot.networkLinkIsUp = networkSnapshot.linkIsUp
                 }
+
+                if let diskActivity {
+                    self.previousDiskBytes = diskActivity.currentState
+                    nextSnapshot.diskReadBps = diskActivity.readBps
+                    nextSnapshot.diskWriteBps = diskActivity.writeBps
+                }
+
+                var sample = SystemMonitorSample()
+                sample.cpuLoad = nextSnapshot.cpuLoad
+                sample.userLoad = nextSnapshot.userLoad
+                sample.systemLoad = nextSnapshot.systemLoad
+                sample.gpuDevice = nextSnapshot.gpuLoad ?? 0
+                sample.gpuRenderer = nextSnapshot.gpuRendererLoad ?? 0
+                sample.gpuTiler = nextSnapshot.gpuTilerLoad ?? 0
+                sample.fps = fps ?? 0
+                sample.ramUsage = nextSnapshot.ramUsage
+                sample.appRAM = nextSnapshot.appRAM
+                sample.wiredRAM = nextSnapshot.wiredRAM
+                sample.compressedRAM = nextSnapshot.compressedRAM
+                sample.cachedRAM = nextSnapshot.cachedRAM
+                sample.diskReadBps = nextSnapshot.diskReadBps
+                sample.diskWriteBps = nextSnapshot.diskWriteBps
+                sample.downloadBps = nextSnapshot.downloadSpeed * 1_048_576
+                sample.uploadBps = nextSnapshot.uploadSpeed * 1_048_576
+                self.history.append(sample, at: Date())
+                self.historyFilledCount = max(self.historyFilledCount, min(self.history.count, self.historyCapacity))
 
                 if self.snapshot != nextSnapshot {
                     self.snapshot = nextSnapshot
@@ -469,7 +537,13 @@ final class SystemMonitorManager: ObservableObject {
         return (Int64(stats.f_bfree) * Int64(stats.f_bsize)) + max(0, purgeable)
     }
 
-    nonisolated private static func readGPUStats() -> (load: Double?, temperature: Double?) {
+    nonisolated private static func readGPUStats() -> (
+        load: Double?,
+        rendererLoad: Double?,
+        tilerLoad: Double?,
+        inUseMemoryBytes: Double?,
+        temperature: Double?
+    ) {
         var iterator: io_iterator_t = 0
         let result = IOServiceGetMatchingServices(
             kIOMainPortDefault,
@@ -478,11 +552,14 @@ final class SystemMonitorManager: ObservableObject {
         )
 
         guard result == KERN_SUCCESS else {
-            return (nil, fallbackGPUTemperature())
+            return (nil, nil, nil, nil, fallbackGPUTemperature())
         }
         defer { IOObjectRelease(iterator) }
 
         var load: Double?
+        var rendererLoad: Double?
+        var tilerLoad: Double?
+        var inUseMemoryBytes: Double?
         var temperature: Double?
 
         while true {
@@ -501,6 +578,15 @@ final class SystemMonitorManager: ObservableObject {
                     load = min(100, max(0, usage))
                 }
 
+                if let value = (stats["Renderer Utilization %"] as? NSNumber)?.doubleValue {
+                    rendererLoad = min(100, max(0, value))
+                }
+                if let value = (stats["Tiler Utilization %"] as? NSNumber)?.doubleValue {
+                    tilerLoad = min(100, max(0, value))
+                }
+                if let value = (stats["In use system memory"] as? NSNumber)?.doubleValue, value > 0 {
+                    inUseMemoryBytes = value
+                }
                 if let value = (stats["Temperature(C)"] as? NSNumber)?.doubleValue,
                    isPlausibleTemperature(value) {
                     temperature = value
@@ -510,7 +596,7 @@ final class SystemMonitorManager: ObservableObject {
             IOObjectRelease(service)
         }
 
-        return (load, temperature ?? fallbackGPUTemperature())
+        return (load, rendererLoad, tilerLoad, inUseMemoryBytes, temperature ?? fallbackGPUTemperature())
     }
 
     nonisolated private static func fallbackGPUTemperature() -> Double? {
@@ -752,10 +838,55 @@ final class SystemMonitorManager: ObservableObject {
             .joined(separator: ", ")
     }
 
-    nonisolated private static func readLoadAverage() -> Double {
+    nonisolated private static func readLoadAverage() -> (minute1: Double, minute5: Double, minute15: Double) {
         var loadAverages = [Double](repeating: 0, count: 3)
-        guard getloadavg(&loadAverages, 3) > 0 else { return 0 }
-        return loadAverages[0]
+        guard getloadavg(&loadAverages, 3) > 0 else { return (0, 0, 0) }
+        return (loadAverages[0], loadAverages[1], loadAverages[2])
+    }
+
+    /// Aggregate read/write bytes/sec across IOBlockStorageDrivers (internal
+    /// APFS stack reports zero, the AppleNVMe driver carries the real counters).
+    nonisolated private static func readDiskActivity(
+        previous: (read: UInt64, written: UInt64, at: Date)?
+    ) -> (readBps: Double, writeBps: Double, currentState: (read: UInt64, written: UInt64, at: Date))? {
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(
+            kIOMainPortDefault,
+            IOServiceMatching("IOBlockStorageDriver"),
+            &iterator
+        ) == KERN_SUCCESS else { return nil }
+        defer { IOObjectRelease(iterator) }
+
+        var totalRead: UInt64 = 0
+        var totalWritten: UInt64 = 0
+        while true {
+            let service = IOIteratorNext(iterator)
+            guard service != 0 else { break }
+            if let statistics = IORegistryEntryCreateCFProperty(
+                service,
+                "Statistics" as CFString,
+                kCFAllocatorDefault,
+                0
+            )?.takeRetainedValue() as? [String: Any] {
+                totalRead += (statistics["Bytes (Read)"] as? NSNumber)?.uint64Value ?? 0
+                totalWritten += (statistics["Bytes (Write)"] as? NSNumber)?.uint64Value ?? 0
+            }
+            IOObjectRelease(service)
+        }
+
+        let now = Date()
+        var readBps = 0.0
+        var writeBps = 0.0
+        if let previous, now.timeIntervalSince(previous.at) > 0.5 {
+            let elapsed = now.timeIntervalSince(previous.at)
+            if totalRead >= previous.read {
+                readBps = Double(totalRead - previous.read) / elapsed
+            }
+            if totalWritten >= previous.written {
+                writeBps = Double(totalWritten - previous.written) / elapsed
+            }
+        }
+        return (readBps, writeBps, (totalRead, totalWritten, now))
     }
 
     nonisolated private static func readCPUCoreCount() -> Int {
