@@ -121,14 +121,10 @@ struct SystemMonitorPopup: View {
     @EnvironmentObject var configProvider: ConfigProvider
 
     var body: some View {
-        MenuBarPopupVariantView(
-            selectedVariant: .vertical,
-            settingsLinkSection: .systemMonitor,
-            vertical: {
-                SystemMonitorDetailsPopup()
-                    .environmentObject(configProvider)
-            }
-        )
+        // The dashboard owns its layout (sidebar + pages) and reaches Settings
+        // from the sidebar footer, so MenuBarPopupVariantView is bypassed.
+        SystemMonitorDashboard()
+            .environmentObject(configProvider)
     }
 }
 
