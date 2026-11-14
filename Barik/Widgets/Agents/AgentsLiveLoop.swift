@@ -214,3 +214,18 @@ final class AgentsLiveLoop: @unchecked Sendable {
         return .cancelled
     }
 }
+
+/// Decides whether a successful snapshot may emit transitions (toasts).
+/// The first snapshot after any period without a fresh baseline (start, outage, wake) is silent.
+struct SnapshotBaseline: Equatable {
+    private(set) var isFresh = false
+
+    /// Call when the store may have gone stale: a failed poll, an outage, wake from sleep.
+    mutating func invalidate() { isFresh = false }
+
+    /// Call for each successful snapshot; returns whether it should emit transitions.
+    mutating func admit() -> Bool {
+        defer { isFresh = true }
+        return isFresh
+    }
+}

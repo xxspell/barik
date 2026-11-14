@@ -74,8 +74,9 @@ final class AgentsManager: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var liveRetryTask: Task<Void, Never>?
     private var versionTask: Task<Void, Never>?
-    /// A fallback poll has fed the store since entering fallback.
-    private var hasPolled = false
+    /// Whether the store holds a fresh baseline in fallback mode: the first successful snapshot
+    /// after entering fallback, a failed poll or wake is applied without transitions.
+    private var baseline = SnapshotBaseline()
 
     private var observers: [NSObjectProtocol] = []
 
@@ -178,11 +179,10 @@ final class AgentsManager: ObservableObject {
             if probing {
                 // The socket answered again: leave fallback polling.
                 logger.info("Agents: herdr socket recovered, leaving fallback polling")
-                let storeIsFresh = hasPolled
                 probing = false
                 stopFallback()
                 mode = .live
-                apply(list, emit: isInitial ? storeIsFresh : true)
+                apply(list, emit: baseline.admit())
             } else {
                 apply(list, emit: !isInitial)
             }
@@ -216,7 +216,7 @@ final class AgentsManager: ObservableObject {
         stopFallback()
         mode = .fallback
         fallbackReason = reason
-        hasPolled = false
+        baseline.invalidate()
         logger.info("Agents: socket protocol failure (\(reason, privacy: .public)), falling back to CLI")
         scheduleLiveRetry()
 
@@ -231,11 +231,11 @@ final class AgentsManager: ObservableObject {
                 do {
                     let list = try await HerdrCLI.agentList(executable: exe)
                     guard !Task.isCancelled, let self else { return }
-                    self.apply(list, emit: self.hasPolled)
-                    self.hasPolled = true
+                    self.apply(list, emit: self.baseline.admit())
                     self.setConnection(.fallbackPolling(reason: self.fallbackReason))
                 } catch {
                     guard !Task.isCancelled, let self else { return }
+                    self.baseline.invalidate() // the store goes stale during the outage
                     self.setConnection(.disconnected(reason: "herdr CLI failed"))
                 }
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
@@ -354,6 +354,9 @@ final class AgentsManager: ObservableObject {
             MainActor.assumeIsolated {
                 guard let self, self.mode != .stopped else { return }
                 self.logger.info("Agents: wake, reconnecting")
+                // Live mode restarts the loop (initial snapshot is silent); in fallback mode the
+                // next poll or probe snapshot must not toast changes made during sleep.
+                if self.mode == .fallback { self.baseline.invalidate() }
                 self.retryNow()
             }
         })
