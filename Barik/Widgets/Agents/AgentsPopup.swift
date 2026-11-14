@@ -7,6 +7,9 @@ import SwiftUI
 struct AgentsPopup: View {
     @ObservedObject private var manager = AgentsManager.shared
     @State private var previews: [String: [String]] = [:]
+    /// The panel is only ordered out on close (the hosting view stays alive), so visibility comes from
+    /// the popup's show/hide notifications rather than onAppear/onDisappear.
+    @State private var visible = true
 
     var body: some View {
         AgentsPopupContent(
@@ -16,14 +19,21 @@ struct AgentsPopup: View {
             groupBy: manager.config.groupBy,
             previewLines: manager.config.previewLines,
             previews: previews,
+            active: visible,
             onFocus: { agent in
                 manager.focus(agent)
                 MenuBarPopup.hide()
             },
             onOpenHerdr: { manager.openHerdr() }
         )
-        // Cancelled automatically when the popup disappears, so nothing polls in the background.
-        .task { await refreshPreviewsWhileVisible() }
+        .onAppear { visible = true }
+        .onReceive(NotificationCenter.default.publisher(for: .willShowWindow)) { _ in visible = true }
+        .onReceive(NotificationCenter.default.publisher(for: .willHideWindow)) { _ in visible = false }
+        // Re-keyed on visibility: the loop is cancelled as soon as the popup hides, so nothing polls in the background.
+        .task(id: visible) {
+            guard visible else { return }
+            await refreshPreviewsWhileVisible()
+        }
     }
 
     private func refreshPreviewsWhileVisible() async {
@@ -51,6 +61,8 @@ struct AgentsPopupContent: View {
     let groupBy: String
     let previewLines: Int
     let previews: [String: [String]]
+    /// False while the popup is hidden: timers stop ticking.
+    var active = true
     var onFocus: (AgentSession) -> Void = { _ in }
     var onOpenHerdr: () -> Void = {}
     var startExpandedIdle = false
@@ -131,6 +143,7 @@ struct AgentsPopupContent: View {
     private func pill(_ status: AgentStatus, _ count: Int, _ color: Color) -> some View {
         HStack(spacing: 3) {
             AgentStatusIcon(status: status, size: 10)
+                .frame(width: 12, height: 12)
             Text("\(count)")
         }
         .barikPopupFont(size: 10.5, weight: .medium, design: design)
@@ -252,6 +265,7 @@ struct AgentsPopupContent: View {
         return Button { onFocus(agent) } label: {
             HStack(alignment: .top, spacing: 8) {
                 AgentStatusIcon(status: agent.status, size: 13)
+                    .frame(width: 16, height: 16)
                     .padding(.top, 1)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
@@ -311,22 +325,32 @@ struct AgentsPopupContent: View {
         if let since = agent.statusSince {
             switch agent.status {
             case .blocked:
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    timeText(AgentTimeFormat.clock(ctx.date.timeIntervalSince(since)), color: amber)
+                ticking(1) { now in
+                    timeText(AgentTimeFormat.clock(now.timeIntervalSince(since)), color: amber)
                 }
                 .help(String(localized: "agents.popup.waiting"))
             case .working:
-                TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                    timeText(AgentTimeFormat.short(ctx.date.timeIntervalSince(since)), color: nil)
+                ticking(30) { now in
+                    timeText(AgentTimeFormat.short(now.timeIntervalSince(since)), color: nil)
                 }
             case .done:
-                TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                    let t = AgentTimeFormat.short(ctx.date.timeIntervalSince(since))
+                ticking(30) { now in
+                    let t = AgentTimeFormat.short(now.timeIntervalSince(since))
                     timeText(String(format: String(localized: "agents.popup.ago"), t), color: nil)
                 }
             case .idle, .unknown:
                 EmptyView()
             }
+        }
+    }
+
+    /// Ticks only while the popup is visible; hidden, it renders once and stops.
+    @ViewBuilder
+    private func ticking<C: View>(_ interval: TimeInterval, @ViewBuilder _ content: @escaping (Date) -> C) -> some View {
+        if active {
+            TimelineView(.periodic(from: .now, by: interval)) { ctx in content(ctx.date) }
+        } else {
+            content(Date())
         }
     }
 
@@ -403,6 +427,7 @@ struct AgentsPopupContent: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 7) {
                     AgentStatusIcon(status: agent.status, size: 12)
+                        .frame(width: 16, height: 16)
                     AgentKindIcon(kind: agent.kind, size: 11)
                     Text(agent.title.isEmpty ? agent.kind : agent.title)
                         .barikPopupFont(size: 11.5, design: design)
@@ -470,6 +495,7 @@ struct AgentsPopupContent: View {
     }
 
     private var footerText: String {
+        if isDisconnected { return "herdr" }
         if let v = herdrVersion, !v.isEmpty {
             return String(format: String(localized: "agents.popup.footer_version"), v, summary.total)
         }
