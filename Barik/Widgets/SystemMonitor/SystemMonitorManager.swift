@@ -59,6 +59,41 @@ extension SystemMonitorMetric: Identifiable {
     var id: String { rawValue }
 }
 
+/// Sidebar pages of the dashboard popup. The selection lives on the manager
+/// because the popup content view is rebuilt with a fresh identity on open.
+enum SystemMonitorCategory: String, CaseIterable, Identifiable {
+    case overview
+    case cpu
+    case gpu
+    case ram
+    case disk
+    case network
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .overview: String(localized: "Overview")
+        case .cpu: String(localized: "CPU")
+        case .gpu: String(localized: "GPU")
+        case .ram: String(localized: "RAM")
+        case .disk: String(localized: "Disk")
+        case .network: String(localized: "Network")
+        }
+    }
+
+    var systemImageName: String {
+        switch self {
+        case .overview: "square.grid.2x2"
+        case .cpu: "cpu"
+        case .gpu: "display"
+        case .ram: "memorychip"
+        case .disk: "internaldrive"
+        case .network: "network"
+        }
+    }
+}
+
 private struct SystemMonitorSnapshot: Equatable {
     var cpuLoad: Double = 0
     var userLoad: Double = 0
@@ -112,6 +147,21 @@ final class SystemMonitorManager: ObservableObject {
     static let shared = SystemMonitorManager()
 
     @Published private var snapshot = SystemMonitorSnapshot()
+
+    @Published private(set) var topCPUProcesses: [TopProcess] = []
+    @Published private(set) var topMemoryProcesses: [TopProcess] = []
+    @Published private(set) var topGPUProcesses: [TopProcess] = []
+    @Published private(set) var topNetworkProcesses: [TopProcess] = []
+
+    /// Set while the dashboard is open; gates the heavy samplers (ps, nettop,
+    /// IORegistry client walk) so a closed popup keeps the old cost profile.
+    @Published private(set) var isPopupVisible = false
+
+    /// Survives popup rebuilds (popup content gets a fresh .id(UUID()) per open).
+    @Published var selectedCategory: SystemMonitorCategory = .overview
+
+    /// Rows per top-process list.
+    let topProcessLimit = 6
 
     var cpuLoad: Double { snapshot.cpuLoad }
     var userLoad: Double { snapshot.userLoad }
@@ -180,6 +230,8 @@ final class SystemMonitorManager: ObservableObject {
     private var lastValidCPUTemperature: Double?
     private var previousDiskBytes: (read: UInt64, written: UInt64, at: Date)?
     private let fpsReader = FPSReader()
+    private var nettopState: NettopState?
+    private var gpuClientState: GPUClientState?
 
     private init() {
         startMonitoring()
@@ -201,6 +253,8 @@ final class SystemMonitorManager: ObservableObject {
 
     func refresh() {
         let fpsReader = self.fpsReader
+        let popupVisible = self.isPopupVisible
+        let limit = self.topProcessLimit
         Task.detached(priority: .utility) {
             let currentState = await MainActor.run {
                 (
@@ -209,6 +263,8 @@ final class SystemMonitorManager: ObservableObject {
                     lastNetworkUpdate: self.lastNetworkUpdate,
                     lastValidCPUTemperature: self.lastValidCPUTemperature,
                     previousDiskBytes: self.previousDiskBytes,
+                    nettopState: self.nettopState,
+                    gpuClientState: self.gpuClientState,
                     snapshot: self.snapshot
                 )
             }
@@ -226,6 +282,24 @@ final class SystemMonitorManager: ObservableObject {
                 previous: currentState.previousNetworkData,
                 lastUpdate: currentState.lastNetworkUpdate
             )
+
+            // Heavy samplers only while the dashboard is on screen.
+            var heavy: (
+                cpu: [TopProcess], memory: [TopProcess], gpu: [TopProcess],
+                network: [TopProcess], nettopState: NettopState?, gpuClientState: GPUClientState?
+            )?
+            if popupVisible {
+                var nettop = currentState.nettopState
+                var gpuClients = currentState.gpuClientState
+                heavy = (
+                    ProcessSampler.cpuProcesses(limit: limit),
+                    ProcessSampler.memoryProcesses(limit: limit),
+                    GPUProcessSampler.gpuProcesses(limit: limit, previous: &gpuClients),
+                    ProcessSampler.networkProcesses(limit: limit, previous: &nettop),
+                    nettop,
+                    gpuClients
+                )
+            }
 
             await MainActor.run {
                 var nextSnapshot = currentState.snapshot
@@ -295,6 +369,15 @@ final class SystemMonitorManager: ObservableObject {
                     self.previousDiskBytes = diskActivity.currentState
                     nextSnapshot.diskReadBps = diskActivity.readBps
                     nextSnapshot.diskWriteBps = diskActivity.writeBps
+                }
+
+                if let heavy {
+                    self.nettopState = heavy.nettopState
+                    self.gpuClientState = heavy.gpuClientState
+                    self.topCPUProcesses = heavy.cpu
+                    self.topMemoryProcesses = heavy.memory
+                    self.topGPUProcesses = heavy.gpu
+                    self.topNetworkProcesses = heavy.network
                 }
 
                 var sample = SystemMonitorSample()
@@ -1020,5 +1103,24 @@ final class SystemMonitorManager: ObservableObject {
             return ""
         }
         return interface
+    }
+
+    /// Called by the dashboard on appear/disappear. Repeated calls with the
+    /// same value are ignored so a category switch does not reseed samplers.
+    func setPopupVisible(_ visible: Bool) {
+        guard isPopupVisible != visible else { return }
+        isPopupVisible = visible
+        if visible {
+            // Seed cumulative counters (nettop, GPU time) immediately so the
+            // first real rows arrive on the next tick instead of after a gap.
+            refresh()
+        } else {
+            nettopState = nil
+            gpuClientState = nil
+            topCPUProcesses = []
+            topMemoryProcesses = []
+            topGPUProcesses = []
+            topNetworkProcesses = []
+        }
     }
 }
