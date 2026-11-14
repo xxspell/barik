@@ -96,10 +96,14 @@ struct AgentsWidget: View {
                         .contentTransition(.numericText())
                         .foregroundStyle(textColor)
                     if !blocked, manager.config.showElapsed, let since = p.since {
-                        // Ticks every 30 s; the label is minute-granular beyond the first minute.
+                        // Minute-granular only: seconds ("0s", "30s") are noise in the bar,
+                        // so nothing is shown during the first minute.
                         TimelineView(.periodic(from: .now, by: 30)) { context in
-                            Text("· \(AgentTimeFormat.short(context.date.timeIntervalSince(since)))")
-                                .foregroundStyle(dimColor)
+                            let elapsed = context.date.timeIntervalSince(since)
+                            if elapsed >= 60 {
+                                Text(verbatim: "· \(AgentTimeFormat.short(elapsed))")
+                                    .foregroundStyle(dimColor)
+                            }
                         }
                     }
                 }
