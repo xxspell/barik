@@ -56,9 +56,18 @@ enum HerdrCLI {
         private var out = Data()
         private var err = Data()
         private var finished = false
+        private var exited = false
         func appendOut(_ d: Data) { lock.lock(); out.append(d); lock.unlock() }
         func appendErr(_ d: Data) { lock.lock(); err.append(d); lock.unlock() }
         func snapshot() -> (Data, Data) { lock.lock(); defer { lock.unlock() }; return (out, err) }
+        func markExited() { lock.lock(); exited = true; lock.unlock() }
+        /// Timeout may only claim completion if the process has not already exited.
+        func claimTimeout() -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            if finished || exited { return false }
+            finished = true
+            return true
+        }
         /// Returns true exactly once.
         func finish() -> Bool { lock.lock(); defer { lock.unlock() }; if finished { return false }; finished = true; return true }
     }
@@ -91,6 +100,7 @@ enum HerdrCLI {
 
             proc.terminationHandler = { p in
                 let status = p.terminationStatus
+                state.markExited()
                 // Wait for EOF on both pipes, but not forever (grandchildren may hold them open).
                 DispatchQueue.global().async {
                     _ = readers.wait(timeout: .now() + 1)
@@ -105,19 +115,25 @@ enum HerdrCLI {
                 }
             }
 
+            // Start draining before run() so a fast-exiting child can never be observed
+            // by the termination handler with the reader group still empty.
+            drain(outPipe, state.appendOut)
+            drain(errPipe, state.appendErr)
+
             do { try proc.run() } catch {
+                // Close write ends so the readers hit EOF and the group balances.
+                try? outPipe.fileHandleForWriting.close()
+                try? errPipe.fileHandleForWriting.close()
                 if state.finish() { cont.resume(throwing: HerdrCLIError.notFound) }
                 return
             }
             // Parent's copy of the write ends must be closed so readers see EOF.
             try? outPipe.fileHandleForWriting.close()
             try? errPipe.fileHandleForWriting.close()
-            drain(outPipe, state.appendOut)
-            drain(errPipe, state.appendErr)
 
             let pid = proc.processIdentifier
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                guard state.finish() else { return }
+                guard state.claimTimeout() else { return }
                 proc.terminate()
                 cont.resume(throwing: HerdrCLIError.timeout)
                 DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
