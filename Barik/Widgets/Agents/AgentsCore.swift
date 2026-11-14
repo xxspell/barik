@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 // MARK: - Model
 
@@ -303,4 +304,115 @@ struct AgentsConfig: Equatable {
         quietWhenHerdrActive: true,
         doneAutohide: 6,
         sound: "off")
+}
+
+// MARK: - Toast queue
+
+enum ToastKind: Equatable { case blocked, done }
+
+struct ToastItem: Identifiable, Equatable {
+    let id: String
+    var agent: AgentSession
+    let kind: ToastKind
+    let createdAt: Date
+}
+
+struct ToastQueue {
+    var maxVisible = 3
+    /// All queued items, newest first (visible + hidden).
+    private var items: [ToastItem] = []
+
+    var visible: [ToastItem] { Array(items.prefix(Swift.max(0, maxVisible))) }
+    var overflow: Int { Swift.max(0, items.count - Swift.max(0, maxVisible)) }
+
+    @discardableResult
+    mutating func push(_ t: AgentTransition, notifyOn: Set<AgentStatus>, now: Date) -> Bool {
+        let kind: ToastKind
+        let suffix: String
+        switch t.to {
+        case .blocked: kind = .blocked; suffix = "blocked"
+        case .done: kind = .done; suffix = "done"
+        default: return false
+        }
+        guard notifyOn.contains(t.to) else { return false }
+        items.removeAll { $0.agent.paneID == t.agent.paneID }
+        items.insert(ToastItem(id: "\(t.agent.paneID)#\(suffix)", agent: t.agent, kind: kind, createdAt: now), at: 0)
+        return true
+    }
+
+    mutating func dismiss(id: String) {
+        items.removeAll { $0.id == id }
+    }
+
+    mutating func reconcile(with agents: [AgentSession]) {
+        let byPane = Dictionary(agents.map { ($0.paneID, $0) }, uniquingKeysWith: { a, _ in a })
+        items = items.compactMap { item in
+            guard let current = byPane[item.agent.paneID] else { return nil }
+            let wanted: AgentStatus = item.kind == .blocked ? .blocked : .done
+            guard current.status == wanted else { return nil }
+            var kept = item
+            kept.agent = current
+            return kept
+        }
+    }
+
+    mutating func expireDone(now: Date, autohide: TimeInterval, pausedIDs: Set<String>) {
+        items.removeAll { $0.kind == .done && !pausedIDs.contains($0.id) && now.timeIntervalSince($0.createdAt) >= autohide }
+    }
+}
+
+// MARK: - Toast placement
+
+struct ScreenInfo: Equatable {
+    let id: String
+    let frame: CGRect
+    let hasNotch: Bool
+    let notchWidth: CGFloat
+}
+
+enum ToastStyle: String { case island, chip, stack }
+
+struct ToastPlacement: Equatable {
+    let screenID: String
+    let style: ToastStyle
+    let anchor: CGRect?
+}
+
+enum ToastPlacementResolver {
+    static func resolve(screens: [ScreenInfo], mainScreenID: String?, mouse: CGPoint,
+                        mode: String, style: ToastStyle, chipRects: [String: CGRect]) -> [ToastPlacement] {
+        guard !screens.isEmpty else { return [] }
+
+        func distance(_ r: CGRect, _ p: CGPoint) -> CGFloat {
+            let dx: CGFloat = Swift.max(r.minX - p.x, 0, p.x - r.maxX)
+            let dy: CGFloat = Swift.max(r.minY - p.y, 0, p.y - r.maxY)
+            return (dx * dx + dy * dy).squareRoot()
+        }
+        func active() -> ScreenInfo {
+            if let s = screens.first(where: { $0.frame.contains(mouse) }) { return s }
+            return screens.min { distance($0.frame, mouse) < distance($1.frame, mouse) }!
+        }
+        func main() -> ScreenInfo {
+            screens.first(where: { $0.id == mainScreenID }) ?? screens[0]
+        }
+
+        let chosen: [ScreenInfo]
+        switch mode {
+        case "active": chosen = [active()]
+        case "main": chosen = [main()]
+        case "all": chosen = screens
+        default: chosen = [screens.first(where: { $0.id == mode }) ?? active()]
+        }
+        return chosen.map { s in
+            if style == .chip, let rect = chipRects[s.id] {
+                return ToastPlacement(screenID: s.id, style: .chip, anchor: rect)
+            }
+            return ToastPlacement(screenID: s.id, style: style == .chip ? .island : style, anchor: nil)
+        }
+    }
+
+    static func shouldSuppress(frontmostBundleID: String?, herdrBundleIDs: [String], quiet: Bool) -> Bool {
+        guard quiet, let id = frontmostBundleID else { return false }
+        return herdrBundleIDs.contains(id)
+    }
 }
