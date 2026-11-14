@@ -16753,6 +16753,134 @@
           }
         }
       }
+    },
+    "agents.toast.waiting": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waiting %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ждёт %@"
+          }
+        }
+      }
+    },
+    "agents.toast.done_in": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "done in %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "готово за %@"
+          }
+        }
+      }
+    },
+    "agents.toast.open": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть"
+          }
+        }
+      }
+    },
+    "agents.toast.later": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Позже"
+          }
+        }
+      }
+    },
+    "agents.toast.more": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%lld more"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ещё +%lld"
+          }
+        }
+      }
+    },
+    "agents.toast.next": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show next"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показать следующий"
+          }
+        }
+      }
+    },
+    "agents.toast.test.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test notification from Barik"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тестовое уведомление от Barik"
+          }
+        }
+      }
+    },
+    "agents.toast.test.preview": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bash command\n  rm -rf ./dist && npm run build\nDo you want to proceed?\n❯ 1. Yes\n  2. Yes, and don't ask again\n  3. No"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Команда Bash\n  rm -rf ./dist && npm run build\nПродолжить?\n❯ 1. Да\n  2. Да, и больше не спрашивать\n  3. Нет"
+          }
+        }
+      }
     }
   },
   "version": "1.1"

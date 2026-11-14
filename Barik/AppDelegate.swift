@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         MenuBarPopup.setup()
         UNUserNotificationCenter.current().delegate = self
         setupPanels()
+        AgentToastController.shared.start()
         tickTickWallpaperManager.startUpdating(
             config: ConfigManager.shared.globalWidgetConfig(for: "default.ticktick")
         )
