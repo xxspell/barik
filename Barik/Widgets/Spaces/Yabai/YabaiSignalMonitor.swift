@@ -249,23 +249,12 @@ final class YabaiSignalMonitor {
 
     @discardableResult
     private func runYabaiCommand(arguments: [String]) -> Data? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executablePath)
-        process.arguments = arguments
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
-
-        do {
-            try process.run()
-        } catch {
-            logger.error("Unable to run yabai command: \(error.localizedDescription)")
+        guard let data = YabaiCommand.run(
+            executablePath: executablePath, arguments: arguments, mergeStderr: true
+        ) else {
+            logger.error("Yabai command failed or timed out: \(arguments.joined(separator: " "), privacy: .public)")
             return nil
         }
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
         return data
     }
 }
