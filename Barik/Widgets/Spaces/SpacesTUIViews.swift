@@ -58,6 +58,20 @@ struct TUISpacesView: View {
                     )
                 }
             }
+        case .minimal:
+            HStack(spacing: 6) {
+                ForEach(spaces) { space in
+                    TUIMinimalSpaceNumber(space: space, isFocused: space.id == focusedSpace?.id)
+                }
+
+                if windowSettings.showWindows, let focusedSpace,
+                   let window = focusedSpace.windows.first(where: { $0.isFocused }) ?? focusedSpace.windows.first {
+                    Text(verbatim: TUIMinimalSpaceNumber.label(for: window, settings: windowSettings))
+                        .barikFont(size: 12, weight: .regular)
+                        .foregroundStyle(BarikStyle.current.dim)
+                        .lineLimit(1)
+                }
+            }
         case .focusedStrip:
             HStack(spacing: 6) {
                 TUISpaceNumberStrip(
@@ -336,5 +350,35 @@ private struct TUIWindowLabel: View {
 
     private func truncate(_ text: String, to maxLength: Int) -> String {
         text.count > maxLength ? String(text.prefix(maxLength - 1)) + "…" : text
+    }
+}
+
+/// Minimal mode: a bare space number — focused bold in the accent, others dim.
+private struct TUIMinimalSpaceNumber: View {
+    @EnvironmentObject var viewModel: SpacesViewModel
+
+    let space: AnySpace
+    let isFocused: Bool
+
+    var body: some View {
+        let style = BarikStyle.current
+        Text(verbatim: space.id)
+            .barikFont(size: 12, weight: isFocused ? .bold : .regular)
+            .foregroundStyle(isFocused ? style.accent : style.dim)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                viewModel.switchToSpace(space, needWindowFocus: true)
+            }
+    }
+
+    /// App name of the focused window (its title when `show-title` is on),
+    /// truncated to `window.title.max-length`.
+    static func label(for window: AnyWindow, settings: TUISpacesWindowSettings) -> String {
+        let appName = window.appName?.isEmpty == false ? window.appName! : window.title
+        let raw = settings.showTitle && !window.title.isEmpty
+            && !settings.alwaysAppNameFor.contains(where: { $0 == window.appName })
+            ? window.title : appName
+        let maxLength = settings.titleMaxLength
+        return raw.count > maxLength ? String(raw.prefix(maxLength - 1)) + "…" : raw
     }
 }
