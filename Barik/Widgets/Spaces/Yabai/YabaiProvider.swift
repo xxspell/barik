@@ -32,19 +32,10 @@ class YabaiSpacesProvider: SpacesProvider, SwitchableSpacesProvider, DeletableSp
     }
 
     private func runYabaiCommand(arguments: [String]) -> Data? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executablePath)
-        process.arguments = arguments
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        do {
-            try process.run()
-        } catch {
-            logger.error("Yabai error: \(error.localizedDescription)")
+        guard let data = YabaiCommand.run(executablePath: executablePath, arguments: arguments) else {
+            logger.error("Yabai command failed or timed out: \(arguments.joined(separator: " "), privacy: .public)")
             return nil
         }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
         return data
     }
 
