@@ -2925,6 +2925,7 @@ private struct SpacesSettingsView: View {
     @State private var showInactiveSpaces = true
     @State private var showEmptySpaces = true
     @State private var showDeleteButton = true
+    @State private var showWindows = true
     @State private var showWindowTitle = true
     @State private var showHiddenWindows = false
     @State private var showHoverTooltip = false
@@ -3050,6 +3051,15 @@ private struct SpacesSettingsView: View {
                 actionTitle: settingsLocalized("settings.action.reset"),
                 action: resetWindowDefaults
             ) {
+                ToggleRow(
+                    title: settingsLocalized("settings.spaces.field.show_windows.title"),
+                    description: settingsLocalized("settings.spaces.field.show_windows.description"),
+                    isOn: bindingForBool(
+                        $showWindows,
+                        field: .init(tablePath: spacesTable, key: "window.show")
+                    )
+                )
+
                 ToggleRow(
                     title: settingsLocalized("settings.spaces.field.show_window_title.title"),
                     description: settingsLocalized("settings.spaces.field.show_window_title.description"),
@@ -3188,6 +3198,7 @@ private struct SpacesSettingsView: View {
         let showInactiveSpacesField = SettingsFieldKey(tablePath: spacesTable, key: "space.show-inactive")
         let showEmptySpacesField = SettingsFieldKey(tablePath: spacesTable, key: "space.show-empty")
         let showDeleteButtonField = SettingsFieldKey(tablePath: spacesTable, key: "space.show-delete-button")
+        let showWindowsField = SettingsFieldKey(tablePath: spacesTable, key: "window.show")
         let showWindowTitleField = SettingsFieldKey(tablePath: spacesTable, key: "window.show-title")
         let showHiddenWindowsField = SettingsFieldKey(tablePath: spacesTable, key: "window.show-hidden")
         let showHoverTooltipField = SettingsFieldKey(tablePath: spacesTable, key: "window.show-hover-tooltip")
@@ -3224,6 +3235,7 @@ private struct SpacesSettingsView: View {
         showInactiveSpaces = resolvedBoolValue(for: showInactiveSpacesField, incoming: settingsStore.boolValue(showInactiveSpacesField, fallback: true), current: showInactiveSpaces)
         showEmptySpaces = resolvedBoolValue(for: showEmptySpacesField, incoming: settingsStore.boolValue(showEmptySpacesField, fallback: true), current: showEmptySpaces)
         showDeleteButton = resolvedBoolValue(for: showDeleteButtonField, incoming: settingsStore.boolValue(showDeleteButtonField, fallback: true), current: showDeleteButton)
+        showWindows = resolvedBoolValue(for: showWindowsField, incoming: settingsStore.boolValue(showWindowsField, fallback: true), current: showWindows)
         showWindowTitle = resolvedBoolValue(for: showWindowTitleField, incoming: settingsStore.boolValue(showWindowTitleField, fallback: true), current: showWindowTitle)
         showHiddenWindows = resolvedBoolValue(for: showHiddenWindowsField, incoming: settingsStore.boolValue(showHiddenWindowsField, fallback: false), current: showHiddenWindows)
         showHoverTooltip = resolvedBoolValue(for: showHoverTooltipField, incoming: settingsStore.boolValue(showHoverTooltipField, fallback: false), current: showHoverTooltip)
@@ -3395,6 +3407,7 @@ private struct SpacesSettingsView: View {
         alwaysDisplayAppNamesTask?.cancel()
 
         isApplyingConfigSnapshot = true
+        showWindows = true
         showWindowTitle = true
         showHiddenWindows = false
         showHoverTooltip = false
@@ -3404,6 +3417,7 @@ private struct SpacesSettingsView: View {
         alwaysDisplayAppNames = ""
         isApplyingConfigSnapshot = false
 
+        settingsStore.setBool(true, for: .init(tablePath: spacesTable, key: "window.show"))
         settingsStore.setBool(true, for: .init(tablePath: spacesTable, key: "window.show-title"))
         settingsStore.setBool(false, for: .init(tablePath: spacesTable, key: "window.show-hidden"))
         settingsStore.setBool(false, for: .init(tablePath: spacesTable, key: "window.show-hover-tooltip"))
