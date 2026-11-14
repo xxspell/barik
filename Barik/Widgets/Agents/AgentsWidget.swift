@@ -139,11 +139,8 @@ struct AgentsWidget: View {
         .onDisappear { AgentsChipRegistry.shared.remove(rect: widgetFrame) }
         .onTapGesture {
             MenuBarPopup.show(rect: widgetFrame, id: "agents") {
-                // Placeholder until the agents popup lands.
-                Text(String(localized: "agents.widget.title"))
-                    .barikFont(size: 13, weight: .semibold, design: BarikStyle.current.fontDesign)
-                    .foregroundStyle(BarikStyle.current.isTUI ? BarikStyle.current.foreground : Color.foregroundOutside)
-                    .padding(16)
+                AgentsPopup()
+                    .environmentObject(configProvider)
             }
         }
     }
