@@ -324,6 +324,10 @@ struct ToastQueue {
 
     var visible: [ToastItem] { Array(items.prefix(Swift.max(0, maxVisible))) }
     var overflow: Int { Swift.max(0, items.count - Swift.max(0, maxVisible)) }
+    /// Every queued item, newest first, including the ones hidden behind the "+N" overflow.
+    var all: [ToastItem] { items }
+    /// Whether any queued item (visible or hidden) is a done toast that can still auto-expire.
+    var hasDone: Bool { items.contains { $0.kind == .done } }
 
     @discardableResult
     mutating func push(_ t: AgentTransition, notifyOn: Set<AgentStatus>, now: Date) -> Bool {

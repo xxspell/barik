@@ -49,6 +49,11 @@ final class AgentToastController {
     private var previewTargets: [String] = []
     private var mouseMonitors: [Any] = []
     private var keyMonitor: Any?
+    /// App that was frontmost when a click made a toast panel key; gets keystrokes back afterwards.
+    private var previousApp: NSRunningApplication?
+    /// Drops key status once the cursor has been off the key panel's cards for a moment.
+    private var keyLeaveWork: DispatchWorkItem?
+    private static let keyLeaveDelay: TimeInterval = 1
 
     private init() {}
 
@@ -97,7 +102,7 @@ final class AgentToastController {
             statusSince: now, focusedInHerdr: false)
         testAgent = agent
         guard queue.push(AgentTransition(agent: agent, from: .working, to: status), notifyOn: [status], now: now),
-              let item = queue.visible.first else { return }
+              let item = queue.all.first else { return }
         resetPause(item.id)
         previews[Self.testPaneID] = String(localized: "agents.toast.test.preview").components(separatedBy: "\n")
         if kind == .done { doneIn[item.id] = 12 * 60 + 7 }
@@ -126,9 +131,9 @@ final class AgentToastController {
         live.insert(Self.testPaneID)
         doneIn = doneIn.filter { live.contains(Self.pane(ofItemID: $0.key)) }
 
-        let before = queue.visible.map(\.id)
+        let wasEmpty = queue.all.isEmpty
         queue.reconcile(with: agents + (testAgent.map { [$0] } ?? []))
-        if before.isEmpty && queue.visible.isEmpty && panels.isEmpty { return }
+        if wasEmpty && queue.all.isEmpty && panels.isEmpty { return }
         sync()
     }
 
@@ -140,7 +145,7 @@ final class AgentToastController {
         guard !ToastPlacementResolver.shouldSuppress(
             frontmostBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
             herdrBundleIDs: cfg.herdrBundleIDs, quiet: cfg.quietWhenHerdrActive) else { return }
-        guard queue.push(t, notifyOn: cfg.notifyOn, now: Date()), let item = queue.visible.first else { return }
+        guard queue.push(t, notifyOn: cfg.notifyOn, now: Date()), let item = queue.all.first else { return }
 
         resetPause(item.id)
         doneIn[item.id] = nil
@@ -181,6 +186,14 @@ final class AgentToastController {
     private func open(_ item: ToastItem) {
         if item.agent.paneID != Self.testPaneID { manager.focus(item.agent) }
         dismiss(item)
+        // focus() activates herdr, but if it can't (test toast, herdr missing) keys must not stay here.
+        relinquishKey()
+    }
+
+    /// "Later" / esc: dismiss only, and hand the keyboard back to the app the user was in.
+    private func later(_ item: ToastItem) {
+        dismiss(item)
+        relinquishKey()
     }
 
     private func dismiss(_ item: ToastItem) {
@@ -190,12 +203,36 @@ final class AgentToastController {
         sync()
     }
 
+    /// Island/chip "+N" pill: shows the next queued item, hidden overflow included.
     private func cycle() {
-        let ids = queue.visible.map(\.id)
-        guard ids.count > 1 else { return }
-        let current = shownID.flatMap(ids.firstIndex(of:)) ?? 0
-        shownID = ids[(current + 1) % ids.count]
-        sync()
+        let ids = queue.all.map(\.id)
+        if ids.count > 1 {
+            let current = shownID.flatMap(ids.firstIndex(of:)) ?? 0
+            shownID = ids[(current + 1) % ids.count]
+            sync()
+        }
+        relinquishKey()
+    }
+
+    /// A clicked toast panel is key (so ⏎/esc work); after an action that doesn't move focus elsewhere,
+    /// give it back. A non-activating panel can't simply resign: ordering it out makes the WindowServer
+    /// return key focus to the active app, and the panel is ordered straight back in.
+    private func relinquishKey() {
+        keyLeaveWork?.cancel()
+        keyLeaveWork = nil
+        for panel in Array(panels.values) + retiring where panel.isKeyWindow {
+            panel.orderOut(nil)
+            panel.orderFrontRegardless()
+        }
+        if NSApp.isActive, let app = previousApp, !app.isTerminated {
+            app.activate()
+        }
+        previousApp = nil
+    }
+
+    private func panelBecameKey() {
+        let front = NSWorkspace.shared.frontmostApplication
+        if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
     }
 
     private func playSound() {
@@ -211,7 +248,7 @@ final class AgentToastController {
         prune()
         updateExpireTimer()
         updatePreviewTask()
-        if queue.visible.isEmpty {
+        if queue.all.isEmpty {
             placementWork?.cancel()
             placementWork = nil
             for panel in panels.values { retire(panel) }
@@ -223,9 +260,9 @@ final class AgentToastController {
     }
 
     private func prune() {
-        let visible = queue.visible
-        let ids = Set(visible.map(\.id))
-        let panes = Set(visible.map(\.agent.paneID))
+        let all = queue.all
+        let ids = Set(all.map(\.id))
+        let panes = Set(all.map(\.agent.paneID))
         hovered.formIntersection(ids)
         pauseStart = pauseStart.filter { ids.contains($0.key) }
         pausedTotal = pausedTotal.filter { ids.contains($0.key) }
@@ -236,17 +273,18 @@ final class AgentToastController {
     }
 
     private var shownItem: ToastItem? {
-        let visible = queue.visible
-        return visible.first { $0.id == shownID } ?? visible.first
+        let all = queue.all
+        return all.first { $0.id == shownID } ?? all.first
     }
 
     private func updateModels() {
         let visible = queue.visible
+        let all = queue.all
         let now = Date()
-        for item in visible where item.kind == .done && countdowns[item.id] == nil {
+        for item in all where item.kind == .done && countdowns[item.id] == nil {
             countdowns[item.id] = countdown(for: item, now: now)
         }
-        let visibleDoneIn = doneIn.filter { id, _ in visible.contains { $0.id == id } }
+        let visibleDoneIn = doneIn.filter { id, _ in all.contains { $0.id == id } }
         for panel in panels.values {
             let m = panel.model
             if m.reduceMotion != reduceMotion { m.reduceMotion = reduceMotion }
@@ -262,8 +300,9 @@ final class AgentToastController {
                 items = visible
                 extra = queue.overflow
             } else {
+                // Cycling reaches every queued item, so the pill counts all of them.
                 items = shownItem.map { [$0] } ?? []
-                extra = max(0, visible.count - 1) + queue.overflow
+                extra = max(0, all.count - 1)
             }
             if m.items != items || m.extra != extra {
                 withAnimation(animation) {
@@ -295,7 +334,7 @@ final class AgentToastController {
     }
 
     private func updateExpireTimer() {
-        let needed = queue.visible.contains { $0.kind == .done } || queue.overflow > 0
+        let needed = queue.hasDone
         if needed, expireTimer == nil {
             let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.tick() }
@@ -313,13 +352,13 @@ final class AgentToastController {
     private func tick() {
         let now = Date()
         let autohide = manager.config.doneAutohide
-        let keep = queue.visible.filter {
+        let keep = queue.all.filter {
             $0.kind == .done
                 && (hovered.contains($0.id) || effectiveElapsed($0, now: now) < autohide - Self.expireTolerance)
         }
-        let before = queue.visible.count + queue.overflow
+        let before = queue.all.count
         queue.expireDone(now: now, autohide: autohide, pausedIDs: Set(keep.map(\.id)))
-        if queue.visible.count + queue.overflow != before { sync() }
+        if queue.all.count != before { sync() }
     }
 
     private func resetPause(_ id: String) {
@@ -364,7 +403,7 @@ final class AgentToastController {
     private func setPreview(_ lines: [String], pane: String) {
         // A failed read keeps the last good preview.
         guard !lines.isEmpty || previews[pane] == nil, previews[pane] != lines else { return }
-        guard queue.visible.contains(where: { $0.agent.paneID == pane }) else { return }
+        guard queue.all.contains(where: { $0.agent.paneID == pane }) else { return }
         previews[pane] = lines
         updateModels()
     }
@@ -388,7 +427,7 @@ final class AgentToastController {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.placementWork = nil
-                guard !self.queue.visible.isEmpty else { return }
+                guard !self.queue.all.isEmpty else { return }
                 self.placePanels()
                 self.sync()
             }
@@ -436,7 +475,8 @@ final class AgentToastController {
         model.reduceMotion = reduceMotion
         let panel = AgentToastPanel(screenID: screenID, frame: frame, model: model)
         model.onOpen = { [weak self] item in self?.open(item) }
-        model.onLater = { [weak self] item in self?.dismiss(item) }
+        model.onLater = { [weak self] item in self?.later(item) }
+        panel.onBecomeKey = { [weak self] in self?.panelBecameKey() }
         model.onCycle = { [weak self] in self?.cycle() }
         model.onRects = { [weak self, weak panel] rects in
             DispatchQueue.main.async {
@@ -500,6 +540,8 @@ final class AgentToastController {
             mouseMonitors.removeAll()
             if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
             keyMonitor = nil
+            keyLeaveWork?.cancel()
+            keyLeaveWork = nil
             if !hovered.isEmpty { setHovered([]) }
         }
     }
@@ -508,15 +550,41 @@ final class AgentToastController {
     private func updateMouse() {
         let p = NSEvent.mouseLocation
         var now = Set<String>()
+        var offKeyPanel = false
         for panel in panels.values {
             let rects = panel.hitRects
             let inside = rects.values.contains { $0.insetBy(dx: -1, dy: -1).contains(p) }
             if panel.ignoresMouseEvents == inside { panel.ignoresMouseEvents = !inside }
+            if panel.isKeyWindow && !inside { offKeyPanel = true }
             for (id, r) in rects where id != AgentToastMetrics.pillKey && r.contains(p) {
                 now.insert(id)
             }
         }
         if now != hovered { setHovered(now) }
+        scheduleKeyLeave(offKeyPanel)
+    }
+
+    /// A card clicked but not acted on keeps the panel key only while the cursor stays on the cards.
+    private func scheduleKeyLeave(_ off: Bool) {
+        guard off else {
+            keyLeaveWork?.cancel()
+            keyLeaveWork = nil
+            return
+        }
+        guard keyLeaveWork == nil else { return }
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.keyLeaveWork = nil
+                let p = NSEvent.mouseLocation
+                let stillOff = self.panels.values.contains { panel in
+                    panel.isKeyWindow && !panel.hitRects.values.contains { $0.insetBy(dx: -1, dy: -1).contains(p) }
+                }
+                if stillOff { self.relinquishKey() }
+            }
+        }
+        keyLeaveWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.keyLeaveDelay, execute: work)
     }
 
     private func setHovered(_ now: Set<String>) {
@@ -527,8 +595,7 @@ final class AgentToastController {
         }
         let changed = now.symmetricDifference(hovered)
         hovered = now
-        let visible = queue.visible
-        for item in visible where item.kind == .done && changed.contains(item.id) {
+        for item in queue.all where item.kind == .done && changed.contains(item.id) {
             countdowns[item.id] = countdown(for: item, now: t)
         }
         updateModels()
@@ -545,7 +612,7 @@ final class AgentToastController {
             open(item)
             return true
         case 53: // escape
-            dismiss(item)
+            later(item)
             return true
         default:
             return false

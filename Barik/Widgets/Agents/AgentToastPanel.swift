@@ -20,9 +20,16 @@ final class AgentToastPanel: NSPanel {
     }
     /// Set one beat after ordering in, so the first items get an insertion transition.
     var ready = false
+    /// Called when a click made the panel key.
+    var onBecomeKey: (() -> Void)?
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    override func becomeKey() {
+        super.becomeKey()
+        onBecomeKey?()
+    }
 
     init(screenID: String, frame: CGRect, model: AgentToastPanelModel) {
         self.screenID = screenID
