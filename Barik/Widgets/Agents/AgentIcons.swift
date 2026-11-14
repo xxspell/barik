@@ -57,7 +57,7 @@ struct RingSpinner: View {
             if reduceMotion {
                 arc
             } else {
-                TimelineView(.animation) { context in
+                TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
                     let t = context.date.timeIntervalSinceReferenceDate
                     arc.rotationEffect(.degrees((t.truncatingRemainder(dividingBy: 0.9) / 0.9) * 360))
                 }
