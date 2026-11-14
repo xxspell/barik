@@ -3,6 +3,7 @@ import SwiftUI
 /// Window-related settings that the TUI spaces views read from the
 /// `[widgets.default.spaces]` table — the same keys the default style uses.
 struct TUISpacesWindowSettings {
+    var showWindows = true
     var showTitle = true
     var titleMaxLength = 50
     var alwaysAppNameFor: [String] = []
@@ -13,6 +14,7 @@ struct TUISpacesWindowSettings {
     init(config: ConfigData) {
         let window = config["window"]?.dictionaryValue ?? [:]
         let title = window["title"]?.dictionaryValue ?? [:]
+        showWindows = window["show"]?.boolValue ?? true
         showTitle = window["show-title"]?.boolValue ?? true
         titleMaxLength = max(title["max-length"]?.intValue ?? 50, 2)
         alwaysAppNameFor = title["always-display-app-name-for"]?.arrayValue?.compactMap(\.stringValue) ?? []
@@ -48,7 +50,7 @@ struct TUISpacesView: View {
                 ForEach(spaces) { space in
                     TUISpaceGroup(
                         space: space,
-                        showKey: showKey,
+                        showKey: showKey || !windowSettings.showWindows,
                         showDeleteButton: showDeleteButton,
                         showOutline: showOutline,
                         shape: shape,
@@ -66,7 +68,7 @@ struct TUISpacesView: View {
                     shape: shape
                 )
 
-                if let focusedSpace, !focusedSpace.windows.isEmpty {
+                if windowSettings.showWindows, let focusedSpace, !focusedSpace.windows.isEmpty {
                     Text("│")
                         .barikFont(size: 12)
                         .foregroundStyle(BarikStyle.current.dim)
@@ -146,8 +148,10 @@ private struct TUISpaceGroup: View {
                 TUISpaceNumber(space: space)
             }
 
-            ForEach(space.windows) { window in
-                TUIWindowLabel(window: window, space: space, settings: windowSettings)
+            if windowSettings.showWindows {
+                ForEach(space.windows) { window in
+                    TUIWindowLabel(window: window, space: space, settings: windowSettings)
+                }
             }
 
             // Keep a keyless empty space visible and clickable.

@@ -17857,6 +17857,38 @@
           }
         }
       }
+    },
+    "settings.spaces.field.show_windows.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show windows"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показывать окна"
+          }
+        }
+      }
+    },
+    "settings.spaces.field.show_windows.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show app icons or names next to space numbers. Turn off to show only the spaces."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Иконки или названия приложений рядом с номерами спейсов. Выключите, чтобы видеть только спейсы."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

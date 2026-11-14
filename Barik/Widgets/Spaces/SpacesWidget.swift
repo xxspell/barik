@@ -81,6 +81,7 @@ struct SpacesWidget: View {
     private var config: ConfigData { configProvider.config }
     private var spaceConfig: ConfigData { config["space"]?.dictionaryValue ?? [:] }
     private var showInactiveSpaces: Bool { spaceConfig["show-inactive"]?.boolValue ?? true }
+    private var showWindows: Bool { (configProvider.config["window"]?.dictionaryValue ?? [:])["show"]?.boolValue ?? true }
     private var showOnlyCurrentDisplaySpaces: Bool { spaceConfig["show-only-current-display-spaces"]?.boolValue ?? false }
     private var displayMode: SpacesDisplayMode {
         SpacesDisplayMode(rawValue: spaceConfig["display-mode"]?.stringValue ?? SpacesDisplayMode.classic.rawValue) ?? .classic
@@ -141,7 +142,7 @@ struct SpacesWidget: View {
                     showOutline: showOutline
                 )
 
-                if let focusedSpace, !focusedSpace.windows.isEmpty {
+                if showWindows, let focusedSpace, !focusedSpace.windows.isEmpty {
                     CompactFocusedWindowsStrip(
                         space: focusedSpace,
                         visualStyle: visualStyle,
@@ -279,7 +280,9 @@ private struct SpaceView: View {
     @ObservedObject var configManager = ConfigManager.shared
     var foregroundHeight: CGFloat { configManager.config.experimental.foreground.resolveHeight() }
 
-    var showKey: Bool { spaceConfig["show-key"]?.boolValue ?? true }
+    var showWindows: Bool { (config["window"]?.dictionaryValue ?? [:])["show"]?.boolValue ?? true }
+    /// With windows hidden the number is the only content, so always show it.
+    var showKey: Bool { (spaceConfig["show-key"]?.boolValue ?? true) || !showWindows }
     var showDeleteButton: Bool { spaceConfig["show-delete-button"]?.boolValue ?? true }
 
     let space: AnySpace
@@ -299,9 +302,11 @@ private struct SpaceView: View {
                     .fixedSize(horizontal: true, vertical: false)
                 Spacer().frame(width: 5)
             }
-            HStack(spacing: 2) {
-                ForEach(space.windows) { window in
-                    WindowView(window: window, space: space, visualStyle: visualStyle)
+            if showWindows {
+                HStack(spacing: 2) {
+                    ForEach(space.windows) { window in
+                        WindowView(window: window, space: space, visualStyle: visualStyle)
+                    }
                 }
             }
             Spacer().frame(width: 10)
