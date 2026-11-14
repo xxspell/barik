@@ -56,6 +56,10 @@ enum WidgetViewFactory {
             CodexUsageWidget()
                 .environmentObject(config)
 
+        case "default.agents":
+            AgentsWidget()
+                .environmentObject(config)
+
         case "default.bambuddy":
             BambuddyWidget()
                 .environmentObject(config)
