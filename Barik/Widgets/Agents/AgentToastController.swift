@@ -268,11 +268,13 @@ final class AgentToastController {
     private func relinquishKey() {
         keyLeaveWork?.cancel()
         keyLeaveWork = nil
+        // Read first: ordering the panel out resigns key, which clears `previousApp`.
+        let previous = previousApp
         for panel in Array(panels.values) + retiring where panel.isKeyWindow {
             panel.orderOut(nil)
             panel.orderFrontRegardless()
         }
-        if NSApp.isActive, let app = previousApp, !app.isTerminated {
+        if NSApp.isActive, let app = previous, !app.isTerminated {
             app.activate()
         }
         previousApp = nil
@@ -281,6 +283,12 @@ final class AgentToastController {
     private func panelBecameKey() {
         let front = NSWorkspace.shared.frontmostApplication
         if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
+    }
+
+    /// Once no toast panel is key, the remembered app is stale and must never be re-activated later.
+    private func panelResignedKey() {
+        guard !(Array(panels.values) + retiring).contains(where: \.isKeyWindow) else { return }
+        previousApp = nil
     }
 
     private func playSound() {
@@ -538,6 +546,7 @@ final class AgentToastController {
         model.onOpen = { [weak self] item in self?.open(item) }
         model.onLater = { [weak self] item in self?.later(item) }
         panel.onBecomeKey = { [weak self] in self?.panelBecameKey() }
+        panel.onResignKey = { [weak self] in self?.panelResignedKey() }
         model.onCycle = { [weak self] in self?.cycle() }
         model.onRects = { [weak self, weak panel] rects in
             DispatchQueue.main.async {

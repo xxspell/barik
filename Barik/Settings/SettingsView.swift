@@ -9437,6 +9437,10 @@ private struct AgentsSettingsView: View {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
             settingsStore.setInt(value, for: field(key))
+            // The reload normally clears the pending value; if the file already held it, none may come.
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, pendingIntWrites[key] == value else { return }
+            pendingIntWrites.removeValue(forKey: key)
         }
     }
 

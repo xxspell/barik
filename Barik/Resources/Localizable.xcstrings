@@ -17809,6 +17809,54 @@
           }
         }
       }
+    },
+    "agents.popup.install_herdr": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install herdr: herdr.dev"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Установите herdr: herdr.dev"
+          }
+        }
+      }
+    },
+    "agents.popup.count.one": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld agent"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "агентов: %lld"
+          }
+        }
+      }
+    },
+    "agents.popup.count.other": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld agents"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "агентов: %lld"
+          }
+        }
+      }
     }
   },
   "version": "1.1"

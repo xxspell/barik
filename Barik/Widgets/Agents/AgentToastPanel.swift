@@ -22,6 +22,8 @@ final class AgentToastPanel: NSPanel {
     var ready = false
     /// Called when a click made the panel key.
     var onBecomeKey: (() -> Void)?
+    /// Called when the panel stops being key.
+    var onResignKey: (() -> Void)?
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
@@ -29,6 +31,11 @@ final class AgentToastPanel: NSPanel {
     override func becomeKey() {
         super.becomeKey()
         onBecomeKey?()
+    }
+
+    override func resignKey() {
+        super.resignKey()
+        onResignKey?()
     }
 
     init(screenID: String, frame: CGRect, model: AgentToastPanelModel) {

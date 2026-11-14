@@ -23,6 +23,23 @@ extension View {
     func trackingReduceMotion(_ value: Binding<Bool>) -> some View {
         modifier(ReduceMotionReader(reduceMotion: value))
     }
+
+    /// Freezes the animated agent icons below this view (e.g. while their popup is hidden).
+    func agentAnimationsPaused(_ paused: Bool) -> some View {
+        environment(\.agentAnimationsPaused, paused)
+    }
+}
+
+private struct AgentAnimationsPausedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// True renders the spinner and the blocked pulse as static frames: no TimelineView ticks.
+    var agentAnimationsPaused: Bool {
+        get { self[AgentAnimationsPausedKey.self] }
+        set { self[AgentAnimationsPausedKey.self] = newValue }
+    }
 }
 
 /// Palette shared by the chip and (later) the popup/toast.
@@ -50,11 +67,12 @@ struct RingSpinner: View {
     var lineWidth: CGFloat = 1.6
 
     @State private var reduceMotion = false
+    @Environment(\.agentAnimationsPaused) private var paused
 
     var body: some View {
         ZStack {
             Circle().stroke(.tint.opacity(0.22), lineWidth: lineWidth)
-            if reduceMotion {
+            if reduceMotion || paused {
                 arc
             } else {
                 TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
@@ -82,6 +100,7 @@ struct AgentStatusIcon: View {
     var size: CGFloat = 13
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.agentAnimationsPaused) private var paused
     @State private var reduceMotion = false
 
     var body: some View {
@@ -91,7 +110,7 @@ struct AgentStatusIcon: View {
         case .blocked:
             let amber = AgentsPalette.amber(tui: tui, light: light)
             Group {
-                if reduceMotion {
+                if reduceMotion || paused {
                     symbol("exclamationmark.bubble.fill", amber)
                 } else {
                     TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in

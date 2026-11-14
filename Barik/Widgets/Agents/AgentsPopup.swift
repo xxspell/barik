@@ -16,6 +16,7 @@ struct AgentsPopup: View {
             summary: manager.summary,
             connection: manager.connection,
             herdrVersion: manager.herdrVersion,
+            herdrAppAvailable: manager.herdrAppAvailable,
             groupBy: manager.config.groupBy,
             previewLines: manager.config.previewLines,
             previews: previews,
@@ -26,8 +27,16 @@ struct AgentsPopup: View {
             },
             onOpenHerdr: { manager.openHerdr() }
         )
-        .onAppear { visible = true }
-        .onReceive(NotificationCenter.default.publisher(for: .willShowWindow)) { _ in visible = true }
+        // Hidden, the tree stays mounted but static: no spinner/pulse TimelineViews keep ticking.
+        .agentAnimationsPaused(!visible)
+        .onAppear {
+            visible = true
+            manager.refreshHerdrAppAvailability()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .willShowWindow)) { _ in
+            visible = true
+            manager.refreshHerdrAppAvailability()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .willHideWindow)) { _ in visible = false }
         // Re-keyed on visibility: the loop is cancelled as soon as the popup hides, so nothing polls in the background.
         .task(id: visible) {
@@ -58,6 +67,7 @@ struct AgentsPopupContent: View {
     let summary: AgentsSummary
     let connection: AgentsConnectionState
     let herdrVersion: String?
+    var herdrAppAvailable = true
     let groupBy: String
     let previewLines: Int
     let previews: [String: [String]]
@@ -68,7 +78,6 @@ struct AgentsPopupContent: View {
     var startExpandedIdle = false
 
     @State private var idleExpanded = false
-    @Environment(\.colorScheme) private var colorScheme
 
     private var style: BarikStyle { BarikStyle.current }
     private var tui: Bool { style.isTUI }
@@ -114,6 +123,8 @@ struct AgentsPopupContent: View {
         .frame(maxHeight: 520)
         .background(Color.black)
         .foregroundStyle(fg)
+        // Always black: status icons must use their dark-theme palette.
+        .environment(\.colorScheme, .dark)
         .onAppear { if startExpandedIdle { idleExpanded = true } }
     }
 
@@ -182,14 +193,21 @@ struct AgentsPopupContent: View {
             Text(String(localized: "agents.widget.not_running"))
                 .barikPopupFont(size: 12, design: design)
                 .foregroundStyle(dim)
-            Button(action: onOpenHerdr) {
-                Text(String(localized: "agents.popup.open_herdr"))
-                    .barikPopupFont(size: 11.5, weight: .medium, design: design)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+            if herdrAppAvailable {
+                Button(action: onOpenHerdr) {
+                    Text(String(localized: "agents.popup.open_herdr"))
+                        .barikPopupFont(size: 11.5, weight: .medium, design: design)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text(String(localized: "agents.popup.install_herdr"))
+                    .barikPopupFont(size: 11, design: design)
+                    .foregroundStyle(dim)
+                    .textSelection(.enabled)
             }
-            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)
@@ -475,10 +493,12 @@ struct AgentsPopupContent: View {
             Text(footerText)
                 .lineLimit(1)
             Spacer()
-            Button(action: onOpenHerdr) {
-                Text(String(localized: "agents.popup.open_herdr_arrow"))
+            if herdrAppAvailable {
+                Button(action: onOpenHerdr) {
+                    Text(String(localized: "agents.popup.open_herdr_arrow"))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .barikPopupFont(size: 11, design: design)
         .foregroundStyle(fg.opacity(0.6))
@@ -494,12 +514,15 @@ struct AgentsPopupContent: View {
         }
     }
 
+    /// "herdr 0.9.5 · 13 agents" (or "herdr · 13 agents" without a version).
     private var footerText: String {
         if isDisconnected { return "herdr" }
-        if let v = herdrVersion, !v.isEmpty {
-            return String(format: String(localized: "agents.popup.footer_version"), v, summary.total)
-        }
-        return String(format: String(localized: "agents.popup.footer"), summary.total)
+        let n = summary.total
+        let count = n == 1
+            ? String(format: String(localized: "agents.popup.count.one"), n)
+            : String(format: String(localized: "agents.popup.count.other"), n)
+        if let v = herdrVersion, !v.isEmpty { return "herdr \(v) · \(count)" }
+        return "herdr · \(count)"
     }
 }
 
