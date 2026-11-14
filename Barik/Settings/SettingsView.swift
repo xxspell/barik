@@ -9063,6 +9063,8 @@ private struct AgentsSettingsView: View {
     @State private var writeTasks: [String: Task<Void, Never>] = [:]
     @State private var pendingStringWrites: [String: String] = [:]
     @State private var pendingArrayWrites: [String: [String]] = [:]
+    @State private var pendingIntWrites: [String: Int] = [:]
+    @State private var lastSyncedInts: [String: Int] = [:]
 
     private let table = "widgets.default.agents"
 
@@ -9156,7 +9158,7 @@ private struct AgentsSettingsView: View {
                     valueFormat: { "\(Int($0))s" }
                 )
                 .onChange(of: fallbackInterval) { _, newValue in
-                    setInt(Int(newValue.rounded()), key: "fallback-interval")
+                    scheduleIntWrite(Int(newValue.rounded()), key: "fallback-interval")
                 }
             }
         }
@@ -9232,7 +9234,7 @@ private struct AgentsSettingsView: View {
                     valueFormat: { "\(Int($0))" }
                 )
                 .onChange(of: previewLines) { _, newValue in
-                    setInt(Int(newValue.rounded()), key: "preview-lines")
+                    scheduleIntWrite(Int(newValue.rounded()), key: "preview-lines")
                 }
             }
         }
@@ -9313,7 +9315,7 @@ private struct AgentsSettingsView: View {
                         valueFormat: { "\(Int($0))s" }
                     )
                     .onChange(of: doneAutohide) { _, newValue in
-                        setInt(Int(newValue.rounded()), key: "done-autohide")
+                        scheduleIntWrite(Int(newValue.rounded()), key: "done-autohide")
                     }
 
                     PickerSettingRow(
@@ -9422,11 +9424,34 @@ private struct AgentsSettingsView: View {
         settingsStore.setBool(value, for: field(key))
     }
 
-    private func setInt(_ value: Int, key: String) {
-        guard !isApplyingConfigSnapshot else { return }
-        // Slider onChange also fires for values just loaded from config; skip no-op writes.
-        guard settingsStore.intValue(field(key), fallback: Int.min) != value else { return }
-        settingsStore.setInt(value, for: field(key))
+    /// Slider writes: debounced, tracked as pending so a config reload mid-drag cannot snap the thumb back.
+    /// Values equal to the last loaded/written one (load, clamp, reset) are never written back.
+    private func scheduleIntWrite(_ value: Int, key: String) {
+        guard lastSyncedInts[key] != value else { return }
+        lastSyncedInts[key] = value
+        writeTasks[key]?.cancel()
+        pendingIntWrites[key] = value
+        writeTasks[key] = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            settingsStore.setInt(value, for: field(key))
+        }
+    }
+
+    private func resolvedInt(_ key: String, incoming: Int, current: Int) -> Int {
+        let result: Int
+        if let pending = pendingIntWrites[key] {
+            if incoming == pending {
+                pendingIntWrites.removeValue(forKey: key)
+                result = incoming
+            } else {
+                result = current
+            }
+        } else {
+            result = incoming
+        }
+        lastSyncedInts[key] = result
+        return result
     }
 
     private func setString(_ value: String, key: String) {
@@ -9543,7 +9568,7 @@ private struct AgentsSettingsView: View {
             bundleIDsText = resolvedIDs.joined(separator: ", ")
         }
 
-        fallbackInterval = min(max((number("fallback-interval") ?? 2).rounded(), 1), 10)
+        fallbackInterval = Double(resolvedInt("fallback-interval", incoming: Int(min(max((number("fallback-interval") ?? 2).rounded(), 1), 10)), current: Int(fallbackInterval)))
         showWhenIdle = config["show-when-idle"]?.boolValue ?? true
         showElapsed = config["show-elapsed"]?.boolValue ?? true
 
@@ -9554,7 +9579,7 @@ private struct AgentsSettingsView: View {
 
         let group = config["group-by"]?.stringValue ?? "status"
         groupBy = ["status", "project"].contains(group) ? group : "status"
-        previewLines = Double(min(max(config["preview-lines"]?.intValue ?? 6, 2), 12))
+        previewLines = Double(resolvedInt("preview-lines", incoming: min(max(config["preview-lines"]?.intValue ?? 6, 2), 12), current: Int(previewLines)))
 
         notifications = config["notifications"]?.boolValue ?? true
         let currentNotify = [notifyBlocked ? "blocked" : nil, notifyDone ? "done" : nil].compactMap { $0 }
@@ -9570,7 +9595,7 @@ private struct AgentsSettingsView: View {
         let screenValue = config["screen"]?.stringValue ?? "active"
         screen = screenValue.isEmpty ? "active" : screenValue
         quietWhenHerdrActive = config["quiet-when-herdr-active"]?.boolValue ?? true
-        doneAutohide = min(max((number("done-autohide") ?? 6).rounded(), 2), 20)
+        doneAutohide = Double(resolvedInt("done-autohide", incoming: Int(min(max((number("done-autohide") ?? 6).rounded(), 2), 20)), current: Int(doneAutohide)))
         let soundValue = config["sound"]?.stringValue ?? "off"
         sound = soundValue.isEmpty ? "off" : soundValue
     }
@@ -9579,6 +9604,7 @@ private struct AgentsSettingsView: View {
 
     private func cancelWrites(_ keys: [String]) {
         for key in keys {
+            pendingIntWrites.removeValue(forKey: key)
             writeTasks[key]?.cancel()
             writeTasks.removeValue(forKey: key)
             pendingStringWrites.removeValue(forKey: key)
@@ -9587,7 +9613,8 @@ private struct AgentsSettingsView: View {
     }
 
     private func resetConnectionDefaults() {
-        cancelWrites(["socket-path", "herdr-cli", "herdr-bundle-ids", "terminal-bundle-id"])
+        cancelWrites(["socket-path", "herdr-cli", "herdr-bundle-ids", "terminal-bundle-id", "fallback-interval"])
+        lastSyncedInts["fallback-interval"] = 2
         isApplyingConfigSnapshot = true
         socketPath = Self.defaultSocketPath
         herdrCLI = Self.defaultHerdrCLI
@@ -9617,6 +9644,8 @@ private struct AgentsSettingsView: View {
     }
 
     private func resetPopupDefaults() {
+        cancelWrites(["preview-lines"])
+        lastSyncedInts["preview-lines"] = 6
         isApplyingConfigSnapshot = true
         groupBy = "status"
         previewLines = 6
@@ -9627,7 +9656,8 @@ private struct AgentsSettingsView: View {
     }
 
     private func resetNotificationDefaults() {
-        cancelWrites(["notify-on"])
+        cancelWrites(["notify-on", "done-autohide"])
+        lastSyncedInts["done-autohide"] = 6
         isApplyingConfigSnapshot = true
         notifications = true
         notifyBlocked = true
