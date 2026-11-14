@@ -103,6 +103,8 @@ private struct SettingsDetailView: View {
                     CodexUsageSettingsView()
                 case .bambuddy:
                     BambuddySettingsView()
+                case .agents:
+                    AgentsSettingsView()
                 case .pomodoro:
                     PomodoroSettingsView()
                 case .ticktick:
@@ -9028,6 +9030,622 @@ private struct WidgetExportView: View {
 
     private func reveal(_ folder: URL) {
         NSWorkspace.shared.activateFileViewerSelecting([folder])
+    }
+}
+
+// MARK: - Agents
+
+private struct AgentsSettingsView: View {
+    @ObservedObject private var configManager = ConfigManager.shared
+    @ObservedObject private var settingsStore = SettingsStore.shared
+    @ObservedObject private var manager = AgentsManager.shared
+
+    @State private var socketPath = AgentsSettingsView.defaultSocketPath
+    @State private var herdrCLI = AgentsSettingsView.defaultHerdrCLI
+    @State private var bundleIDsText = AgentsSettingsView.defaultBundleIDs.joined(separator: ", ")
+    @State private var terminalBundleID = ""
+    @State private var fallbackInterval = 2.0
+    @State private var showWhenIdle = true
+    @State private var showElapsed = true
+    @State private var enabledKinds = Set(AgentsSettingsView.allKinds)
+    @State private var groupBy = "status"
+    @State private var previewLines = 6.0
+    @State private var notifications = true
+    @State private var notifyBlocked = true
+    @State private var notifyDone = true
+    @State private var toastStyle = "island"
+    @State private var screen = "active"
+    @State private var quietWhenHerdrActive = true
+    @State private var doneAutohide = 6.0
+    @State private var sound = "off"
+    @State private var isApplyingConfigSnapshot = false
+
+    @State private var writeTasks: [String: Task<Void, Never>] = [:]
+    @State private var pendingStringWrites: [String: String] = [:]
+    @State private var pendingArrayWrites: [String: [String]] = [:]
+
+    private let table = "widgets.default.agents"
+
+    private static let defaultSocketPath = "~/.config/herdr/herdr.sock"
+    private static let defaultHerdrCLI = "herdr"
+    private static let defaultBundleIDs = ["so.pen.herdr-gpui"]
+    private static let allKinds = ["claude", "opencode", "omp", "pi", "jcode"]
+    private static let sounds = ["off", "Glass", "Ping", "Pop", "Hero", "Submarine"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            SettingsHeaderView(
+                title: settingsLocalized("settings.agents.header.title"),
+                description: settingsLocalized("settings.agents.header.description")
+            )
+
+            connectionCard
+            barCard
+            popupCard
+            notificationsCard
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(24)
+        .onAppear(perform: loadFromConfig)
+        .onReceive(configManager.$config) { _ in
+            loadFromConfig()
+        }
+    }
+
+    // MARK: - Cards
+
+    private var connectionCard: some View {
+        SettingsCardView(
+            settingsLocalized("settings.agents.card.connection"),
+            actionTitle: settingsLocalized("settings.action.reset"),
+            action: resetConnectionDefaults
+        ) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 10) {
+                    SettingsStatusBadge(title: connectionBadgeTitle, tint: connectionBadgeTint)
+                    if let version = manager.herdrVersion, !version.isEmpty {
+                        Text(String(format: settingsLocalized("settings.agents.status.version"), version))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                DebouncedTextSettingRow(
+                    title: settingsLocalized("settings.agents.field.socket_path.title"),
+                    description: settingsLocalized("settings.agents.field.socket_path.description"),
+                    text: $socketPath
+                )
+                .onChange(of: socketPath) { _, newValue in
+                    scheduleStringWrite(key: "socket-path", value: newValue)
+                }
+
+                DebouncedTextSettingRow(
+                    title: settingsLocalized("settings.agents.field.herdr_cli.title"),
+                    description: settingsLocalized("settings.agents.field.herdr_cli.description"),
+                    text: $herdrCLI
+                )
+                .onChange(of: herdrCLI) { _, newValue in
+                    scheduleStringWrite(key: "herdr-cli", value: newValue)
+                }
+
+                DebouncedTextSettingRow(
+                    title: settingsLocalized("settings.agents.field.bundle_ids.title"),
+                    description: settingsLocalized("settings.agents.field.bundle_ids.description"),
+                    text: $bundleIDsText
+                )
+                .onChange(of: bundleIDsText) { _, newValue in
+                    scheduleArrayWrite(key: "herdr-bundle-ids", value: newValue)
+                }
+
+                DebouncedTextSettingRow(
+                    title: settingsLocalized("settings.agents.field.terminal_bundle_id.title"),
+                    description: settingsLocalized("settings.agents.field.terminal_bundle_id.description"),
+                    text: $terminalBundleID
+                )
+                .onChange(of: terminalBundleID) { _, newValue in
+                    scheduleStringWrite(key: "terminal-bundle-id", value: newValue)
+                }
+
+                SliderSettingRow(
+                    title: settingsLocalized("settings.agents.field.fallback_interval.title"),
+                    description: settingsLocalized("settings.agents.field.fallback_interval.description"),
+                    value: $fallbackInterval,
+                    range: 1...10,
+                    step: 1,
+                    valueFormat: { "\(Int($0))s" }
+                )
+                .onChange(of: fallbackInterval) { _, newValue in
+                    setInt(Int(newValue.rounded()), key: "fallback-interval")
+                }
+            }
+        }
+    }
+
+    private var barCard: some View {
+        SettingsCardView(
+            settingsLocalized("settings.agents.card.bar"),
+            actionTitle: settingsLocalized("settings.action.reset"),
+            action: resetBarDefaults
+        ) {
+            VStack(alignment: .leading, spacing: 16) {
+                ToggleRow(
+                    title: settingsLocalized("settings.agents.field.show_when_idle.title"),
+                    description: settingsLocalized("settings.agents.field.show_when_idle.description"),
+                    isOn: Binding(
+                        get: { showWhenIdle },
+                        set: { showWhenIdle = $0; setBool($0, key: "show-when-idle") }
+                    )
+                )
+
+                ToggleRow(
+                    title: settingsLocalized("settings.agents.field.show_elapsed.title"),
+                    description: settingsLocalized("settings.agents.field.show_elapsed.description"),
+                    isOn: Binding(
+                        get: { showElapsed },
+                        set: { showElapsed = $0; setBool($0, key: "show-elapsed") }
+                    )
+                )
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(settingsLocalized("settings.agents.field.kinds.title"))
+                        .font(.headline)
+                    Text(settingsLocalized("settings.agents.field.kinds.description"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    ForEach(Self.allKinds, id: \.self) { kind in
+                        Toggle(kind, isOn: kindBinding(kind))
+                            .toggleStyle(.switch)
+                            .disabled(enabledKinds == [kind])
+                    }
+                }
+            }
+        }
+    }
+
+    private var popupCard: some View {
+        SettingsCardView(
+            settingsLocalized("settings.agents.card.popup"),
+            actionTitle: settingsLocalized("settings.action.reset"),
+            action: resetPopupDefaults
+        ) {
+            VStack(alignment: .leading, spacing: 16) {
+                SegmentedPickerRow(
+                    title: settingsLocalized("settings.agents.field.group_by.title"),
+                    description: settingsLocalized("settings.agents.field.group_by.description"),
+                    selection: Binding(
+                        get: { groupBy },
+                        set: { groupBy = $0; setString($0, key: "group-by") }
+                    ),
+                    options: ["status", "project"],
+                    titleForOption: { $0 == "status"
+                        ? settingsLocalized("settings.agents.group_by.status")
+                        : settingsLocalized("settings.agents.group_by.project") }
+                )
+
+                SliderSettingRow(
+                    title: settingsLocalized("settings.agents.field.preview_lines.title"),
+                    description: settingsLocalized("settings.agents.field.preview_lines.description"),
+                    value: $previewLines,
+                    range: 2...12,
+                    step: 1,
+                    valueFormat: { "\(Int($0))" }
+                )
+                .onChange(of: previewLines) { _, newValue in
+                    setInt(Int(newValue.rounded()), key: "preview-lines")
+                }
+            }
+        }
+    }
+
+    private var notificationsCard: some View {
+        SettingsCardView(
+            settingsLocalized("settings.agents.card.notifications"),
+            actionTitle: settingsLocalized("settings.action.reset"),
+            action: resetNotificationDefaults
+        ) {
+            VStack(alignment: .leading, spacing: 16) {
+                ToggleRow(
+                    title: settingsLocalized("settings.agents.field.notifications.title"),
+                    description: settingsLocalized("settings.agents.field.notifications.description"),
+                    isOn: Binding(
+                        get: { notifications },
+                        set: { notifications = $0; setBool($0, key: "notifications") }
+                    )
+                )
+
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(settingsLocalized("settings.agents.field.notify_on.title"))
+                            .font(.headline)
+                        Text(settingsLocalized("settings.agents.field.notify_on.description"))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Toggle(settingsLocalized("settings.agents.notify_on.blocked"), isOn: Binding(
+                            get: { notifyBlocked },
+                            set: { notifyBlocked = $0; writeNotifyOn() }
+                        ))
+                        .toggleStyle(.switch)
+                        Toggle(settingsLocalized("settings.agents.notify_on.done"), isOn: Binding(
+                            get: { notifyDone },
+                            set: { notifyDone = $0; writeNotifyOn() }
+                        ))
+                        .toggleStyle(.switch)
+                    }
+
+                    SegmentedPickerRow(
+                        title: settingsLocalized("settings.agents.field.toast_style.title"),
+                        description: settingsLocalized("settings.agents.field.toast_style.description"),
+                        selection: Binding(
+                            get: { toastStyle },
+                            set: { toastStyle = $0; setString($0, key: "toast-style") }
+                        ),
+                        options: ["island", "chip", "stack"],
+                        titleForOption: { settingsLocalized("settings.agents.toast_style.\($0)") }
+                    )
+
+                    PickerSettingRow(
+                        title: settingsLocalized("settings.agents.field.screen.title"),
+                        description: settingsLocalized("settings.agents.field.screen.description"),
+                        selection: Binding(
+                            get: { screen },
+                            set: { screen = $0; setString($0, key: "screen") }
+                        ),
+                        options: screenOptions.map(\.id),
+                        titleForOption: { id in screenOptions.first { $0.id == id }?.title ?? id }
+                    )
+
+                    ToggleRow(
+                        title: settingsLocalized("settings.agents.field.quiet.title"),
+                        description: settingsLocalized("settings.agents.field.quiet.description"),
+                        isOn: Binding(
+                            get: { quietWhenHerdrActive },
+                            set: { quietWhenHerdrActive = $0; setBool($0, key: "quiet-when-herdr-active") }
+                        )
+                    )
+
+                    SliderSettingRow(
+                        title: settingsLocalized("settings.agents.field.done_autohide.title"),
+                        description: settingsLocalized("settings.agents.field.done_autohide.description"),
+                        value: $doneAutohide,
+                        range: 2...20,
+                        step: 1,
+                        valueFormat: { "\(Int($0))s" }
+                    )
+                    .onChange(of: doneAutohide) { _, newValue in
+                        setInt(Int(newValue.rounded()), key: "done-autohide")
+                    }
+
+                    PickerSettingRow(
+                        title: settingsLocalized("settings.agents.field.sound.title"),
+                        description: settingsLocalized("settings.agents.field.sound.description"),
+                        selection: Binding(
+                            get: { sound },
+                            set: { sound = $0; setString($0, key: "sound") }
+                        ),
+                        options: soundOptions,
+                        titleForOption: { $0 == "off" ? settingsLocalized("settings.agents.sound.off") : $0 }
+                    )
+                }
+                .disabled(!notifications)
+                .opacity(notifications ? 1 : 0.45)
+
+                HStack(spacing: 12) {
+                    Button {
+                        AgentToastController.shared.showTest(kind: .blocked)
+                    } label: {
+                        Label(settingsLocalized("settings.agents.action.test_blocked"), systemImage: "exclamationmark.bubble")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button {
+                        AgentToastController.shared.showTest(kind: .done)
+                    } label: {
+                        Label(settingsLocalized("settings.agents.action.test_done"), systemImage: "checkmark.bubble")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .buttonStyle(.bordered)
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    // MARK: - Derived options
+
+    private struct ScreenOption { let id: String; let title: String }
+
+    private var screenOptions: [ScreenOption] {
+        var result = [
+            ScreenOption(id: "active", title: settingsLocalized("settings.agents.screen.active")),
+            ScreenOption(id: "main", title: settingsLocalized("settings.agents.screen.main")),
+            ScreenOption(id: "all", title: settingsLocalized("settings.agents.screen.all")),
+        ]
+        for screen in NSScreen.screens {
+            let descriptor = screen.monitorDescriptor
+            result.append(ScreenOption(id: descriptor.id, title: screen.localizedName))
+        }
+        if !result.contains(where: { $0.id == screen }) {
+            result.append(ScreenOption(id: screen, title: screen))
+        }
+        return result
+    }
+
+    private var soundOptions: [String] {
+        Self.sounds.contains(sound) ? Self.sounds : Self.sounds + [sound]
+    }
+
+    private var connectionBadgeTitle: String {
+        switch manager.connection {
+        case .live:
+            return settingsLocalized("settings.badge.live")
+        case .fallbackPolling(let reason):
+            return String(format: settingsLocalized("settings.agents.status.polling"), reason)
+        case .disconnected(let reason):
+            return reason.isEmpty ? settingsLocalized("settings.agents.status.disconnected") : reason
+        case .connecting:
+            return settingsLocalized("settings.agents.status.connecting")
+        }
+    }
+
+    private var connectionBadgeTint: Color {
+        switch manager.connection {
+        case .live: return .green
+        case .fallbackPolling: return .orange
+        case .disconnected, .connecting: return .gray
+        }
+    }
+
+    private func kindBinding(_ kind: String) -> Binding<Bool> {
+        Binding(
+            get: { enabledKinds.contains(kind) },
+            set: { isOn in
+                var next = enabledKinds
+                if isOn { next.insert(kind) } else { next.remove(kind) }
+                guard !next.isEmpty else { return }
+                enabledKinds = next
+                writeKinds()
+            }
+        )
+    }
+
+    // MARK: - Writes
+
+    private func field(_ key: String) -> SettingsFieldKey {
+        .init(tablePath: table, key: key)
+    }
+
+    private func setBool(_ value: Bool, key: String) {
+        guard !isApplyingConfigSnapshot else { return }
+        settingsStore.setBool(value, for: field(key))
+    }
+
+    private func setInt(_ value: Int, key: String) {
+        guard !isApplyingConfigSnapshot else { return }
+        // Slider onChange also fires for values just loaded from config; skip no-op writes.
+        guard settingsStore.intValue(field(key), fallback: Int.min) != value else { return }
+        settingsStore.setInt(value, for: field(key))
+    }
+
+    private func setString(_ value: String, key: String) {
+        guard !isApplyingConfigSnapshot else { return }
+        settingsStore.setString(value, for: field(key))
+    }
+
+    private func setStringArray(_ value: [String], key: String) {
+        pendingArrayWrites[key] = value
+        ConfigManager.shared.updateConfigStringArrayValue(tablePath: table, key: key, newValue: value)
+    }
+
+    private func writeKinds() {
+        guard !isApplyingConfigSnapshot else { return }
+        // All kinds enabled is stored as [] meaning "all".
+        let value = enabledKinds.count == Self.allKinds.count
+            ? []
+            : Self.allKinds.filter { enabledKinds.contains($0) }
+        setStringArray(value, key: "agents")
+    }
+
+    private func writeNotifyOn() {
+        guard !isApplyingConfigSnapshot else { return }
+        var value: [String] = []
+        if notifyBlocked { value.append("blocked") }
+        if notifyDone { value.append("done") }
+        setStringArray(value, key: "notify-on")
+    }
+
+    private func scheduleStringWrite(key: String, value: String) {
+        guard !isApplyingConfigSnapshot else { return }
+        writeTasks[key]?.cancel()
+        pendingStringWrites[key] = value
+        writeTasks[key] = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            settingsStore.setString(value, for: field(key))
+        }
+    }
+
+    private func scheduleArrayWrite(key: String, value: String) {
+        guard !isApplyingConfigSnapshot else { return }
+        let values = Self.parseList(value)
+        writeTasks[key]?.cancel()
+        pendingArrayWrites[key] = values
+        writeTasks[key] = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            ConfigManager.shared.updateConfigStringArrayValue(tablePath: table, key: key, newValue: values)
+        }
+    }
+
+    private static func parseList(_ raw: String) -> [String] {
+        raw.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    // MARK: - Config
+
+    private func resolvedString(_ key: String, incoming: String, current: String) -> String {
+        if let pending = pendingStringWrites[key] {
+            if incoming == pending {
+                pendingStringWrites.removeValue(forKey: key)
+                return incoming
+            }
+            return current
+        }
+        return incoming
+    }
+
+    private func resolvedArray(_ key: String, incoming: [String], current: [String]) -> [String] {
+        if let pending = pendingArrayWrites[key] {
+            if incoming == pending {
+                pendingArrayWrites.removeValue(forKey: key)
+                return incoming
+            }
+            return current
+        }
+        return incoming
+    }
+
+    private func loadFromConfig() {
+        isApplyingConfigSnapshot = true
+        defer { isApplyingConfigSnapshot = false }
+
+        let config = configManager.globalWidgetConfig(for: "default.agents")
+        func number(_ key: String) -> Double? {
+            switch config[key] {
+            case let .int(i)?: return Double(i)
+            case let .double(d)?: return d
+            default: return nil
+            }
+        }
+
+        socketPath = resolvedString(
+            "socket-path",
+            incoming: config["socket-path"]?.stringValue ?? Self.defaultSocketPath,
+            current: socketPath)
+        herdrCLI = resolvedString(
+            "herdr-cli",
+            incoming: config["herdr-cli"]?.stringValue ?? Self.defaultHerdrCLI,
+            current: herdrCLI)
+        terminalBundleID = resolvedString(
+            "terminal-bundle-id",
+            incoming: config["terminal-bundle-id"]?.stringValue ?? "",
+            current: terminalBundleID)
+
+        let incomingIDs = config["herdr-bundle-ids"]?.stringArrayValue ?? Self.defaultBundleIDs
+        let resolvedIDs = resolvedArray(
+            "herdr-bundle-ids", incoming: incomingIDs, current: Self.parseList(bundleIDsText))
+        // Keep the user's in-progress text when it already parses to the same list.
+        if Self.parseList(bundleIDsText) != resolvedIDs {
+            bundleIDsText = resolvedIDs.joined(separator: ", ")
+        }
+
+        fallbackInterval = min(max((number("fallback-interval") ?? 2).rounded(), 1), 10)
+        showWhenIdle = config["show-when-idle"]?.boolValue ?? true
+        showElapsed = config["show-elapsed"]?.boolValue ?? true
+
+        let incomingKinds = (config["agents"]?.stringArrayValue ?? []).filter { Self.allKinds.contains($0) }
+        let currentKinds = enabledKinds.count == Self.allKinds.count ? [] : Self.allKinds.filter { enabledKinds.contains($0) }
+        let kinds = resolvedArray("agents", incoming: incomingKinds, current: currentKinds)
+        enabledKinds = kinds.isEmpty ? Set(Self.allKinds) : Set(kinds)
+
+        let group = config["group-by"]?.stringValue ?? "status"
+        groupBy = ["status", "project"].contains(group) ? group : "status"
+        previewLines = Double(min(max(config["preview-lines"]?.intValue ?? 6, 2), 12))
+
+        notifications = config["notifications"]?.boolValue ?? true
+        let currentNotify = [notifyBlocked ? "blocked" : nil, notifyDone ? "done" : nil].compactMap { $0 }
+        let notify = resolvedArray(
+            "notify-on",
+            incoming: config["notify-on"]?.stringArrayValue ?? ["blocked", "done"],
+            current: currentNotify)
+        notifyBlocked = notify.contains("blocked")
+        notifyDone = notify.contains("done")
+
+        let style = config["toast-style"]?.stringValue ?? "island"
+        toastStyle = ["island", "chip", "stack"].contains(style) ? style : "island"
+        let screenValue = config["screen"]?.stringValue ?? "active"
+        screen = screenValue.isEmpty ? "active" : screenValue
+        quietWhenHerdrActive = config["quiet-when-herdr-active"]?.boolValue ?? true
+        doneAutohide = min(max((number("done-autohide") ?? 6).rounded(), 2), 20)
+        let soundValue = config["sound"]?.stringValue ?? "off"
+        sound = soundValue.isEmpty ? "off" : soundValue
+    }
+
+    // MARK: - Resets
+
+    private func cancelWrites(_ keys: [String]) {
+        for key in keys {
+            writeTasks[key]?.cancel()
+            writeTasks.removeValue(forKey: key)
+            pendingStringWrites.removeValue(forKey: key)
+            pendingArrayWrites.removeValue(forKey: key)
+        }
+    }
+
+    private func resetConnectionDefaults() {
+        cancelWrites(["socket-path", "herdr-cli", "herdr-bundle-ids", "terminal-bundle-id"])
+        isApplyingConfigSnapshot = true
+        socketPath = Self.defaultSocketPath
+        herdrCLI = Self.defaultHerdrCLI
+        bundleIDsText = Self.defaultBundleIDs.joined(separator: ", ")
+        terminalBundleID = ""
+        fallbackInterval = 2
+        isApplyingConfigSnapshot = false
+
+        settingsStore.setString(Self.defaultSocketPath, for: field("socket-path"))
+        settingsStore.setString(Self.defaultHerdrCLI, for: field("herdr-cli"))
+        setStringArray(Self.defaultBundleIDs, key: "herdr-bundle-ids")
+        settingsStore.setString("", for: field("terminal-bundle-id"))
+        settingsStore.setInt(2, for: field("fallback-interval"))
+    }
+
+    private func resetBarDefaults() {
+        cancelWrites(["agents"])
+        isApplyingConfigSnapshot = true
+        showWhenIdle = true
+        showElapsed = true
+        enabledKinds = Set(Self.allKinds)
+        isApplyingConfigSnapshot = false
+
+        settingsStore.setBool(true, for: field("show-when-idle"))
+        settingsStore.setBool(true, for: field("show-elapsed"))
+        setStringArray([], key: "agents")
+    }
+
+    private func resetPopupDefaults() {
+        isApplyingConfigSnapshot = true
+        groupBy = "status"
+        previewLines = 6
+        isApplyingConfigSnapshot = false
+
+        settingsStore.setString("status", for: field("group-by"))
+        settingsStore.setInt(6, for: field("preview-lines"))
+    }
+
+    private func resetNotificationDefaults() {
+        cancelWrites(["notify-on"])
+        isApplyingConfigSnapshot = true
+        notifications = true
+        notifyBlocked = true
+        notifyDone = true
+        toastStyle = "island"
+        screen = "active"
+        quietWhenHerdrActive = true
+        doneAutohide = 6
+        sound = "off"
+        isApplyingConfigSnapshot = false
+
+        settingsStore.setBool(true, for: field("notifications"))
+        setStringArray(["blocked", "done"], key: "notify-on")
+        settingsStore.setString("island", for: field("toast-style"))
+        settingsStore.setString("active", for: field("screen"))
+        settingsStore.setBool(true, for: field("quiet-when-herdr-active"))
+        settingsStore.setInt(6, for: field("done-autohide"))
+        settingsStore.setString("off", for: field("sound"))
     }
 }
 

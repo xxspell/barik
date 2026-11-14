@@ -123,7 +123,7 @@ struct AgentsPopupContent: View {
         HStack(spacing: 8) {
             Text(String(localized: "agents.widget.title"))
                 .barikPopupFont(size: 14, weight: .semibold, design: design)
-            RoutedSettingsLink(section: .other) {
+            RoutedSettingsLink(section: .agents) {
                 Image(systemName: "gearshape.fill")
                     .barikPopupFont(size: 11, weight: .semibold)
                     .foregroundColor(.white.opacity(0.5))
