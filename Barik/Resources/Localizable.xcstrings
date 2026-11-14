@@ -16449,6 +16449,70 @@
           }
         }
       }
+    },
+    "settings.section.agents": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agents"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Агенты"
+          }
+        }
+      }
+    },
+    "settings.displays.catalog.widget.agents.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "State of AI coding agents running in herdr."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Состояние ИИ-агентов, запущенных в herdr."
+          }
+        }
+      }
+    },
+    "agents.widget.not_running": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "herdr is not running"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "herdr не запущен"
+          }
+        }
+      }
+    },
+    "agents.widget.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agents"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Агенты"
+          }
+        }
+      }
     }
   },
   "version": "1.1"

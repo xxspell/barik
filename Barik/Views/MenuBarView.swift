@@ -27,6 +27,7 @@ struct MenuBarView: View {
         "default.system-monitor",
         "default.cpuram",
         "default.screen-recording-stop",
+        "default.agents",
     ]
 
     private var widgetSpacing: CGFloat {

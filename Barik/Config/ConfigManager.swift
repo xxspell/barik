@@ -200,6 +200,27 @@ final class ConfigManager: ObservableObject {
             # display-mode = "auto"    # "auto", "progress", "count", "icon"
             # refresh-interval = 30    # seconds between updates (min 10)
 
+            # Agents widget — shows the state of AI coding agents managed by herdr
+            # Uncomment to customize (all keys are optional, values shown are defaults):
+            # [widgets.default.agents]
+            # socket-path = "~/.config/herdr/herdr.sock"  # herdr API socket
+            # herdr-cli = "herdr"                         # CLI used for fallback polling
+            # herdr-bundle-ids = ["so.pen.herdr-gpui"]    # herdr GUI app(s) to raise on click
+            # terminal-bundle-id = ""                     # terminal hosting the herdr TUI (optional)
+            # fallback-interval = 2                       # seconds between CLI polls in fallback mode
+            # show-when-idle = true                       # keep a dim icon when nothing is active
+            # show-elapsed = true                         # show longest working time in the chip
+            # agents = []                                 # limit to kinds, e.g. ["claude", "pi"]; empty = all
+            # group-by = "status"                         # popup grouping: "status" or "project"
+            # preview-lines = 6                           # screen lines shown for blocked agents (0-50)
+            # notifications = true                        # toast on status changes
+            # notify-on = ["blocked", "done"]             # statuses that trigger a toast
+            # toast-style = "island"                      # toast look
+            # screen = "active"                           # which screen shows toasts
+            # quiet-when-herdr-active = true              # no toasts while herdr is frontmost
+            # done-autohide = 6                           # seconds before a done toast hides (0 = stay)
+            # sound = "off"                               # "off" or a system sound name
+
             [widgets.default.system-monitor]
             show-icon = false
             use-metric-icons = false
