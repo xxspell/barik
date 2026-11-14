@@ -17793,6 +17793,22 @@
           }
         }
       }
+    },
+    "settings.agents.status.not_on_bar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widget not on bar"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Виджет не на панели"
+          }
+        }
+      }
     }
   },
   "version": "1.1"

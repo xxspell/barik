@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Render-only: AppDelegate starts/stops `AgentsManager` depending on whether the widget is displayed.
 struct AgentsWidget: View {
     @EnvironmentObject var configProvider: ConfigProvider
     @ObservedObject private var manager = AgentsManager.shared
@@ -9,8 +10,6 @@ struct AgentsWidget: View {
     @State private var reduceMotion = false
 
     private var style: BarikStyle { BarikStyle.current }
-
-    private var agentsConfig: AgentsConfig { AgentsConfig(config: configProvider.config) }
 
     private var isDisconnected: Bool {
         if case .disconnected = manager.connection { return true }
@@ -22,20 +21,11 @@ struct AgentsWidget: View {
     private var textColor: Color { style.isTUI ? style.foreground : .foregroundOutside }
     private var dimColor: Color { style.isTUI ? style.dim : Color.foregroundOutside.opacity(0.5) }
 
+    /// Hidden renders nothing at all, so the bar's HStack adds no spacing for it.
     var body: some View {
-        // The zero-size node is always present so onAppear/onChange fire even while the chip is hidden.
-        ZStack {
-            Color.clear
-                .frame(width: 0, height: 0)
-                .onAppear { startManager() }
-                .onChange(of: agentsConfig) { _, _ in startManager() }
-                .trackingReduceMotion($reduceMotion)
-            if isVisible { chip }
+        if isVisible {
+            chip.trackingReduceMotion($reduceMotion)
         }
-    }
-
-    private func startManager() {
-        manager.start(config: agentsConfig)
     }
 
     // MARK: State
@@ -43,6 +33,7 @@ struct AgentsWidget: View {
     private enum Mode { case hidden, idle, disconnected, active }
 
     private var mode: Mode {
+        guard manager.isStarted else { return .hidden }
         let showIdle = manager.config.showWhenIdle
         if isDisconnected { return showIdle ? .disconnected : .hidden }
         if case .idle = manager.summary.chipState { return showIdle ? .idle : .hidden }

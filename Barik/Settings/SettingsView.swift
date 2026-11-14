@@ -9380,6 +9380,7 @@ private struct AgentsSettingsView: View {
     }
 
     private var connectionBadgeTitle: String {
+        guard manager.isStarted else { return settingsLocalized("settings.agents.status.not_on_bar") }
         switch manager.connection {
         case .live:
             return settingsLocalized("settings.badge.live")
@@ -9393,6 +9394,7 @@ private struct AgentsSettingsView: View {
     }
 
     private var connectionBadgeTint: Color {
+        guard manager.isStarted else { return .gray }
         switch manager.connection {
         case .live: return .green
         case .fallbackPolling: return .orange

@@ -54,7 +54,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 self?.tickTickWallpaperManager.startUpdating(config: widgetConfig)
                 let gotifyConfig = config.rootToml.widgets.config(for: "default.gotify") ?? [:]
                 self?.gotifyManager.startUpdating(config: gotifyConfig)
+                self?.updateAgents(config: config)
             }
+        updateAgents(config: ConfigManager.shared.config)
 
         editModeCancellable = BarEditModeState.shared.$isActive
             .receive(on: RunLoop.main)
@@ -72,6 +74,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     @objc private func screenParametersDidChange(_ notification: Notification) {
         setupPanels()
         tickTickWallpaperManager.screenConfigurationDidChange()
+        updateAgents(config: ConfigManager.shared.config)
+    }
+
+    /// Runs the agents manager only while some connected screen's bar shows the agents widget.
+    private func updateAgents(config: Config) {
+        let widgets = config.rootToml.widgets
+        let monitorIDs = NSScreen.screens.map(\.monitorDescriptor.id)
+        let lists = monitorIDs.isEmpty
+            ? [widgets.displayed]
+            : monitorIDs.map { widgets.displays[$0]?.displayed ?? widgets.displayed }
+        let manager = AgentsManager.shared
+        if lists.contains(where: { $0.contains { $0.id == "default.agents" } }) {
+            manager.start(config: AgentsConfig(config: widgets.config(for: "default.agents") ?? [:]))
+        } else {
+            manager.stop()
+        }
     }
 
     private func handleEditModeChange(_ isActive: Bool) {

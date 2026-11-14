@@ -50,8 +50,11 @@ final class AgentsManager: ObservableObject {
     @Published private(set) var summary = AgentsSummary(agents: [], kinds: [])
     @Published private(set) var connection: AgentsConnectionState = .connecting
     @Published private(set) var herdrVersion: String?
-    @Published private(set) var herdrIsFrontmost = false
-    private(set) var config: AgentsConfig = .default
+    /// Whether the widget is on the bar and the manager is running (driven by AppDelegate).
+    @Published private(set) var isStarted = false
+    /// Whether "Open herdr" can do anything: a herdr app is installed/running or the configured terminal runs.
+    @Published private(set) var herdrAppAvailable = false
+    @Published private(set) var config: AgentsConfig = .default
     let transitions = PassthroughSubject<AgentTransition, Never>()
 
     private enum Mode { case stopped, live, fallback }
@@ -59,7 +62,6 @@ final class AgentsManager: ObservableObject {
     private static let liveRetryInterval: TimeInterval = 300
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "barik", category: "Agents")
 
-    private var started = false
     private var mode: Mode = .stopped
     private var store = AgentStore()
     private var client: HerdrClient?
@@ -84,16 +86,47 @@ final class AgentsManager: ObservableObject {
 
     // MARK: Public API
 
+    /// Starts the manager, or applies a new config to the running one. Only connection keys
+    /// (socket path, CLI, fallback interval) restart the live loop; other keys are swapped in place.
     func start(config newConfig: AgentsConfig) {
-        if started && newConfig == config { return }
-        if started { stopAll() }
-        started = true
+        if isStarted {
+            guard newConfig != config else { return }
+            let old = config
+            config = newConfig
+            refreshHerdrAppAvailability()
+            publish()
+            guard newConfig.socketPath != old.socketPath || newConfig.herdrCLI != old.herdrCLI
+                || newConfig.fallbackInterval != old.fallbackInterval else { return }
+            logger.info("Agents: connection settings changed, restarting")
+            stopAll()
+            run()
+            return
+        }
+        isStarted = true
         config = newConfig
-        client = HerdrClient(socketPath: newConfig.socketPath)
         installObserversOnce()
-        updateFrontmost(NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+        refreshHerdrAppAvailability()
         publish()
-        logger.info("Agents: starting (socket \(newConfig.socketPath, privacy: .public))")
+        run()
+    }
+
+    /// Stops everything (the widget left the bar): no loop, no polling, no agents, no toasts.
+    func stop() {
+        guard isStarted else { return }
+        logger.info("Agents: stopping")
+        stopAll()
+        client = nil
+        store = AgentStore()
+        baseline = SnapshotBaseline()
+        publish()
+        herdrVersion = nil
+        setConnection(.connecting)
+        isStarted = false
+    }
+
+    private func run() {
+        client = HerdrClient(socketPath: config.socketPath)
+        logger.info("Agents: starting (socket \(self.config.socketPath, privacy: .public))")
         startLive()
         fetchVersion()
     }
@@ -115,6 +148,17 @@ final class AgentsManager: ObservableObject {
 
     func openHerdr() {
         _ = activateHerdr()
+    }
+
+    func refreshHerdrAppAvailability() {
+        let workspace = NSWorkspace.shared
+        let running = workspace.runningApplications
+        let ids = config.herdrBundleIDs
+        let terminal = config.terminalBundleID
+        let available = running.contains { ids.contains($0.bundleIdentifier ?? "") }
+            || ids.contains { workspace.urlForApplication(withBundleIdentifier: $0) != nil }
+            || (!terminal.isEmpty && running.contains { $0.bundleIdentifier == terminal })
+        if available != herdrAppAvailable { herdrAppAvailable = available }
     }
 
     func preview(paneID: String) async -> [String] {
@@ -343,12 +387,6 @@ final class AgentsManager: ObservableObject {
         guard observers.isEmpty else { return }
         let nc = NSWorkspace.shared.notificationCenter
 
-        observers.append(nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
-                                        object: nil, queue: .main) { [weak self] note in
-            let id = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
-            MainActor.assumeIsolated { self?.updateFrontmost(id) }
-        })
-
         observers.append(nc.addObserver(forName: NSWorkspace.didWakeNotification,
                                         object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -365,7 +403,9 @@ final class AgentsManager: ObservableObject {
                                         object: nil, queue: .main) { [weak self] note in
             let id = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
             MainActor.assumeIsolated {
-                guard let self, let id, self.config.herdrBundleIDs.contains(id) else { return }
+                guard let self, self.isStarted else { return }
+                self.refreshHerdrAppAvailability()
+                guard let id, self.config.herdrBundleIDs.contains(id) else { return }
                 let disconnected: Bool
                 switch self.connection {
                 case .disconnected, .fallbackPolling: disconnected = true
@@ -376,10 +416,5 @@ final class AgentsManager: ObservableObject {
                 self.retryNow()
             }
         })
-    }
-
-    private func updateFrontmost(_ bundleID: String?) {
-        let front = bundleID.map { config.herdrBundleIDs.contains($0) } ?? false
-        if front != herdrIsFrontmost { herdrIsFrontmost = front }
     }
 }

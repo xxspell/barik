@@ -77,6 +77,10 @@ final class AgentToastController {
         manager.transitions
             .sink { [weak self] t in MainActor.assumeIsolated { self?.handle(t) } }
             .store(in: &cancellables)
+        manager.$isStarted
+            .removeDuplicates()
+            .sink { [weak self] running in MainActor.assumeIsolated { if !running { self?.reset() } } }
+            .store(in: &cancellables)
 
         observers.append(NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
@@ -115,6 +119,21 @@ final class AgentToastController {
         placementWork?.cancel()
         placementWork = nil
         placePanels()
+        sync()
+    }
+
+    /// The widget left the bar: drop every toast (test ones included) and retire the panels.
+    private func reset() {
+        queue = ToastQueue()
+        testAgent = nil
+        shownID = nil
+        previews = [:]
+        doneIn = [:]
+        history = [:]
+        graceWork?.cancel()
+        graceWork = nil
+        placementWork?.cancel()
+        placementWork = nil
         sync()
     }
 
