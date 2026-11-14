@@ -3,6 +3,9 @@ import AppKit
 enum SpacesDisplayMode: String, CaseIterable {
     case classic
     case focusedStrip = "focused-strip"
+    /// Numbers only (TUI: the original look — focused space bold in the accent,
+    /// others dim, plus the focused app name when windows are shown).
+    case minimal
 }
 
 enum SpacesVisualStyle: String, CaseIterable {

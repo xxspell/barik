@@ -2888,6 +2888,7 @@ private struct SpacesSettingsView: View {
     private enum SpacesDisplayModeOption: String, CaseIterable {
         case classic
         case focusedStrip = "focused-strip"
+        case minimal
 
         var title: String {
             switch self {
@@ -2895,6 +2896,8 @@ private struct SpacesSettingsView: View {
                 settingsLocalized("settings.spaces.field.display_mode.option.classic")
             case .focusedStrip:
                 settingsLocalized("settings.spaces.field.display_mode.option.focused_strip")
+            case .minimal:
+                settingsLocalized("settings.spaces.field.display_mode.option.minimal")
             }
         }
     }

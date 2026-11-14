@@ -134,6 +134,13 @@ struct SpacesWidget: View {
                 ForEach(visibleSpaces) { space in
                     SpaceView(space: space, visualStyle: visualStyle, showOutline: showOutline)
                 }
+            case .minimal:
+                CompactSpacesSelector(
+                    spaces: visibleSpaces,
+                    focusedSpaceID: focusedSpace?.id,
+                    visualStyle: visualStyle,
+                    showOutline: showOutline
+                )
             case .focusedStrip:
                 CompactSpacesSelector(
                     spaces: visibleSpaces,
