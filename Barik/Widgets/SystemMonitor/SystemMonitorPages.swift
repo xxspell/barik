@@ -46,15 +46,15 @@ struct SMOverviewPage: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 18) {
                             HStack(spacing: 4) {
-                                Image(systemName: "arrow.down").font(.system(size: 10, weight: .bold)).foregroundStyle(.green)
+                                Image(systemName: "arrow.down").barikPopupFont(size: 10, weight: .bold).foregroundStyle(.green)
                                 Text(SMFormat.bytesPerSecond(systemMonitor.downloadSpeed * 1_048_576))
-                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                    .barikPopupFont(size: 12, weight: .semibold, design: .monospaced)
                                     .contentTransition(.numericText())
                             }
                             HStack(spacing: 4) {
-                                Image(systemName: "arrow.up").font(.system(size: 10, weight: .bold)).foregroundStyle(.blue)
+                                Image(systemName: "arrow.up").barikPopupFont(size: 10, weight: .bold).foregroundStyle(.blue)
                                 Text(SMFormat.bytesPerSecond(systemMonitor.uploadSpeed * 1_048_576))
-                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                    .barikPopupFont(size: 12, weight: .semibold, design: .monospaced)
                                     .contentTransition(.numericText())
                             }
                             Spacer()
@@ -287,7 +287,7 @@ struct SMRAMPage: View {
                             )
                             Spacer()
                             Text(String(format: "of %.0f GB", systemMonitor.totalRAM))
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .barikPopupFont(size: 11, weight: .medium, design: .rounded)
                                 .foregroundStyle(.secondary)
                         }
                         SMStackedBar(segments: [
@@ -325,7 +325,7 @@ struct SMRAMPage: View {
                                     .fill(pressureColor)
                                     .frame(width: 8, height: 8)
                                 Text(systemMonitor.memoryPressure)
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .barikPopupFont(size: 13, weight: .semibold, design: .rounded)
                             }
                             SMStatRow(label: "Swap used", value: gb(systemMonitor.swapUsedRAM),
                                       valueColor: systemMonitor.swapUsedRAM > 1 ? .orange : .primary)
@@ -385,19 +385,19 @@ struct SMDiskPage: View {
                         HStack(spacing: 24) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Read")
-                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .barikPopupFont(size: 10, weight: .medium, design: .rounded)
                                     .foregroundStyle(.secondary)
                                 Text(SMFormat.bytesPerSecond(systemMonitor.diskReadBps))
-                                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                                    .barikPopupFont(size: 16, weight: .bold, design: .monospaced)
                                     .foregroundStyle(.cyan)
                                     .contentTransition(.numericText())
                             }
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Write")
-                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .barikPopupFont(size: 10, weight: .medium, design: .rounded)
                                     .foregroundStyle(.secondary)
                                 Text(SMFormat.bytesPerSecond(systemMonitor.diskWriteBps))
-                                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                                    .barikPopupFont(size: 16, weight: .bold, design: .monospaced)
                                     .foregroundStyle(.orange)
                                     .contentTransition(.numericText())
                             }
@@ -421,7 +421,7 @@ struct SMDiskPage: View {
                             Image(systemName: "internaldrive.fill")
                                 .foregroundStyle(.secondary)
                             Text(systemMonitor.diskVolumeName)
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .barikPopupFont(size: 12, weight: .semibold, design: .rounded)
                                 .lineLimit(1)
                         }
                         SMStackedBar(segments: [
@@ -457,28 +457,28 @@ struct SMNetworkPage: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.down.circle.fill")
-                                        .font(.system(size: 11))
+                                        .barikPopupFont(size: 11)
                                         .foregroundStyle(.green)
                                     Text("Download")
-                                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                                        .barikPopupFont(size: 10, weight: .medium, design: .rounded)
                                         .foregroundStyle(.secondary)
                                 }
                                 Text(SMFormat.bytesPerSecond(systemMonitor.downloadSpeed * 1_048_576))
-                                    .font(.system(size: 17, weight: .bold, design: .monospaced))
+                                    .barikPopupFont(size: 17, weight: .bold, design: .monospaced)
                                     .foregroundStyle(.green)
                                     .contentTransition(.numericText())
                             }
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.up.circle.fill")
-                                        .font(.system(size: 11))
+                                        .barikPopupFont(size: 11)
                                         .foregroundStyle(.blue)
                                     Text("Upload")
-                                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                                        .barikPopupFont(size: 10, weight: .medium, design: .rounded)
                                         .foregroundStyle(.secondary)
                                 }
                                 Text(SMFormat.bytesPerSecond(systemMonitor.uploadSpeed * 1_048_576))
-                                    .font(.system(size: 17, weight: .bold, design: .monospaced))
+                                    .barikPopupFont(size: 17, weight: .bold, design: .monospaced)
                                     .foregroundStyle(.blue)
                                     .contentTransition(.numericText())
                             }
@@ -503,7 +503,7 @@ struct SMNetworkPage: View {
                                 .fill(systemMonitor.networkLinkIsUp ? Color.green : Color.red)
                                 .frame(width: 8, height: 8)
                             Text(systemMonitor.networkLinkIsUp ? "Connected" : "Offline")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .barikPopupFont(size: 13, weight: .semibold, design: .rounded)
                         }
                         SMStatRow(label: "Interface",
                                   value: systemMonitor.activeNetworkInterface.isEmpty

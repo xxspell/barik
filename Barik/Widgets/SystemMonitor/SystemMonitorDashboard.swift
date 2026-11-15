@@ -40,14 +40,14 @@ struct SystemMonitorDashboard: View {
             HStack(spacing: 6) {
                 RoutedSettingsLink(section: .systemMonitor) {
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 11))
+                        .barikPopupFont(size: 11)
                         .foregroundStyle(.secondary)
                         .padding(5)
                         .background(hoverSettings ? Color.gray.opacity(0.3) : Color.clear)
                         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                 }
                 Text("Settings")
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .barikPopupFont(size: 10, weight: .medium, design: .rounded)
                     .foregroundStyle(.tertiary)
             }
             .padding(.top, 6)
@@ -58,6 +58,12 @@ struct SystemMonitorDashboard: View {
 
     @State private var hoverSettings = false
 
+    /// Selection highlight follows Barik's palette: the TUI accent in TUI,
+    /// a neutral white wash on the default black popup.
+    private var selectionTint: Color {
+        BarikStyle.current.isTUI ? BarikStyle.current.accent : Color.white
+    }
+
     private func sidebarItem(_ category: SystemMonitorCategory) -> some View {
         let isSelected = systemMonitor.selectedCategory == category
         return Button {
@@ -65,17 +71,17 @@ struct SystemMonitorDashboard: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: category.systemImageName)
-                    .font(.system(size: 12, weight: .medium))
+                    .barikPopupFont(size: 12, weight: .medium)
                     .frame(width: 16)
                 Text(category.title)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .medium, design: .rounded))
+                    .barikPopupFont(size: 12, weight: isSelected ? .semibold : .medium, design: .rounded)
                 Spacer()
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+                    .fill(isSelected ? selectionTint.opacity(BarikStyle.current.isTUI ? 0.22 : 0.14) : Color.clear)
             )
             .foregroundStyle(isSelected ? Color.primary : Color.secondary)
             .contentShape(Rectangle())

@@ -55,7 +55,7 @@ struct SMCard<Content: View>: View {
             if let title {
                 HStack {
                     Text(title)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .barikPopupFont(size: 11, weight: .semibold, design: .rounded)
                         .foregroundStyle(.secondary)
                         .textCase(.uppercase)
                     Spacer()
@@ -189,11 +189,11 @@ struct SMChartLegend: View {
                 HStack(spacing: 4) {
                     Circle().fill(entry.color).frame(width: 6, height: 6)
                     Text(entry.label)
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .barikPopupFont(size: 10, weight: .medium, design: .rounded)
                         .foregroundStyle(.secondary)
                     if let value = entry.value {
                         Text(value)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .barikPopupFont(size: 10, weight: .semibold, design: .monospaced)
                             .foregroundStyle(.primary)
                             .contentTransition(.numericText())
                     }
@@ -212,12 +212,12 @@ struct SMHeroMetric: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(value)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .barikPopupFont(size: 30, weight: .bold, design: .rounded)
                 .monospacedDigit()
                 .foregroundStyle(color)
                 .contentTransition(.numericText())
             Text(unit)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .barikPopupFont(size: 12, weight: .semibold, design: .rounded)
                 .foregroundStyle(.secondary)
         }
     }
@@ -234,11 +234,11 @@ struct SMStatRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .barikPopupFont(size: 11, weight: .medium, design: .rounded)
                 .foregroundStyle(.secondary)
             Spacer()
             Text(value)
-                .font(.system(size: 11, weight: .semibold, design: monospaced ? .monospaced : .rounded))
+                .barikPopupFont(size: 11, weight: .semibold, design: monospaced ? .monospaced : .rounded)
                 .foregroundStyle(valueColor)
                 .contentTransition(.numericText())
                 .textSelection(.enabled)
@@ -319,12 +319,12 @@ struct SMRingGauge: View {
                 .animation(.easeOut(duration: 0.4), value: fraction)
             VStack(spacing: 0) {
                 Text(centerText)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .barikPopupFont(size: 15, weight: .bold, design: .rounded)
                     .monospacedDigit()
                     .contentTransition(.numericText())
                 if let caption {
                     Text(caption)
-                        .font(.system(size: 8, weight: .medium, design: .rounded))
+                        .barikPopupFont(size: 8, weight: .medium, design: .rounded)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -349,18 +349,18 @@ struct SMProcessRow: View {
                         .frame(width: 16, height: 16)
                 } else {
                     Image(systemName: "terminal")
-                        .font(.system(size: 12))
+                        .barikPopupFont(size: 12)
                         .foregroundStyle(.secondary)
                         .frame(width: 16, height: 16)
                 }
             }
             Text(process.name)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .barikPopupFont(size: 11, weight: .medium, design: .rounded)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 8)
             Text(valueText(process))
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .barikPopupFont(size: 10, weight: .semibold, design: .monospaced)
                 .foregroundStyle(tint)
                 .monospacedDigit()
                 .contentTransition(.numericText())
@@ -386,7 +386,7 @@ struct SMProcessList: View {
     var body: some View {
         if processes.isEmpty {
             Text(emptyText)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .barikPopupFont(size: 11, weight: .medium, design: .rounded)
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 12)
