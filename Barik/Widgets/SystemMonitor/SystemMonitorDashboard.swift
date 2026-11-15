@@ -5,6 +5,56 @@ import SwiftUI
 /// so this view intentionally bypasses MenuBarPopupVariantView.
 struct SystemMonitorDashboard: View {
     @ObservedObject private var systemMonitor = SystemMonitorManager.shared
+    @EnvironmentObject private var configProvider: ConfigProvider
+
+    private var popupConfig: ConfigData {
+        configProvider.config["popup"]?.dictionaryValue ?? [:]
+    }
+
+    /// Overview is always first; the other pages follow `popup.metrics`
+    /// (falling back to the bar's `metrics`, then all). A `temperature` entry
+    /// adds no page — temperatures live on Overview, CPU and GPU.
+    private var categories: [SystemMonitorCategory] {
+        let metrics = popupConfig["metrics"]?.stringArrayValue
+            ?? configProvider.config["metrics"]?.stringArrayValue
+            ?? SystemMonitorMetric.allCases.map(\.rawValue)
+        var pages: [SystemMonitorCategory] = [.overview]
+        for metric in metrics {
+            guard let page = SystemMonitorCategory(rawValue: metric), page != .overview,
+                  !pages.contains(page) else { continue }
+            pages.append(page)
+        }
+        return pages
+    }
+
+    private var dashboardSettings: DashboardSettings {
+        DashboardSettings(
+            topProcesses: popupConfig["top-processes"]?.intValue ?? 5,
+            historySeconds: popupConfig["history-seconds"]?.intValue ?? 300,
+            showNetworkProcesses: popupConfig["show-network-processes"]?.boolValue ?? true
+        )
+    }
+
+    private var showCharts: Bool { popupConfig["show-charts"]?.boolValue ?? true }
+
+    private struct DashboardSettings: Equatable {
+        let topProcesses: Int
+        let historySeconds: Int
+        let showNetworkProcesses: Bool
+    }
+
+    private func apply(_ settings: DashboardSettings) {
+        systemMonitor.applyDashboardConfig(
+            topProcesses: settings.topProcesses,
+            historySeconds: settings.historySeconds,
+            showNetworkProcesses: settings.showNetworkProcesses
+        )
+    }
+
+    /// The selected page, falling back to Overview when it was hidden in Settings.
+    private var currentCategory: SystemMonitorCategory {
+        categories.contains(systemMonitor.selectedCategory) ? systemMonitor.selectedCategory : .overview
+    }
 
     private let dashboardWidth: CGFloat = 760
     private let dashboardHeight: CGFloat = 520
@@ -20,8 +70,13 @@ struct SystemMonitorDashboard: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(width: dashboardWidth, height: dashboardHeight)
+        .environment(\.smShowCharts, showCharts)
         .onAppear {
+            apply(dashboardSettings)
             systemMonitor.setPopupVisible(true)
+        }
+        .onChange(of: dashboardSettings) { _, settings in
+            apply(settings)
         }
         .onDisappear {
             systemMonitor.setPopupVisible(false)
@@ -33,7 +88,7 @@ struct SystemMonitorDashboard: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(SystemMonitorCategory.allCases) { category in
+            ForEach(categories) { category in
                 sidebarItem(category)
             }
             Spacer()
@@ -65,7 +120,7 @@ struct SystemMonitorDashboard: View {
     }
 
     private func sidebarItem(_ category: SystemMonitorCategory) -> some View {
-        let isSelected = systemMonitor.selectedCategory == category
+        let isSelected = currentCategory == category
         return Button {
             systemMonitor.selectedCategory = category
         } label: {
@@ -91,7 +146,7 @@ struct SystemMonitorDashboard: View {
 
     @ViewBuilder
     private var page: some View {
-        switch systemMonitor.selectedCategory {
+        switch currentCategory {
         case .overview:
             SMOverviewPage()
         case .cpu:

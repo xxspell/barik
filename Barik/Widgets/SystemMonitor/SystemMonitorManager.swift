@@ -160,8 +160,10 @@ final class SystemMonitorManager: ObservableObject {
     /// Survives popup rebuilds (popup content gets a fresh .id(UUID()) per open).
     @Published var selectedCategory: SystemMonitorCategory = .overview
 
-    /// Rows per top-process list.
-    let topProcessLimit = 6
+    /// Rows per top-process list (`popup.top-processes`, 0 hides the lists).
+    private(set) var topProcessLimit = 5
+    /// `popup.show-network-processes`: gates the nettop sampler.
+    private(set) var showNetworkProcesses = true
 
     var cpuLoad: Double { snapshot.cpuLoad }
     var userLoad: Double { snapshot.userLoad }
@@ -211,8 +213,9 @@ final class SystemMonitorManager: ObservableObject {
 
     // MARK: - History
 
-    /// Chart window width in samples; charts read left-padded series of this length.
-    let historyCapacity = 120
+    /// Chart window width in samples (`popup.history-seconds` / 3 s tick);
+    /// charts read left-padded series of this length.
+    private(set) var historyCapacity = 100
     /// Samples collected so far, clamped to the capacity, so charts can scale
     /// their time axis while the ring is still filling up.
     private(set) var historyFilledCount = 0
@@ -221,7 +224,7 @@ final class SystemMonitorManager: ObservableObject {
         history.series(keyPath)
     }
 
-    private var history = SystemMonitorHistory(capacity: 120)
+    private var history = SystemMonitorHistory(capacity: 100)
 
     private var timer: Timer?
     private var previousCPUTicks: (user: UInt32, system: UInt32, idle: UInt32, nice: UInt32)?
@@ -255,6 +258,7 @@ final class SystemMonitorManager: ObservableObject {
         let fpsReader = self.fpsReader
         let popupVisible = self.isPopupVisible
         let limit = self.topProcessLimit
+        let sampleNetwork = self.showNetworkProcesses
         Task.detached(priority: .utility) {
             let currentState = await MainActor.run {
                 (
@@ -288,14 +292,14 @@ final class SystemMonitorManager: ObservableObject {
                 cpu: [TopProcess], memory: [TopProcess], gpu: [TopProcess],
                 network: [TopProcess], nettopState: NettopState?, gpuClientState: GPUClientState?
             )?
-            if popupVisible {
+            if popupVisible, limit > 0 {
                 var nettop = currentState.nettopState
                 var gpuClients = currentState.gpuClientState
                 heavy = (
                     ProcessSampler.cpuProcesses(limit: limit),
                     ProcessSampler.memoryProcesses(limit: limit),
                     GPUProcessSampler.gpuProcesses(limit: limit, previous: &gpuClients),
-                    ProcessSampler.networkProcesses(limit: limit, previous: &nettop),
+                    sampleNetwork ? ProcessSampler.networkProcesses(limit: limit, previous: &nettop) : [],
                     nettop,
                     gpuClients
                 )
@@ -1103,6 +1107,32 @@ final class SystemMonitorManager: ObservableObject {
             return ""
         }
         return interface
+    }
+
+    /// Applies the dashboard keys from `[widgets.default.system-monitor.popup]`.
+    /// Called by the dashboard on open and on config reload; cheap when nothing changed.
+    func applyDashboardConfig(topProcesses: Int, historySeconds: Int, showNetworkProcesses: Bool) {
+        topProcessLimit = min(max(topProcesses, 0), 15)
+        if self.showNetworkProcesses != showNetworkProcesses {
+            self.showNetworkProcesses = showNetworkProcesses
+            if !showNetworkProcesses {
+                nettopState = nil
+                topNetworkProcesses = []
+            }
+        }
+        if topProcessLimit == 0 {
+            topCPUProcesses = []
+            topMemoryProcesses = []
+            topGPUProcesses = []
+            topNetworkProcesses = []
+        }
+        let capacity = max(40, min(historySeconds, 3600) / 3)
+        if capacity != historyCapacity {
+            history = history.resized(to: capacity)
+            historyCapacity = capacity
+            historyFilledCount = history.count
+            objectWillChange.send()
+        }
     }
 
     /// Called by the dashboard on appear/disappear. Repeated calls with the

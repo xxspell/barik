@@ -54,7 +54,7 @@ struct SMCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             if let title {
                 HStack {
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                         .barikPopupFont(size: 11, weight: .semibold, design: .rounded)
                         .foregroundStyle(.secondary)
                         .textCase(.uppercase)
@@ -100,7 +100,16 @@ struct SMHistoryChart: View {
     var gridDivisions: Int = 0
     var cornerRadius: CGFloat = 6
 
+    @Environment(\.smShowCharts) private var showCharts
+
     var body: some View {
+        if showCharts {
+            chartBody
+        }
+    }
+
+    @ViewBuilder
+    private var chartBody: some View {
         Canvas { context, size in
             let allValues = series.flatMap(\.values)
             let dataMax = max(allValues.max() ?? 0, 0.0001)
@@ -188,7 +197,7 @@ struct SMChartLegend: View {
             ForEach(entries) { entry in
                 HStack(spacing: 4) {
                     Circle().fill(entry.color).frame(width: 6, height: 6)
-                    Text(entry.label)
+                    Text(LocalizedStringKey(entry.label))
                         .barikPopupFont(size: 10, weight: .medium, design: .rounded)
                         .foregroundStyle(.secondary)
                     if let value = entry.value {
@@ -216,7 +225,7 @@ struct SMHeroMetric: View {
                 .monospacedDigit()
                 .foregroundStyle(color)
                 .contentTransition(.numericText())
-            Text(unit)
+            Text(LocalizedStringKey(unit))
                 .barikPopupFont(size: 12, weight: .semibold, design: .rounded)
                 .foregroundStyle(.secondary)
         }
@@ -233,7 +242,7 @@ struct SMStatRow: View {
 
     var body: some View {
         HStack {
-            Text(label)
+            Text(LocalizedStringKey(label))
                 .barikPopupFont(size: 11, weight: .medium, design: .rounded)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -323,7 +332,7 @@ struct SMRingGauge: View {
                     .monospacedDigit()
                     .contentTransition(.numericText())
                 if let caption {
-                    Text(caption)
+                    Text(LocalizedStringKey(caption))
                         .barikPopupFont(size: 8, weight: .medium, design: .rounded)
                         .foregroundStyle(.secondary)
                 }
@@ -385,7 +394,7 @@ struct SMProcessList: View {
 
     var body: some View {
         if processes.isEmpty {
-            Text(emptyText)
+            Text(LocalizedStringKey(emptyText))
                 .barikPopupFont(size: 11, weight: .medium, design: .rounded)
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -403,5 +412,17 @@ struct SMProcessList: View {
                 }
             }
         }
+    }
+}
+
+/// `popup.show-charts`: when false every history chart in the dashboard is hidden.
+private struct SMShowChartsKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    var smShowCharts: Bool {
+        get { self[SMShowChartsKey.self] }
+        set { self[SMShowChartsKey.self] = newValue }
     }
 }

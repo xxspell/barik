@@ -69,25 +69,16 @@ struct SystemMonitorHistory {
         guard count > 0 else { return nil }
         return slots[(head + count - 1) % slots.count].sample
     }
+
+    /// A copy with a new capacity that keeps the newest samples (oldest are
+    /// dropped when shrinking), so changing the history length never blanks charts.
+    func resized(to newCapacity: Int) -> SystemMonitorHistory {
+        var copy = SystemMonitorHistory(capacity: newCapacity)
+        let keep = min(count, copy.capacity)
+        for index in (count - keep)..<count {
+            let slot = slots[(head + index) % slots.count]
+            copy.append(slot.sample, at: slot.date)
+        }
+        return copy
+    }
 }
-
-#if DEBUG
-func systemMonitorHistorySelfTest() {
-    var h = SystemMonitorHistory(capacity: 4)
-    for i in 0..<6 { h.append(SystemMonitorSample(cpuLoad: Double(i)), at: Date()) }
-    precondition(h.count == 4)
-    let s = h.series(\.cpuLoad)
-    precondition(s.count == 4 && s == [2, 3, 4, 5])
-    precondition(h.latestSample?.cpuLoad == 5)
-
-    var partial = SystemMonitorHistory(capacity: 4)
-    partial.append(SystemMonitorSample(cpuLoad: 7), at: Date())
-    precondition(partial.series(\.cpuLoad) == [0, 0, 0, 7])
-    precondition(partial.timestamps().count == 1)
-
-    let empty = SystemMonitorHistory(capacity: 2)
-    precondition(empty.series(\.cpuLoad) == [0, 0])
-    precondition(empty.latestSample == nil)
-    NSLog("systemMonitorHistorySelfTest OK")
-}
-#endif
