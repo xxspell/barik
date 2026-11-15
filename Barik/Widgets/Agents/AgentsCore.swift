@@ -81,13 +81,20 @@ enum HerdrParser {
         if let r = o["result"] as? [String: Any] {
             return r["type"] as? String == "subscription_started" ? .subscriptionStarted : nil
         }
-        guard let event = o["event"] as? String else { return nil }
+        // herdr (0.9.5) names per-pane events with dots ("pane.agent_status_changed")
+        // but global topology events with underscores ("pane_agent_detected",
+        // "workspace_created"); accept both spellings.
+        guard let raw = o["event"] as? String else { return nil }
+        let event = raw.replacingOccurrences(of: "_", with: ".")
+            .replacingOccurrences(of: "agent.status.changed", with: "agent_status_changed")
+            .replacingOccurrences(of: "agent.detected", with: "agent_detected")
         switch event {
         case "pane.agent_status_changed":
             guard let d = o["data"] as? [String: Any], let pane = d["pane_id"] as? String else { return nil }
             let status = AgentStatus(rawValue: d["agent_status"] as? String ?? "") ?? .unknown
             return .statusChanged(paneID: pane, status: status)
-        case "pane.created", "pane.closed", "pane.agent_detected":
+        case "pane.created", "pane.closed", "pane.exited", "pane.agent_detected",
+             "workspace.created", "workspace.closed", "tab.created", "tab.closed":
             return .topologyChanged
         default:
             return nil
@@ -131,7 +138,10 @@ enum HerdrRequest {
     static func agentList() -> Data { make("agent.list", [:]) }
 
     static func subscribe(paneIDs: [String]) -> Data {
-        var subs: [[String: Any]] = ["pane.created", "pane.closed", "pane.agent_detected"].map { ["type": $0] }
+        var subs: [[String: Any]] = [
+            "pane.created", "pane.closed", "pane.exited", "pane.agent_detected",
+            "workspace.created", "workspace.closed", "tab.created", "tab.closed",
+        ].map { ["type": $0] }
         subs += paneIDs.map { ["type": "pane.agent_status_changed", "pane_id": $0] }
         return make("events.subscribe", ["subscriptions": subs])
     }
