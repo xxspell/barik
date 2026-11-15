@@ -932,6 +932,12 @@
             "state": "translated",
             "value": "Ядра"
           }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cores"
+          }
         }
       }
     },
@@ -1015,6 +1021,12 @@
             "state": "translated",
             "value": "Диск"
           }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disk"
+          }
         }
       }
     },
@@ -1049,6 +1061,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Скачивание"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download"
           }
         }
       }
@@ -1598,6 +1616,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Свободно"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Idle"
           }
         }
       }
@@ -3036,6 +3060,12 @@
             "state": "translated",
             "value": "Система"
           }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System"
+          }
         }
       }
     },
@@ -3759,6 +3789,12 @@
             "state": "translated",
             "value": "Отдача"
           }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upload"
+          }
         }
       }
     },
@@ -3776,6 +3812,12 @@
     "Uptime": {
       "localizations": {
         "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uptime"
+          }
+        },
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Uptime"
@@ -18602,6 +18644,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "Трафик по приложениям на странице «Сеть» (запускает nettop, пока открыт дашборд)."
+          }
+        }
+      }
+    },
+    "Disk Activity": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disk Activity"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Активность диска"
+          }
+        }
+      }
+    },
+    "%@ GB free": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ GB free"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ГБ свободно"
+          }
+        }
+      }
+    },
+    "Battery": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Battery"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Батарея"
+          }
+        }
+      }
+    },
+    "SSD": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSD"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSD"
+          }
+        }
+      }
+    },
+    "Load 1/5/15": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load 1/5/15"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нагрузка 1/5/15"
           }
         }
       }

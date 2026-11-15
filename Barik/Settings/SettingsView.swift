@@ -7003,7 +7003,7 @@ private struct SystemMonitorSettingsView: View {
     @State private var popupDiskDetailSelections: [String: Bool] = [:]
     @State private var popupGPUDetailSelections: [String: Bool] = [:]
     @State private var popupNetworkDetailSelections: [String: Bool] = [:]
-    @State private var dashboardTopProcesses = 5.0
+    @State private var dashboardTopProcesses = 8.0
     @State private var dashboardHistorySeconds = 300
     @State private var dashboardShowCharts = true
     @State private var dashboardShowNetworkProcesses = true
@@ -7356,7 +7356,7 @@ private struct SystemMonitorSettingsView: View {
             (metric.rawValue, resolvedPopupMetrics.contains(metric.rawValue))
         })
 
-        dashboardTopProcesses = Double(resolvedIntValue(for: .init(tablePath: systemMonitorPopupTable, key: "top-processes"), incoming: popupConfig["top-processes"]?.intValue ?? 5, current: Int(dashboardTopProcesses.rounded())))
+        dashboardTopProcesses = Double(resolvedIntValue(for: .init(tablePath: systemMonitorPopupTable, key: "top-processes"), incoming: popupConfig["top-processes"]?.intValue ?? 8, current: Int(dashboardTopProcesses.rounded())))
         dashboardHistorySeconds = resolvedIntValue(for: .init(tablePath: systemMonitorPopupTable, key: "history-seconds"), incoming: popupConfig["history-seconds"]?.intValue ?? 300, current: dashboardHistorySeconds)
         dashboardShowCharts = resolvedBoolValue(for: .init(tablePath: systemMonitorPopupTable, key: "show-charts"), incoming: popupConfig["show-charts"]?.boolValue ?? true, current: dashboardShowCharts)
         dashboardShowNetworkProcesses = resolvedBoolValue(for: .init(tablePath: systemMonitorPopupTable, key: "show-network-processes"), incoming: popupConfig["show-network-processes"]?.boolValue ?? true, current: dashboardShowNetworkProcesses)
@@ -7448,11 +7448,11 @@ private struct SystemMonitorSettingsView: View {
     }
 
     private func resetDashboardDefaults() {
-        dashboardTopProcesses = 5
+        dashboardTopProcesses = 8
         dashboardHistorySeconds = 300
         dashboardShowCharts = true
         dashboardShowNetworkProcesses = true
-        setIntValue(5, for: .init(tablePath: systemMonitorPopupTable, key: "top-processes"))
+        setIntValue(8, for: .init(tablePath: systemMonitorPopupTable, key: "top-processes"))
         setIntValue(300, for: .init(tablePath: systemMonitorPopupTable, key: "history-seconds"))
         setBoolValue(true, for: .init(tablePath: systemMonitorPopupTable, key: "show-charts"))
         setBoolValue(true, for: .init(tablePath: systemMonitorPopupTable, key: "show-network-processes"))

@@ -29,7 +29,7 @@ struct SystemMonitorDashboard: View {
 
     private var dashboardSettings: DashboardSettings {
         DashboardSettings(
-            topProcesses: popupConfig["top-processes"]?.intValue ?? 5,
+            topProcesses: popupConfig["top-processes"]?.intValue ?? 8,
             historySeconds: popupConfig["history-seconds"]?.intValue ?? 300,
             showNetworkProcesses: popupConfig["show-network-processes"]?.boolValue ?? true
         )

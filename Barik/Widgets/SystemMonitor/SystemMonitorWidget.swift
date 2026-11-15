@@ -140,6 +140,8 @@ struct SystemMonitorWidget: View {
         return HStack(spacing: 8) {
             ForEach(metrics, id: \.rawValue) { metric in
                 tuiMetric(metric, style: style)
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(TapGesture().onEnded { systemMonitor.focus(on: metric) })
             }
         }
         .barikFont(size: 12, weight: .regular, design: .monospaced)
@@ -214,6 +216,8 @@ struct SystemMonitorWidget: View {
                             ForEach(Array(column.enumerated()), id: \.element.rawValue) { metricIndex, metric in
                                 VStack(alignment: .leading, spacing: columnRowSpacing) {
                                     metricRow(for: metric)
+                                        .contentShape(Rectangle())
+                                        .simultaneousGesture(TapGesture().onEnded { systemMonitor.focus(on: metric) })
 
                                     if dividerMode.showsHorizontalDividers && metricIndex < column.count - 1 {
                                         metricDivider()

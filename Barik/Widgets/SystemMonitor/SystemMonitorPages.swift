@@ -22,95 +22,220 @@ struct SMOverviewPage: View {
     var body: some View {
         SMPageScroll {
             HStack(spacing: 10) {
-                tile(title: "CPU", color: .orange, fraction: systemMonitor.cpuLoad / 100,
-                     center: String(format: "%.0f%%", systemMonitor.cpuLoad),
-                     caption: SMFormat.load(systemMonitor.loadAverage) + " load",
-                     series: systemMonitor.series(\.cpuLoad), maxHeight: 100)
-                tile(title: "GPU", color: .purple, fraction: (systemMonitor.gpuLoad ?? 0) / 100,
-                     center: systemMonitor.gpuLoad.map { String(format: "%.0f%%", $0) } ?? "--",
-                     caption: systemMonitor.fps.map { String(format: "%.0f FPS", $0) } ?? "no fps",
-                     series: systemMonitor.series(\.gpuDevice), maxHeight: 100)
-                tile(title: "RAM", color: .blue, fraction: systemMonitor.ramUsage / 100,
-                     center: String(format: "%.0f%%", systemMonitor.ramUsage),
-                     caption: String(format: "%.1f/%.0f GB", systemMonitor.usedRAM, systemMonitor.totalRAM),
-                     series: systemMonitor.series(\.ramUsage), maxHeight: 100)
-                tile(title: "Disk", color: .indigo, fraction: systemMonitor.diskUsage / 100,
-                     center: String(format: "%.0f%%", systemMonitor.diskUsage),
-                     caption: String(format: "%.0f GB free", systemMonitor.freeDisk),
-                     series: systemMonitor.series(\.diskWriteBps), maxHeight: nil)
+                SMOverviewTile(
+                    title: "CPU", systemImage: "cpu", color: .orange, page: .cpu,
+                    value: systemMonitor.cpuLoad,
+                    detail: SMFormat.load(systemMonitor.loadAverage),
+                    series: systemMonitor.series(\.cpuLoad)
+                )
+                SMOverviewTile(
+                    title: "GPU", systemImage: "display", color: .purple, page: .gpu,
+                    value: systemMonitor.gpuLoad,
+                    detail: systemMonitor.fps.map { String(format: "%.0f FPS", $0) } ?? "",
+                    series: systemMonitor.series(\.gpuDevice)
+                )
+                SMOverviewTile(
+                    title: "RAM", systemImage: "memorychip", color: .blue, page: .ram,
+                    value: systemMonitor.ramUsage,
+                    detail: String(format: "%.1f / %.0f GB", systemMonitor.usedRAM, systemMonitor.totalRAM),
+                    series: systemMonitor.series(\.ramUsage)
+                )
+                SMOverviewTile(
+                    title: "Disk", systemImage: "internaldrive", color: .indigo, page: .disk,
+                    value: systemMonitor.diskUsage,
+                    detail: String(format: String(localized: "%@ GB free"), String(format: "%.0f", systemMonitor.freeDisk)),
+                    series: nil
+                )
             }
-            .frame(height: 148)
 
             HStack(alignment: .top, spacing: 10) {
                 SMCard("Network") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 18) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.down").barikPopupFont(size: 10, weight: .bold).foregroundStyle(.green)
-                                Text(SMFormat.bytesPerSecond(systemMonitor.downloadSpeed * 1_048_576))
-                                    .barikPopupFont(size: 12, weight: .semibold, design: .monospaced)
-                                    .contentTransition(.numericText())
-                            }
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.up").barikPopupFont(size: 10, weight: .bold).foregroundStyle(.blue)
-                                Text(SMFormat.bytesPerSecond(systemMonitor.uploadSpeed * 1_048_576))
-                                    .barikPopupFont(size: 12, weight: .semibold, design: .monospaced)
-                                    .contentTransition(.numericText())
-                            }
-                            Spacer()
-                        }
-                        SMHistoryChart(
-                            series: [
-                                SMChartSeries(values: systemMonitor.series(\.downloadBps), color: .green),
-                                SMChartSeries(values: systemMonitor.series(\.uploadBps), color: .blue)
-                            ],
-                            filledCount: max(systemMonitor.historyFilledCount, 2)
-                        )
-                        .frame(height: 54)
-                    }
+                    SMDualRateBlock(
+                        first: (label: "Download", systemImage: "arrow.down", color: .green,
+                                rate: systemMonitor.downloadSpeed * 1_048_576),
+                        second: (label: "Upload", systemImage: "arrow.up", color: .blue,
+                                 rate: systemMonitor.uploadSpeed * 1_048_576),
+                        firstSeries: systemMonitor.series(\.downloadBps),
+                        secondSeries: systemMonitor.series(\.uploadBps),
+                        filledCount: max(systemMonitor.historyFilledCount, 2)
+                    )
+                }
+                SMCard("Disk Activity") {
+                    SMDualRateBlock(
+                        first: (label: "Read", systemImage: "arrow.down.doc", color: .cyan,
+                                rate: systemMonitor.diskReadBps),
+                        second: (label: "Write", systemImage: "arrow.up.doc", color: .orange,
+                                 rate: systemMonitor.diskWriteBps),
+                        firstSeries: systemMonitor.series(\.diskReadBps),
+                        secondSeries: systemMonitor.series(\.diskWriteBps),
+                        filledCount: max(systemMonitor.historyFilledCount, 2)
+                    )
+                }
+            }
+
+            HStack(alignment: .top, spacing: 10) {
+                SMCard("Top Processes") {
+                    SMProcessList(
+                        processes: Array(systemMonitor.topCPUProcesses.prefix(5)),
+                        emptyText: "Collecting…",
+                        valueText: { String(format: "%.1f%%", $0.primary) },
+                        tint: .orange
+                    )
                 }
                 .frame(maxWidth: .infinity)
 
                 SMCard("Temperatures") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        SMStatRow(label: "CPU",
-                                  value: systemMonitor.cpuTemperature.map { String(format: "%.0f°C", $0) } ?? "--",
-                                  valueColor: tempColor(systemMonitor.cpuTemperature))
-                        SMStatRow(label: "GPU",
-                                  value: systemMonitor.gpuTemperature.map { String(format: "%.0f°C", $0) } ?? "--",
-                                  valueColor: tempColor(systemMonitor.gpuTemperature))
+                    VStack(alignment: .leading, spacing: 7) {
+                        SMTemperatureRow(label: "CPU", value: systemMonitor.cpuTemperature)
+                        SMTemperatureRow(label: "GPU", value: systemMonitor.gpuTemperature)
+                        SMTemperatureRow(label: "SSD", value: systemMonitor.ssdTemperature)
+                        SMTemperatureRow(label: "Battery", value: systemMonitor.batteryTemperature)
                     }
                 }
-                .frame(width: 200)
+                .frame(width: 170)
+
+                SMCard("System") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        SMStatRow(label: "Load 1/5/15",
+                                  value: [systemMonitor.loadAverage, systemMonitor.loadAverage5m, systemMonitor.loadAverage15m]
+                                      .map(SMFormat.load).joined(separator: " "))
+                        SMStatRow(label: "Cores", value: "\(systemMonitor.cpuCoreCount)")
+                        SMStatRow(label: "Uptime", value: SMFormat.uptime(ProcessInfo.processInfo.systemUptime))
+                    }
+                }
+                .frame(width: 170)
             }
         }
     }
+}
 
-    private func tile(title: String, color: Color, fraction: Double, center: String,
-                      caption: String, series: [Double], maxHeight: Double?) -> some View {
-        SMCard(title) {
-            HStack(spacing: 10) {
-                SMRingGauge(fraction: fraction, color: color, centerText: center, caption: caption)
-                    .frame(width: 64, height: 64)
-                VStack(alignment: .trailing, spacing: 4) {
-                    Spacer(minLength: 0)
-                    SMHistoryChart(
-                        series: [SMChartSeries(values: series, color: color)],
-                        maxHeight: maxHeight,
-                        filledCount: max(systemMonitor.historyFilledCount, 2)
-                    )
-                    .frame(height: 40)
+/// Overview metric tile: header, big value with a short detail, a thin
+/// usage bar and a full-width history line. Clicking opens the metric's page.
+private struct SMOverviewTile: View {
+    @ObservedObject private var systemMonitor = SystemMonitorManager.shared
+
+    let title: String
+    let systemImage: String
+    let color: Color
+    let page: SystemMonitorCategory
+    let value: Double?
+    let detail: String
+    let series: [Double]?
+
+    var body: some View {
+        Button {
+            systemMonitor.selectedCategory = page
+        } label: {
+            SMCard {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(LocalizedStringKey(title), systemImage: systemImage)
+                        .barikPopupFont(size: 11, weight: .semibold, design: .rounded)
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                        .labelStyle(.titleAndIcon)
+
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text(value.map { String(format: "%.0f", $0) } ?? "--")
+                            .barikPopupFont(size: 22, weight: .bold, design: .rounded)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                        Text(verbatim: "%")
+                            .barikPopupFont(size: 11, weight: .semibold, design: .rounded)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text(detail.isEmpty ? " " : detail)
+                        .barikPopupFont(size: 10, weight: .medium, design: .rounded)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    SMLinearGauge(fraction: (value ?? 0) / 100, color: color, height: 4)
+
+                    if let series {
+                        SMHistoryChart(
+                            series: [SMChartSeries(values: series, color: color)],
+                            maxHeight: 100,
+                            filledCount: max(systemMonitor.historyFilledCount, 2)
+                        )
+                        .frame(height: 30)
+                    } else {
+                        Spacer(minLength: 30)
+                    }
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .buttonStyle(.plain)
+        .help(Text(LocalizedStringKey(title)))
+    }
+}
+
+/// Two rates side by side over a shared two-series chart (network, disk I/O).
+private struct SMDualRateBlock: View {
+    typealias Rate = (label: String, systemImage: String, color: Color, rate: Double)
+
+    let first: Rate
+    let second: Rate
+    let firstSeries: [Double]
+    let secondSeries: [Double]
+    let filledCount: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 16) {
+                rate(first)
+                rate(second)
+                Spacer(minLength: 0)
+            }
+            SMHistoryChart(
+                series: [
+                    SMChartSeries(values: firstSeries, color: first.color),
+                    SMChartSeries(values: secondSeries, color: second.color, filled: false)
+                ],
+                filledCount: filledCount
+            )
+            .frame(height: 50)
         }
     }
 
-    private func tempColor(_ value: Double?) -> Color {
+    private func rate(_ rate: Rate) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Label(LocalizedStringKey(rate.label), systemImage: rate.systemImage)
+                .barikPopupFont(size: 10, weight: .medium, design: .rounded)
+                .foregroundStyle(rate.color)
+            Text(SMFormat.bytesPerSecond(rate.rate))
+                .barikPopupFont(size: 13, weight: .semibold, design: .monospaced)
+                .monospacedDigit()
+                .contentTransition(.numericText())
+        }
+    }
+}
+
+/// Temperature with a short heat bar (30–100 °C) colored by severity.
+private struct SMTemperatureRow: View {
+    let label: String
+    let value: Double?
+
+    private var color: Color {
         guard let value else { return .secondary }
         if value >= 90 { return .red }
-        if value >= 80 { return .orange }
-        return .primary
+        if value >= 75 { return .orange }
+        return .green
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(LocalizedStringKey(label))
+                    .barikPopupFont(size: 11, weight: .medium, design: .rounded)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(value.map { String(format: "%.0f°C", $0) } ?? "--")
+                    .barikPopupFont(size: 11, weight: .semibold, design: .monospaced)
+                    .foregroundStyle(value == nil ? .secondary : color)
+                    .contentTransition(.numericText())
+            }
+            SMLinearGauge(fraction: ((value ?? 30) - 30) / 70, color: color, height: 3)
+        }
     }
 }
 
@@ -437,6 +562,19 @@ struct SMDiskPage: View {
                 }
                 .frame(width: 200)
             }
+
+            SMCard("Top Processes") {
+                SMProcessList(
+                    processes: systemMonitor.topDiskProcesses,
+                    emptyText: "Idle",
+                    valueText: { process in
+                        let write = process.secondary.map { " W " + SMFormat.bytesPerSecond($0) } ?? ""
+                        return "R " + SMFormat.bytesPerSecond(process.primary) + write
+                    },
+                    tint: .cyan,
+                    barUsesSum: true
+                )
+            }
         }
     }
 
@@ -524,7 +662,8 @@ struct SMNetworkPage: View {
                         let up = process.secondary.map { " ↑ " + SMFormat.bytesPerSecond($0) } ?? ""
                         return "↓ " + SMFormat.bytesPerSecond(process.primary) + up
                     },
-                    tint: .green
+                    tint: .green,
+                    barUsesSum: true
                 )
             }
         }

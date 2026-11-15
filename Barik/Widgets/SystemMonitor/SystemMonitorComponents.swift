@@ -28,6 +28,15 @@ enum SMFormat {
     }
 
     /// Load average with adaptive precision.
+    /// "3d 4h", "5h 12m", "42m".
+    static func uptime(_ seconds: TimeInterval) -> String {
+        let minutes = Int(seconds) / 60
+        let days = minutes / 1440, hours = (minutes % 1440) / 60, mins = minutes % 60
+        if days > 0 { return "\(days)d \(hours)h" }
+        if hours > 0 { return "\(hours)h \(mins)m" }
+        return "\(mins)m"
+    }
+
     static func load(_ value: Double) -> String {
         value >= 100 ? String(format: "%.0f", value) : String(format: "%.2f", value)
     }
@@ -391,6 +400,13 @@ struct SMProcessList: View {
     let emptyText: String
     let valueText: (TopProcess) -> String
     let tint: Color
+    /// Rate pairs (down+up, read+write) size the bar by their sum; CPU rows
+    /// carry RSS bytes in `secondary`, so they keep the primary-only default.
+    var barUsesSum = false
+
+    private func magnitude(_ process: TopProcess) -> Double {
+        barUsesSum ? process.primary + (process.secondary ?? 0) : process.primary
+    }
 
     var body: some View {
         if processes.isEmpty {
@@ -400,13 +416,13 @@ struct SMProcessList: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 12)
         } else {
-            let maxPrimary = processes.map(\.primary).max() ?? 1
+            let maxPrimary = processes.map(magnitude).max() ?? 1
             VStack(spacing: 2) {
                 ForEach(processes) { process in
                     SMProcessRow(
                         process: process,
                         valueText: valueText,
-                        valueFraction: { $0.primary / max(maxPrimary, 0.0001) },
+                        valueFraction: { magnitude($0) / max(maxPrimary, 0.0001) },
                         tint: tint
                     )
                 }
