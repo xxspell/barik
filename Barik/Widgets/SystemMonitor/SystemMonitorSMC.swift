@@ -23,6 +23,7 @@ private enum SMCDataType: String {
 private enum SMCCommand: UInt8 {
     case kernelIndex = 2
     case readBytes = 5
+    case keyFromIndex = 8
     case readKeyInfo = 9
 }
 
@@ -158,6 +159,42 @@ final class SMCReader {
             bytes: value.bytes,
             decodedValue: decode(value)
         )
+    }
+
+    private var discoveredKeys: [String]?
+
+    /// Every SMC key, enumerated once by index and cached. Sensor key names
+    /// differ per Apple Silicon generation, so callers pick by prefix instead
+    /// of hard-coding one chip's list.
+    func allKeys() -> [String] {
+        lock.lock()
+        if let discoveredKeys {
+            lock.unlock()
+            return discoveredKeys
+        }
+        lock.unlock()
+
+        guard let count = readValue(for: "#KEY"), count > 0, count < 20_000 else { return [] }
+
+        lock.lock()
+        defer { lock.unlock() }
+        guard ensureConnection() else { return [] }
+        var keys: [String] = []
+        keys.reserveCapacity(Int(count))
+        for index in 0..<UInt32(count) {
+            var input = SMCKeyData()
+            var output = SMCKeyData()
+            input.data8 = SMCCommand.keyFromIndex.rawValue
+            input.data32 = index
+            guard call(command: .kernelIndex, input: &input, output: &output) == kIOReturnSuccess else { continue }
+            keys.append(output.key.fourCharacterString())
+        }
+        discoveredKeys = keys
+        return keys
+    }
+
+    func keys(withPrefix prefix: String) -> [String] {
+        allKeys().filter { $0.hasPrefix(prefix) }
     }
 
     private func ensureConnection() -> Bool {

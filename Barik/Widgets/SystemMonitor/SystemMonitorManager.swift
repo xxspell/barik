@@ -59,12 +59,49 @@ extension SystemMonitorMetric: Identifiable {
     var id: String { rawValue }
 }
 
+/// Sidebar pages of the dashboard popup. The selection lives on the manager
+/// because the popup content view is rebuilt with a fresh identity on open.
+enum SystemMonitorCategory: String, CaseIterable, Identifiable {
+    case overview
+    case cpu
+    case gpu
+    case ram
+    case disk
+    case network
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .overview: String(localized: "Overview")
+        case .cpu: String(localized: "CPU")
+        case .gpu: String(localized: "GPU")
+        case .ram: String(localized: "RAM")
+        case .disk: String(localized: "Disk")
+        case .network: String(localized: "Network")
+        }
+    }
+
+    var systemImageName: String {
+        switch self {
+        case .overview: "square.grid.2x2"
+        case .cpu: "cpu"
+        case .gpu: "display"
+        case .ram: "memorychip"
+        case .disk: "internaldrive"
+        case .network: "network"
+        }
+    }
+}
+
 private struct SystemMonitorSnapshot: Equatable {
     var cpuLoad: Double = 0
     var userLoad: Double = 0
     var systemLoad: Double = 0
     var idleLoad: Double = 100
     var loadAverage: Double = 0
+    var loadAverage5m: Double = 0
+    var loadAverage15m: Double = 0
     var cpuCoreCount: Int = 0
 
     var ramUsage: Double = 0
@@ -87,8 +124,14 @@ private struct SystemMonitorSnapshot: Equatable {
     var diskVolumeName: String = "/"
 
     var gpuLoad: Double?
+    var gpuRendererLoad: Double?
+    var gpuTilerLoad: Double?
+    var gpuInUseMemoryBytes: Double?
+    var fps: Double?
     var cpuTemperature: Double?
     var gpuTemperature: Double?
+    var ssdTemperature: Double?
+    var batteryTemperature: Double?
 
     var uploadSpeed: Double = 0
     var downloadSpeed: Double = 0
@@ -96,6 +139,9 @@ private struct SystemMonitorSnapshot: Equatable {
     var totalDownloadedBytes: UInt64 = 0
     var activeNetworkInterface: String = ""
     var networkLinkIsUp: Bool = false
+
+    var diskReadBps: Double = 0
+    var diskWriteBps: Double = 0
 }
 
 @MainActor
@@ -104,11 +150,32 @@ final class SystemMonitorManager: ObservableObject {
 
     @Published private var snapshot = SystemMonitorSnapshot()
 
+    @Published private(set) var topCPUProcesses: [TopProcess] = []
+    @Published private(set) var topMemoryProcesses: [TopProcess] = []
+    @Published private(set) var topGPUProcesses: [TopProcess] = []
+    @Published private(set) var topNetworkProcesses: [TopProcess] = []
+    /// primary = read bytes/s, secondary = write bytes/s.
+    @Published private(set) var topDiskProcesses: [TopProcess] = []
+
+    /// Set while the dashboard is open; gates the heavy samplers (ps, nettop,
+    /// IORegistry client walk) so a closed popup keeps the old cost profile.
+    @Published private(set) var isPopupVisible = false
+
+    /// Survives popup rebuilds (popup content gets a fresh .id(UUID()) per open).
+    @Published var selectedCategory: SystemMonitorCategory = .overview
+
+    /// Rows per top-process list (`popup.top-processes`, 0 hides the lists).
+    private(set) var topProcessLimit = 8
+    /// `popup.show-network-processes`: gates the nettop sampler.
+    private(set) var showNetworkProcesses = true
+
     var cpuLoad: Double { snapshot.cpuLoad }
     var userLoad: Double { snapshot.userLoad }
     var systemLoad: Double { snapshot.systemLoad }
     var idleLoad: Double { snapshot.idleLoad }
     var loadAverage: Double { snapshot.loadAverage }
+    var loadAverage5m: Double { snapshot.loadAverage5m }
+    var loadAverage15m: Double { snapshot.loadAverage15m }
     var cpuCoreCount: Int { snapshot.cpuCoreCount }
 
     var ramUsage: Double { snapshot.ramUsage }
@@ -131,8 +198,14 @@ final class SystemMonitorManager: ObservableObject {
     var diskVolumeName: String { snapshot.diskVolumeName }
 
     var gpuLoad: Double? { snapshot.gpuLoad }
+    var gpuRendererLoad: Double? { snapshot.gpuRendererLoad }
+    var gpuTilerLoad: Double? { snapshot.gpuTilerLoad }
+    var gpuInUseMemoryBytes: Double? { snapshot.gpuInUseMemoryBytes }
+    var fps: Double? { snapshot.fps }
     var cpuTemperature: Double? { snapshot.cpuTemperature }
     var gpuTemperature: Double? { snapshot.gpuTemperature }
+    var ssdTemperature: Double? { snapshot.ssdTemperature }
+    var batteryTemperature: Double? { snapshot.batteryTemperature }
 
     var uploadSpeed: Double { snapshot.uploadSpeed }
     var downloadSpeed: Double { snapshot.downloadSpeed }
@@ -141,11 +214,34 @@ final class SystemMonitorManager: ObservableObject {
     var activeNetworkInterface: String { snapshot.activeNetworkInterface }
     var networkLinkIsUp: Bool { snapshot.networkLinkIsUp }
 
+    var diskReadBps: Double { snapshot.diskReadBps }
+    var diskWriteBps: Double { snapshot.diskWriteBps }
+
+    // MARK: - History
+
+    /// Chart window width in samples (`popup.history-seconds` / 3 s tick);
+    /// charts read left-padded series of this length.
+    private(set) var historyCapacity = 100
+    /// Samples collected so far, clamped to the capacity, so charts can scale
+    /// their time axis while the ring is still filling up.
+    private(set) var historyFilledCount = 0
+
+    func series(_ keyPath: KeyPath<SystemMonitorSample, Double>) -> [Double] {
+        history.series(keyPath)
+    }
+
+    private var history = SystemMonitorHistory(capacity: 100)
+
     private var timer: Timer?
     private var previousCPUTicks: (user: UInt32, system: UInt32, idle: UInt32, nice: UInt32)?
     private var previousNetworkData: [String: (ibytes: UInt64, obytes: UInt64)] = [:]
     private var lastNetworkUpdate = Date()
     private var lastValidCPUTemperature: Double?
+    private var previousDiskBytes: (read: UInt64, written: UInt64, at: Date)?
+    private let fpsReader = FPSReader()
+    private var nettopState: NettopState?
+    private var gpuClientState: GPUClientState?
+    private var diskProcessState: DiskProcessState?
 
     private init() {
         startMonitoring()
@@ -166,15 +262,21 @@ final class SystemMonitorManager: ObservableObject {
     }
 
     func refresh() {
-        Task.detached(priority: .utility) { [weak self] in
-            guard let self else { return }
-
+        let fpsReader = self.fpsReader
+        let popupVisible = self.isPopupVisible
+        let limit = self.topProcessLimit
+        let sampleNetwork = self.showNetworkProcesses
+        Task.detached(priority: .utility) {
             let currentState = await MainActor.run {
                 (
                     previousCPUTicks: self.previousCPUTicks,
                     previousNetworkData: self.previousNetworkData,
                     lastNetworkUpdate: self.lastNetworkUpdate,
                     lastValidCPUTemperature: self.lastValidCPUTemperature,
+                    previousDiskBytes: self.previousDiskBytes,
+                    nettopState: self.nettopState,
+                    gpuClientState: self.gpuClientState,
+                    diskProcessState: self.diskProcessState,
                     snapshot: self.snapshot
                 )
             }
@@ -184,12 +286,38 @@ final class SystemMonitorManager: ObservableObject {
             let diskSnapshot = Self.readDiskUsage()
             let gpuSnapshot = Self.readGPUStats()
             let rawCPUTemperature = Self.readCPUTemperature()
-            let loadAverage = Self.readLoadAverage()
+            let ssdTemperature = Self.readSSDTemperature()
+            let batteryTemperature = Self.readBatteryTemperature()
+            let loadAverages = Self.readLoadAverage()
+            let diskActivity = Self.readDiskActivity(previous: currentState.previousDiskBytes)
+            let fps = fpsReader.read()
             let cpuCoreCount = Self.readCPUCoreCount()
             let networkSnapshot = Self.readNetworkActivity(
                 previous: currentState.previousNetworkData,
                 lastUpdate: currentState.lastNetworkUpdate
             )
+
+            // Heavy samplers only while the dashboard is on screen.
+            var heavy: (
+                cpu: [TopProcess], memory: [TopProcess], gpu: [TopProcess],
+                network: [TopProcess], disk: [TopProcess],
+                nettopState: NettopState?, gpuClientState: GPUClientState?, diskState: DiskProcessState?
+            )?
+            if popupVisible, limit > 0 {
+                var nettop = currentState.nettopState
+                var gpuClients = currentState.gpuClientState
+                var diskState = currentState.diskProcessState
+                heavy = (
+                    ProcessSampler.cpuProcesses(limit: limit),
+                    ProcessSampler.memoryProcesses(limit: limit),
+                    GPUProcessSampler.gpuProcesses(limit: limit, previous: &gpuClients),
+                    sampleNetwork ? ProcessSampler.networkProcesses(limit: limit, previous: &nettop) : [],
+                    DiskProcessSampler.diskProcesses(limit: limit, previous: &diskState),
+                    nettop,
+                    gpuClients,
+                    diskState
+                )
+            }
 
             await MainActor.run {
                 var nextSnapshot = currentState.snapshot
@@ -201,7 +329,9 @@ final class SystemMonitorManager: ObservableObject {
                     nextSnapshot.systemLoad = cpuSnapshot.systemLoad
                     nextSnapshot.idleLoad = cpuSnapshot.idleLoad
                 }
-                nextSnapshot.loadAverage = loadAverage
+                nextSnapshot.loadAverage = loadAverages.minute1
+                nextSnapshot.loadAverage5m = loadAverages.minute5
+                nextSnapshot.loadAverage15m = loadAverages.minute15
                 nextSnapshot.cpuCoreCount = cpuCoreCount
 
                 if let ramSnapshot {
@@ -228,7 +358,13 @@ final class SystemMonitorManager: ObservableObject {
                 }
 
                 nextSnapshot.gpuLoad = gpuSnapshot.load
+                nextSnapshot.gpuRendererLoad = gpuSnapshot.rendererLoad
+                nextSnapshot.gpuTilerLoad = gpuSnapshot.tilerLoad
+                nextSnapshot.gpuInUseMemoryBytes = gpuSnapshot.inUseMemoryBytes
+                nextSnapshot.fps = fps
                 nextSnapshot.gpuTemperature = gpuSnapshot.temperature
+                nextSnapshot.ssdTemperature = ssdTemperature
+                nextSnapshot.batteryTemperature = batteryTemperature
                 let resolvedCPUTemperature = Self.stabilizedCPUTemperature(
                     rawCPUTemperature,
                     previousValid: currentState.lastValidCPUTemperature
@@ -248,6 +384,43 @@ final class SystemMonitorManager: ObservableObject {
                     nextSnapshot.activeNetworkInterface = networkSnapshot.activeInterface
                     nextSnapshot.networkLinkIsUp = networkSnapshot.linkIsUp
                 }
+
+                if let diskActivity {
+                    self.previousDiskBytes = diskActivity.currentState
+                    nextSnapshot.diskReadBps = diskActivity.readBps
+                    nextSnapshot.diskWriteBps = diskActivity.writeBps
+                }
+
+                if let heavy {
+                    self.nettopState = heavy.nettopState
+                    self.gpuClientState = heavy.gpuClientState
+                    self.diskProcessState = heavy.diskState
+                    self.topDiskProcesses = heavy.disk
+                    self.topCPUProcesses = heavy.cpu
+                    self.topMemoryProcesses = heavy.memory
+                    self.topGPUProcesses = heavy.gpu
+                    self.topNetworkProcesses = heavy.network
+                }
+
+                var sample = SystemMonitorSample()
+                sample.cpuLoad = nextSnapshot.cpuLoad
+                sample.userLoad = nextSnapshot.userLoad
+                sample.systemLoad = nextSnapshot.systemLoad
+                sample.gpuDevice = nextSnapshot.gpuLoad ?? 0
+                sample.gpuRenderer = nextSnapshot.gpuRendererLoad ?? 0
+                sample.gpuTiler = nextSnapshot.gpuTilerLoad ?? 0
+                sample.fps = fps ?? 0
+                sample.ramUsage = nextSnapshot.ramUsage
+                sample.appRAM = nextSnapshot.appRAM
+                sample.wiredRAM = nextSnapshot.wiredRAM
+                sample.compressedRAM = nextSnapshot.compressedRAM
+                sample.cachedRAM = nextSnapshot.cachedRAM
+                sample.diskReadBps = nextSnapshot.diskReadBps
+                sample.diskWriteBps = nextSnapshot.diskWriteBps
+                sample.downloadBps = nextSnapshot.downloadSpeed * 1_048_576
+                sample.uploadBps = nextSnapshot.uploadSpeed * 1_048_576
+                self.history.append(sample, at: Date())
+                self.historyFilledCount = max(self.historyFilledCount, min(self.history.count, self.historyCapacity))
 
                 if self.snapshot != nextSnapshot {
                     self.snapshot = nextSnapshot
@@ -469,7 +642,13 @@ final class SystemMonitorManager: ObservableObject {
         return (Int64(stats.f_bfree) * Int64(stats.f_bsize)) + max(0, purgeable)
     }
 
-    nonisolated private static func readGPUStats() -> (load: Double?, temperature: Double?) {
+    nonisolated private static func readGPUStats() -> (
+        load: Double?,
+        rendererLoad: Double?,
+        tilerLoad: Double?,
+        inUseMemoryBytes: Double?,
+        temperature: Double?
+    ) {
         var iterator: io_iterator_t = 0
         let result = IOServiceGetMatchingServices(
             kIOMainPortDefault,
@@ -478,11 +657,14 @@ final class SystemMonitorManager: ObservableObject {
         )
 
         guard result == KERN_SUCCESS else {
-            return (nil, fallbackGPUTemperature())
+            return (nil, nil, nil, nil, fallbackGPUTemperature())
         }
         defer { IOObjectRelease(iterator) }
 
         var load: Double?
+        var rendererLoad: Double?
+        var tilerLoad: Double?
+        var inUseMemoryBytes: Double?
         var temperature: Double?
 
         while true {
@@ -501,6 +683,15 @@ final class SystemMonitorManager: ObservableObject {
                     load = min(100, max(0, usage))
                 }
 
+                if let value = (stats["Renderer Utilization %"] as? NSNumber)?.doubleValue {
+                    rendererLoad = min(100, max(0, value))
+                }
+                if let value = (stats["Tiler Utilization %"] as? NSNumber)?.doubleValue {
+                    tilerLoad = min(100, max(0, value))
+                }
+                if let value = (stats["In use system memory"] as? NSNumber)?.doubleValue, value > 0 {
+                    inUseMemoryBytes = value
+                }
                 if let value = (stats["Temperature(C)"] as? NSNumber)?.doubleValue,
                    isPlausibleTemperature(value) {
                     temperature = value
@@ -510,17 +701,50 @@ final class SystemMonitorManager: ObservableObject {
             IOObjectRelease(service)
         }
 
-        return (load, temperature ?? fallbackGPUTemperature())
+        return (load, rendererLoad, tilerLoad, inUseMemoryBytes, temperature ?? fallbackGPUTemperature())
     }
 
     nonisolated private static func fallbackGPUTemperature() -> Double? {
+        // Intel Macs.
         if let value = SMCReader.shared.readValue(for: "TGDD"), isPlausibleTemperature(value) {
             return value
         }
         if let value = SMCReader.shared.readValue(for: "TCGC"), isPlausibleTemperature(value) {
             return value
         }
-        return nil
+        // Apple Silicon: GPU cluster sensors are "Tg*" (M1/M2/M4) or "Tf*"
+        // (M3); key names vary by chip, so they are discovered once.
+        return averageTemperature(keys: gpuTemperatureKeys)
+    }
+
+    nonisolated private static let gpuTemperatureKeys: [String] = {
+        let tg = SMCReader.shared.keys(withPrefix: "Tg")
+        return tg.isEmpty ? SMCReader.shared.keys(withPrefix: "Tf") : tg
+    }()
+
+    nonisolated private static let ssdTemperatureKeys: [String] = {
+        let available = Set(SMCReader.shared.allKeys())
+        return ["TH0x", "TH0a", "TH0b", "TH0A", "TH0B", "TH0F"].filter(available.contains)
+    }()
+
+    nonisolated private static let batteryTemperatureKeys: [String] = {
+        let available = Set(SMCReader.shared.allKeys())
+        return ["TB0T", "TB1T", "TB2T"].filter(available.contains)
+    }()
+
+    /// Mean of the plausible readings among `keys`; nil when none are readable.
+    nonisolated private static func averageTemperature(keys: [String]) -> Double? {
+        let values = keys.compactMap { SMCReader.shared.readValue(for: $0) }.filter(isPlausibleTemperature)
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
+    }
+
+    nonisolated private static func readSSDTemperature() -> Double? {
+        averageTemperature(keys: ssdTemperatureKeys)
+    }
+
+    nonisolated private static func readBatteryTemperature() -> Double? {
+        averageTemperature(keys: batteryTemperatureKeys)
     }
 
     nonisolated private static func readCPUTemperature() -> Double? {
@@ -752,10 +976,55 @@ final class SystemMonitorManager: ObservableObject {
             .joined(separator: ", ")
     }
 
-    nonisolated private static func readLoadAverage() -> Double {
+    nonisolated private static func readLoadAverage() -> (minute1: Double, minute5: Double, minute15: Double) {
         var loadAverages = [Double](repeating: 0, count: 3)
-        guard getloadavg(&loadAverages, 3) > 0 else { return 0 }
-        return loadAverages[0]
+        guard getloadavg(&loadAverages, 3) > 0 else { return (0, 0, 0) }
+        return (loadAverages[0], loadAverages[1], loadAverages[2])
+    }
+
+    /// Aggregate read/write bytes/sec across IOBlockStorageDrivers (internal
+    /// APFS stack reports zero, the AppleNVMe driver carries the real counters).
+    nonisolated private static func readDiskActivity(
+        previous: (read: UInt64, written: UInt64, at: Date)?
+    ) -> (readBps: Double, writeBps: Double, currentState: (read: UInt64, written: UInt64, at: Date))? {
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(
+            kIOMainPortDefault,
+            IOServiceMatching("IOBlockStorageDriver"),
+            &iterator
+        ) == KERN_SUCCESS else { return nil }
+        defer { IOObjectRelease(iterator) }
+
+        var totalRead: UInt64 = 0
+        var totalWritten: UInt64 = 0
+        while true {
+            let service = IOIteratorNext(iterator)
+            guard service != 0 else { break }
+            if let statistics = IORegistryEntryCreateCFProperty(
+                service,
+                "Statistics" as CFString,
+                kCFAllocatorDefault,
+                0
+            )?.takeRetainedValue() as? [String: Any] {
+                totalRead += (statistics["Bytes (Read)"] as? NSNumber)?.uint64Value ?? 0
+                totalWritten += (statistics["Bytes (Write)"] as? NSNumber)?.uint64Value ?? 0
+            }
+            IOObjectRelease(service)
+        }
+
+        let now = Date()
+        var readBps = 0.0
+        var writeBps = 0.0
+        if let previous, now.timeIntervalSince(previous.at) > 0.5 {
+            let elapsed = now.timeIntervalSince(previous.at)
+            if totalRead >= previous.read {
+                readBps = Double(totalRead - previous.read) / elapsed
+            }
+            if totalWritten >= previous.written {
+                writeBps = Double(totalWritten - previous.written) / elapsed
+            }
+        }
+        return (readBps, writeBps, (totalRead, totalWritten, now))
     }
 
     nonisolated private static func readCPUCoreCount() -> Int {
@@ -889,5 +1158,60 @@ final class SystemMonitorManager: ObservableObject {
             return ""
         }
         return interface
+    }
+
+    /// Applies the dashboard keys from `[widgets.default.system-monitor.popup]`.
+    /// Called by the dashboard on open and on config reload; cheap when nothing changed.
+    func applyDashboardConfig(topProcesses: Int, historySeconds: Int, showNetworkProcesses: Bool) {
+        topProcessLimit = min(max(topProcesses, 0), 15)
+        if self.showNetworkProcesses != showNetworkProcesses {
+            self.showNetworkProcesses = showNetworkProcesses
+            if !showNetworkProcesses {
+                nettopState = nil
+                topNetworkProcesses = []
+            }
+        }
+        if topProcessLimit == 0 {
+            topCPUProcesses = []
+            topMemoryProcesses = []
+            topGPUProcesses = []
+            topNetworkProcesses = []
+            topDiskProcesses = []
+        }
+        let capacity = max(40, min(historySeconds, 3600) / 3)
+        if capacity != historyCapacity {
+            history = history.resized(to: capacity)
+            historyCapacity = capacity
+            historyFilledCount = history.count
+            objectWillChange.send()
+        }
+    }
+
+    /// Opens the dashboard on the page that matches a clicked bar metric;
+    /// temperature has no page of its own and lands on Overview.
+    func focus(on metric: SystemMonitorMetric?) {
+        guard let metric else { return }
+        selectedCategory = SystemMonitorCategory(rawValue: metric.rawValue) ?? .overview
+    }
+
+    /// Called by the dashboard on appear/disappear. Repeated calls with the
+    /// same value are ignored so a category switch does not reseed samplers.
+    func setPopupVisible(_ visible: Bool) {
+        guard isPopupVisible != visible else { return }
+        isPopupVisible = visible
+        if visible {
+            // Seed cumulative counters (nettop, GPU time) immediately so the
+            // first real rows arrive on the next tick instead of after a gap.
+            refresh()
+        } else {
+            nettopState = nil
+            gpuClientState = nil
+            diskProcessState = nil
+            topDiskProcesses = []
+            topCPUProcesses = []
+            topMemoryProcesses = []
+            topGPUProcesses = []
+            topNetworkProcesses = []
+        }
     }
 }

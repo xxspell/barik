@@ -316,9 +316,11 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MARKETING_VERSION = 0.17.0;
+				OTHER_LDFLAGS = "-lIOReport";
 				PRODUCT_BUNDLE_IDENTIFIER = Pansy.Barik;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Barik/Widgets/SystemMonitor/SystemMonitorBridge.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -352,7 +354,9 @@
 				MARKETING_VERSION = 0.17.0;
 				PRODUCT_BUNDLE_IDENTIFIER = Pansy.Barik;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				OTHER_LDFLAGS = "-lIOReport";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Barik/Widgets/SystemMonitor/SystemMonitorBridge.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;

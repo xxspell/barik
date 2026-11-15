@@ -7003,6 +7003,10 @@ private struct SystemMonitorSettingsView: View {
     @State private var popupDiskDetailSelections: [String: Bool] = [:]
     @State private var popupGPUDetailSelections: [String: Bool] = [:]
     @State private var popupNetworkDetailSelections: [String: Bool] = [:]
+    @State private var dashboardTopProcesses = 8.0
+    @State private var dashboardHistorySeconds = 300
+    @State private var dashboardShowCharts = true
+    @State private var dashboardShowNetworkProcesses = true
     @State private var isApplyingConfigSnapshot = false
     @State private var pendingStringWrites: [String: String] = [:]
     @State private var pendingBoolWrites: [String: Bool] = [:]
@@ -7187,62 +7191,58 @@ private struct SystemMonitorSettingsView: View {
             }
 
             SettingsCardView(
-                settingsLocalized("settings.system_monitor.card.popup_details"),
+                settingsLocalized("settings.system_monitor.card.dashboard"),
                 actionTitle: settingsLocalized("settings.action.reset"),
-                action: resetPopupDefaults
+                action: resetDashboardDefaults
             ) {
-                popupDetailSection(
-                    title: settingsLocalized("settings.system_monitor.popup_details.cpu_fields.title"),
-                    description: settingsLocalized("settings.system_monitor.popup_details.cpu_fields.description"),
-                    options: SystemMonitorPopupCPUDetailOption.allCases,
-                    selections: $popupCPUDetailSelections,
-                    fieldKey: "cpu-details",
-                    defaults: [.usage, .temperature, .loadAverage, .cores]
+                SliderSettingRow(
+                    title: settingsLocalized("settings.system_monitor.dashboard.top_processes.title"),
+                    description: settingsLocalized("settings.system_monitor.dashboard.top_processes.description"),
+                    value: $dashboardTopProcesses,
+                    range: 0...15,
+                    step: 1,
+                    valueFormat: { "\(Int($0))" }
+                )
+                .onChange(of: dashboardTopProcesses) { _, newValue in
+                    setIntValue(Int(newValue.rounded()), for: .init(tablePath: systemMonitorPopupTable, key: "top-processes"))
+                }
+
+                SegmentedPickerRow(
+                    title: settingsLocalized("settings.system_monitor.dashboard.history.title"),
+                    description: settingsLocalized("settings.system_monitor.dashboard.history.description"),
+                    selection: Binding(
+                        get: { dashboardHistorySeconds },
+                        set: { newValue in
+                            dashboardHistorySeconds = newValue
+                            setIntValue(newValue, for: .init(tablePath: systemMonitorPopupTable, key: "history-seconds"))
+                        }
+                    ),
+                    options: [60, 300, 600],
+                    titleForOption: { String(format: settingsLocalized("settings.system_monitor.dashboard.history.minutes"), $0 / 60) }
                 )
 
-                popupDetailSection(
-                    title: settingsLocalized("settings.system_monitor.popup_details.temperature_fields.title"),
-                    description: settingsLocalized("settings.system_monitor.popup_details.temperature_fields.description"),
-                    options: SystemMonitorPopupTemperatureDetailOption.allCases,
-                    selections: $popupTemperatureDetailSelections,
-                    fieldKey: "temperature-details",
-                    defaults: [.cpu, .gpu]
+                ToggleRow(
+                    title: settingsLocalized("settings.system_monitor.dashboard.show_charts.title"),
+                    description: settingsLocalized("settings.system_monitor.dashboard.show_charts.description"),
+                    isOn: Binding(
+                        get: { dashboardShowCharts },
+                        set: { newValue in
+                            dashboardShowCharts = newValue
+                            setBoolValue(newValue, for: .init(tablePath: systemMonitorPopupTable, key: "show-charts"))
+                        }
+                    )
                 )
 
-                popupDetailSection(
-                    title: settingsLocalized("settings.system_monitor.popup_details.memory_fields.title"),
-                    description: settingsLocalized("settings.system_monitor.popup_details.memory_fields.description"),
-                    options: SystemMonitorPopupRAMDetailOption.allCases,
-                    selections: $popupRAMDetailSelections,
-                    fieldKey: "ram-details",
-                    defaults: [.used, .app, .free, .pressure]
-                )
-
-                popupDetailSection(
-                    title: settingsLocalized("settings.system_monitor.popup_details.disk_fields.title"),
-                    description: settingsLocalized("settings.system_monitor.popup_details.disk_fields.description"),
-                    options: SystemMonitorPopupDiskDetailOption.allCases,
-                    selections: $popupDiskDetailSelections,
-                    fieldKey: "disk-details",
-                    defaults: [.used, .free, .total]
-                )
-
-                popupDetailSection(
-                    title: settingsLocalized("settings.system_monitor.popup_details.gpu_fields.title"),
-                    description: settingsLocalized("settings.system_monitor.popup_details.gpu_fields.description"),
-                    options: SystemMonitorPopupGPUDetailOption.allCases,
-                    selections: $popupGPUDetailSelections,
-                    fieldKey: "gpu-details",
-                    defaults: [.utilization, .temperature]
-                )
-
-                popupDetailSection(
-                    title: settingsLocalized("settings.system_monitor.popup_details.network_fields.title"),
-                    description: settingsLocalized("settings.system_monitor.popup_details.network_fields.description"),
-                    options: SystemMonitorPopupNetworkDetailOption.allCases,
-                    selections: $popupNetworkDetailSelections,
-                    fieldKey: "network-details",
-                    defaults: [.status, .download, .upload, .interfaceName]
+                ToggleRow(
+                    title: settingsLocalized("settings.system_monitor.dashboard.network_processes.title"),
+                    description: settingsLocalized("settings.system_monitor.dashboard.network_processes.description"),
+                    isOn: Binding(
+                        get: { dashboardShowNetworkProcesses },
+                        set: { newValue in
+                            dashboardShowNetworkProcesses = newValue
+                            setBoolValue(newValue, for: .init(tablePath: systemMonitorPopupTable, key: "show-network-processes"))
+                        }
+                    )
                 )
             }
 
@@ -7356,6 +7356,11 @@ private struct SystemMonitorSettingsView: View {
             (metric.rawValue, resolvedPopupMetrics.contains(metric.rawValue))
         })
 
+        dashboardTopProcesses = Double(resolvedIntValue(for: .init(tablePath: systemMonitorPopupTable, key: "top-processes"), incoming: popupConfig["top-processes"]?.intValue ?? 8, current: Int(dashboardTopProcesses.rounded())))
+        dashboardHistorySeconds = resolvedIntValue(for: .init(tablePath: systemMonitorPopupTable, key: "history-seconds"), incoming: popupConfig["history-seconds"]?.intValue ?? 300, current: dashboardHistorySeconds)
+        dashboardShowCharts = resolvedBoolValue(for: .init(tablePath: systemMonitorPopupTable, key: "show-charts"), incoming: popupConfig["show-charts"]?.boolValue ?? true, current: dashboardShowCharts)
+        dashboardShowNetworkProcesses = resolvedBoolValue(for: .init(tablePath: systemMonitorPopupTable, key: "show-network-processes"), incoming: popupConfig["show-network-processes"]?.boolValue ?? true, current: dashboardShowNetworkProcesses)
+
         popupCPUDetailSelections = detailSelectionDictionary(
             for: .init(tablePath: systemMonitorPopupTable, key: "cpu-details"),
             incoming: popupConfig["cpu-details"]?.stringArrayValue,
@@ -7440,6 +7445,17 @@ private struct SystemMonitorSettingsView: View {
         settingsStore.setInt(90, for: .init(tablePath: systemMonitorTable, key: "disk-critical-level"))
         settingsStore.setInt(70, for: .init(tablePath: systemMonitorTable, key: "gpu-warning-level"))
         settingsStore.setInt(90, for: .init(tablePath: systemMonitorTable, key: "gpu-critical-level"))
+    }
+
+    private func resetDashboardDefaults() {
+        dashboardTopProcesses = 8
+        dashboardHistorySeconds = 300
+        dashboardShowCharts = true
+        dashboardShowNetworkProcesses = true
+        setIntValue(8, for: .init(tablePath: systemMonitorPopupTable, key: "top-processes"))
+        setIntValue(300, for: .init(tablePath: systemMonitorPopupTable, key: "history-seconds"))
+        setBoolValue(true, for: .init(tablePath: systemMonitorPopupTable, key: "show-charts"))
+        setBoolValue(true, for: .init(tablePath: systemMonitorPopupTable, key: "show-network-processes"))
     }
 
     private func resetPopupDefaults() {
