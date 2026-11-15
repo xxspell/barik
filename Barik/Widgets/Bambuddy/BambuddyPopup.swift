@@ -11,14 +11,14 @@ struct BambuddyPopup: View {
         category: "BambuddyPopup"
     )
 
-    @State private var selectedPrinter: BambuddyPrinterWithStatus?
     @State private var controlsHovered = false
     @State private var refreshAnimation = false
 
-    private let popupWidth: CGFloat = 400
-    private let cardSpacing: CGFloat = 10
-    private let cardHorizontalPadding: CGFloat = 16
-    private let cardVerticalPadding: CGFloat = 12
+    // Same rhythm as the other Barik popups (Claude/Codex usage): flat sections
+    // separated by hairline dividers, 20 pt side padding.
+    private let popupWidth: CGFloat = 340
+    private let sectionHorizontalPadding: CGFloat = 20
+    private let sectionVerticalPadding: CGFloat = 14
 
     private var showPercentage: Bool { configProvider.config["show-progress"]?.boolValue ?? true }
     private var showTimeRemaining: Bool { configProvider.config["show-time-remaining"]?.boolValue ?? true }
@@ -32,18 +32,17 @@ struct BambuddyPopup: View {
                 .background(Color.white.opacity(0.1))
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: cardSpacing) {
+                VStack(alignment: .leading, spacing: 0) {
                     if manager.printers.isEmpty && !manager.isConfigured {
                         notConfiguredView
+                            .padding(.horizontal, sectionHorizontalPadding)
                     } else if manager.printers.isEmpty {
                         noPrintersView
+                            .padding(.horizontal, sectionHorizontalPadding)
                     } else {
-                        printerCards
+                        printerSections
                     }
                 }
-                .padding(.horizontal, cardHorizontalPadding)
-                .padding(.top, cardVerticalPadding)
-                .padding(.bottom, 16)
             }
 
             Divider()
@@ -56,11 +55,6 @@ struct BambuddyPopup: View {
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.2)) {
                 controlsHovered = hovering
-            }
-        }
-        .onAppear {
-            if selectedPrinter == nil {
-                selectedPrinter = manager.printers.first
             }
         }
     }
@@ -120,8 +114,8 @@ struct BambuddyPopup: View {
 
             refreshButton
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, sectionHorizontalPadding)
+        .padding(.vertical, sectionVerticalPadding)
     }
 
     private func statusBadge(count: Int, label: String, color: Color) -> some View {
@@ -146,14 +140,17 @@ struct BambuddyPopup: View {
 
     // MARK: - Printer Cards
 
-    private var printerCards: some View {
-        ForEach(manager.printers) { printerWithStatus in
-            printerCard(for: printerWithStatus)
+    private var printerSections: some View {
+        ForEach(Array(manager.printers.enumerated()), id: \.element.id) { index, printerWithStatus in
+            if index > 0 {
+                Divider()
+                    .background(Color.white.opacity(0.1))
+            }
+            printerSection(for: printerWithStatus)
         }
     }
 
-    private func printerCard(for printer: BambuddyPrinterWithStatus) -> some View {
-        let isSelected = selectedPrinter?.id == printer.id
+    private func printerSection(for printer: BambuddyPrinterWithStatus) -> some View {
         let isOnline = printer.isOnline
         let state = printer.displayState
 
@@ -275,29 +272,20 @@ struct BambuddyPopup: View {
                 errorsSection(printer.hmsErrors)
             }
 
-            if isOnline {
-                printerActions(for: printer)
+            if isOnline, printer.status?.awaitingPlateClear == true {
+                plateClearNotice
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(isSelected ? 0.07 : 0.03))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(
-                    isSelected ? Color.bambuddyAccent.opacity(0.4) : Color.clear,
-                    lineWidth: 1
-                )
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                selectedPrinter = printer
-            }
-        }
+        .padding(.horizontal, sectionHorizontalPadding)
+        .padding(.vertical, sectionVerticalPadding)
+    }
+
+    /// The printer is done and waits for the build plate to be cleared. Shown as
+    /// status, not a button: Barik has no Bambuddy control API wired up yet.
+    private var plateClearNotice: some View {
+        Label(String(localized: "bambuddy.plate_needs_clearing"), systemImage: "hand.raised.fill")
+            .barikPopupFont(size: 11, weight: .semibold)
+            .foregroundStyle(.orange)
     }
 
     private func stateBadge(for state: BambuddyPrinterState) -> some View {
@@ -320,7 +308,7 @@ struct BambuddyPopup: View {
                 tempItem(
                     label: String(localized: "bambuddy.nozzle"),
                     value: "\(Int(nozzle.rounded()))°",
-                    target: temps.nozzleTarget.map { "\(Int($0.rounded()))°" },
+                    target: heatingTarget(temps.nozzleTarget),
                     color: .orange
                 )
             }
@@ -329,7 +317,7 @@ struct BambuddyPopup: View {
                 tempItem(
                     label: String(localized: "bambuddy.bed"),
                     value: "\(Int(bed.rounded()))°",
-                    target: temps.bedTarget.map { "\(Int($0.rounded()))°" },
+                    target: heatingTarget(temps.bedTarget),
                     color: .blue
                 )
             }
@@ -362,11 +350,17 @@ struct BambuddyPopup: View {
                 .foregroundStyle(.white)
 
             if let target = target {
-                Text("/\(target)")
+                Text(verbatim: "→ \(target)")
                     .barikPopupFont(size: 10, weight: .medium, design: .monospaced)
                     .foregroundStyle(.white.opacity(0.3))
             }
         }
+    }
+
+    /// Target temperature only while heating; an idle printer reports 0.
+    private func heatingTarget(_ target: Double?) -> String? {
+        guard let target, target > 0 else { return nil }
+        return "\(Int(target.rounded()))°"
     }
 
     private func progressBar(progress: Double, color: Color) -> some View {
@@ -448,90 +442,6 @@ struct BambuddyPopup: View {
         case 2: return .orange
         case 3: return .yellow
         default: return .gray
-        }
-    }
-
-    private func printerActions(for printer: BambuddyPrinterWithStatus) -> some View {
-        HStack(spacing: 8) {
-            if printer.displayState == .running {
-                actionButton(
-                    title: String(localized: "bambuddy.pause"),
-                    icon: "pause.fill",
-                    color: .orange
-                ) {
-                    // TODO: Implement pause
-                }
-            } else if printer.displayState == .pause {
-                actionButton(
-                    title: String(localized: "bambuddy.resume"),
-                    icon: "play.fill",
-                    color: .green
-                ) {
-                    // TODO: Implement resume
-                }
-            }
-
-            if printer.displayState.isActive {
-                actionButton(
-                    title: String(localized: "bambuddy.stop"),
-                    icon: "stop.fill",
-                    color: .red
-                ) {
-                    // TODO: Implement stop
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            if printer.status?.awaitingPlateClear == true {
-                actionButton(
-                    title: String(localized: "bambuddy.clear_plate"),
-                    icon: "hand.raised.fill",
-                    color: .blue
-                ) {
-                    // TODO: Implement clear plate
-                }
-            }
-        }
-    }
-
-    private enum ActionButtonStyle {
-        case primary, secondary
-    }
-
-    private func actionButton(
-        title: String,
-        icon: String,
-        color: Color,
-        style: ActionButtonStyle = .primary,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .barikPopupFont(size: 10, weight: .semibold)
-                Text(title)
-                    .barikPopupFont(size: 10, weight: .semibold)
-            }
-            .foregroundStyle(style == .primary ? .white : .white.opacity(0.8))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(style == .primary ? color.opacity(0.18) : Color.white.opacity(0.06))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(style == .primary ? color.opacity(0.4) : Color.white.opacity(0.1), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            if hovering {
-                NSCursor.pointingHand.push()
-            } else {
-                NSCursor.pop()
-            }
         }
     }
 
@@ -624,12 +534,14 @@ struct BambuddyPopup: View {
             Spacer(minLength: 0)
 
             if let lastRefresh = manager.lastRefresh {
-                Text(String(format: String(localized: "bambuddy.refreshed"), RelativeDateTimeFormatter().localizedString(for: lastRefresh, relativeTo: Date())))
-                    .barikPopupFont(size: 10, design: .monospaced)
-                    .foregroundStyle(.white.opacity(0.4))
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    Text(updatedText(lastRefresh, now: context.date))
+                        .barikPopupFont(size: 10)
+                        .foregroundStyle(.white.opacity(0.4))
+                }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, sectionHorizontalPadding)
         .padding(.vertical, 10)
     }
 
@@ -670,6 +582,15 @@ struct BambuddyPopup: View {
     }
 
     // MARK: - Helpers
+
+    /// "Updated just now" under a minute, then "Updated 3 min. ago".
+    private func updatedText(_ date: Date, now: Date) -> String {
+        if now.timeIntervalSince(date) < 60 {
+            return String(localized: "bambuddy.updated_just_now")
+        }
+        let relative = date.formatted(.relative(presentation: .named, unitsStyle: .abbreviated))
+        return String(format: String(localized: "bambuddy.updated_ago"), relative)
+    }
 
     /// `remainingTime` is reported by the printer's own firmware in **minutes**, not seconds.
     private func formatTime(_ minutes: Int) -> String {

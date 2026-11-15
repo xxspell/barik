@@ -18727,6 +18727,54 @@
           }
         }
       }
+    },
+    "bambuddy.plate_needs_clearing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plate needs clearing"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нужно очистить стол"
+          }
+        }
+      }
+    },
+    "bambuddy.updated_just_now": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated just now"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновлено только что"
+          }
+        }
+      }
+    },
+    "bambuddy.updated_ago": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновлено %@"
+          }
+        }
+      }
     }
   },
   "version": "1.1"
