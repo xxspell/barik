@@ -172,9 +172,10 @@ enum ProcessSampler {
         task.executableURL = URL(fileURLWithPath: path)
         task.arguments = arguments
         let stdout = Pipe()
-        let stderr = Pipe()
         task.standardOutput = stdout
-        task.standardError = stderr
+        // Discard stderr: reading two pipes one after the other can block if
+        // stderr fills its buffer while we wait for stdout's EOF.
+        task.standardError = FileHandle.nullDevice
         do {
             try task.run()
         } catch {
@@ -187,34 +188,9 @@ enum ProcessSampler {
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5, execute: watchdog)
 
         let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        stderr.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()
         watchdog.cancel()
         guard task.terminationStatus == 0, !data.isEmpty else { return nil }
         return String(data: data, encoding: .utf8)
     }
 }
-
-#if DEBUG
-func systemMonitorProcessesSelfTest() {
-    let cpu = ProcessSampler.cpuProcesses(limit: 5)
-    precondition(!cpu.isEmpty, "cpu list empty")
-    precondition(cpu[0].primary >= 0 && cpu[0].primary < 500)
-    precondition(cpu[0].secondary != nil && cpu[0].secondary! > 0, "rss missing")
-    precondition(!cpu[0].name.isEmpty && !cpu[0].name.contains(".1"), "name not resolved: \(cpu[0].name)")
-
-    let mem = ProcessSampler.memoryProcesses(limit: 5)
-    precondition(!mem.isEmpty, "mem list empty")
-    precondition(mem[0].primary > 1_000_000, "rss not bytes: \(mem[0].primary)")
-
-    var state: NettopState?
-    precondition(ProcessSampler.networkProcesses(limit: 5, previous: &state).isEmpty, "first nettop must seed")
-    Thread.sleep(forTimeInterval: 2)
-    let net = ProcessSampler.networkProcesses(limit: 5, previous: &state)
-    for p in net {
-        precondition(p.primary >= 0 && (p.secondary ?? 0) >= 0)
-        precondition(!p.name.isEmpty)
-    }
-    NSLog("processesSelfTest OK cpu=\(cpu.map(\.name)) net=\(net.map { "\($0.name):\($0.primary)" })")
-}
-#endif

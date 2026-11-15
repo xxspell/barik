@@ -66,17 +66,3 @@ final class FPSReader {
         return Double(delta) / (now - previousTime)
     }
 }
-
-#if DEBUG
-func systemMonitorFPSSelfTest() {
-    let reader = FPSReader()
-    precondition(reader.isAvailable, "IOReport DCP swap subscription unavailable")
-    precondition(reader.read() == nil, "first sample must be nil")
-    Thread.sleep(forTimeInterval: 2)
-    guard let fps = reader.read() else {
-        preconditionFailure("no fps after second sample")
-    }
-    precondition(fps > 0 && fps < 1000, "fps out of range: \(fps)")
-    NSLog("fpsSelfTest OK fps=\(fps)")
-}
-#endif

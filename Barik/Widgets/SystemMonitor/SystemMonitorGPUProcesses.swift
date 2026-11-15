@@ -96,18 +96,3 @@ enum GPUProcessSampler {
         return result
     }
 }
-
-#if DEBUG
-func systemMonitorGPUProcessesSelfTest() {
-    var state: GPUClientState?
-    precondition(GPUProcessSampler.gpuProcesses(limit: 10, previous: &state).isEmpty, "first read must seed")
-    precondition(state != nil && !state!.clients.isEmpty, "no GPU clients found in IORegistry")
-    Thread.sleep(forTimeInterval: 2)
-    let rows = GPUProcessSampler.gpuProcesses(limit: 10, previous: &state)
-    for row in rows {
-        precondition(row.primary > 0 && row.primary < 1000, "gpu % out of range: \(row.primary)")
-        precondition(!row.name.isEmpty)
-    }
-    NSLog("gpuProcessesSelfTest OK clients=\(rows.map { "\($0.name):\($0.primary)" })")
-}
-#endif

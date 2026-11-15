@@ -292,13 +292,13 @@ struct SMRAMPage: View {
                         }
                         SMStackedBar(segments: [
                             SMSegment(fraction: fraction(systemMonitor.appRAM), color: .blue,
-                                      label: "App: \(String(format: "%.1f", systemMonitor.appRAM)) GB"),
+                                      label: String(format: String(localized: "App: %@ GB"), String(format: "%.1f", systemMonitor.appRAM))),
                             SMSegment(fraction: fraction(systemMonitor.wiredRAM), color: .red.opacity(0.8),
-                                      label: "Wired: \(String(format: "%.1f", systemMonitor.wiredRAM)) GB"),
+                                      label: String(format: String(localized: "Wired: %@ GB"), String(format: "%.1f", systemMonitor.wiredRAM))),
                             SMSegment(fraction: fraction(systemMonitor.compressedRAM), color: .purple.opacity(0.8),
-                                      label: "Compressed: \(String(format: "%.1f", systemMonitor.compressedRAM)) GB"),
+                                      label: String(format: String(localized: "Compressed: %@ GB"), String(format: "%.1f", systemMonitor.compressedRAM))),
                             SMSegment(fraction: fraction(systemMonitor.cachedRAM), color: .green.opacity(0.7),
-                                      label: "Cached: \(String(format: "%.1f", systemMonitor.cachedRAM)) GB")
+                                      label: String(format: String(localized: "Cached: %@ GB"), String(format: "%.1f", systemMonitor.cachedRAM)))
                         ], height: 12)
                         SMChartLegend(entries: [
                             .init(label: "App", color: .blue, value: gb(systemMonitor.appRAM)),
@@ -426,7 +426,7 @@ struct SMDiskPage: View {
                         }
                         SMStackedBar(segments: [
                             SMSegment(fraction: systemMonitor.diskUsage / 100, color: .indigo,
-                                      label: "Used: \(String(format: "%.0f", systemMonitor.usedDisk)) GB")
+                                      label: String(format: String(localized: "Used: %@ GB"), String(format: "%.0f", systemMonitor.usedDisk)))
                         ], height: 12)
                         VStack(alignment: .leading, spacing: 6) {
                             SMStatRow(label: "Used", value: gb(systemMonitor.usedDisk))
