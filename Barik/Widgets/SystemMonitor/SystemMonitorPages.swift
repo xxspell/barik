@@ -96,7 +96,7 @@ struct SMOverviewPage: View {
 
                 SMCard("System") {
                     VStack(alignment: .leading, spacing: 6) {
-                        SMStatRow(label: "Load 1/5/15",
+                        SMStatRow(label: "Load",
                                   value: [systemMonitor.loadAverage, systemMonitor.loadAverage5m, systemMonitor.loadAverage15m]
                                       .map(SMFormat.load).joined(separator: " "))
                         SMStatRow(label: "Cores", value: "\(systemMonitor.cpuCoreCount)")
