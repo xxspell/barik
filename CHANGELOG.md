@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.18.0
+
+![Header](https://raw.githubusercontent.com/xxspell/barik/main/resources/changelog/0.18.0/banner-system-monitor.png)
+
+### Added
+- Add a System Monitor dashboard: the popup is now a sidebar with Overview, CPU, GPU, RAM, Disk and Network pages — history charts, load average 1/5/15, top processes by CPU, memory, GPU time, network and disk read/write, FPS, GPU renderer/tiler load and disk throughput. Clicking a metric in the bar opens the dashboard on that page (temperature opens Overview)
+- Add more temperature sensors: GPU temperature on Apple Silicon (the chip's SMC sensors are discovered automatically), plus SSD and battery
+- Add dashboard settings — top-process rows, history length (1/5/10 min), charts on/off and per-app network sampling; the Popup content toggles now choose which pages appear in the sidebar
+- Add an AI Agents widget for [herdr](https://herdr.dev): tracks Claude Code, opencode, omp, pi and jcode agents. The bar chip names the agent waiting for you and counts working/finished ones; the popup groups agents by status or project, shows the waiting agent's screen, and jumps to the agent in herdr on click
+
+  ![AI Agents](https://raw.githubusercontent.com/xxspell/barik/main/resources/changelog/0.18.0/banner-agents.png)
+- Add animated "needs you" and "done" notifications for agents — island (grows out of the notch), chip or stack style, shown on the screen you're looking at and quiet while herdr is in front. Settings → Agents has a test button
+
+  ![Agent notification](https://raw.githubusercontent.com/xxspell/barik/main/resources/changelog/0.18.0/agents-toast.gif)
+- Add a Bambuddy widget for Bambu Lab printers: print progress, time left, layers, nozzle/bed/chamber temperatures and a plate-clear reminder
+
+  ![Bambuddy widget](https://raw.githubusercontent.com/xxspell/barik/main/resources/changelog/0.18.0/banner-bambuddy.png)
+- Add per-model weekly limits, a usage breakdown by surface and extra usage to the Claude Usage popup
+- Add a Minimal display mode for Spaces, a `window.show = false` option to hide window labels, and make the TUI style honour the rest of the Spaces settings
+
+### Fixed
+- Fix Spaces going blank until restart when a yabai command hangs — yabai calls now time out and retry on the next event
+- Fix Spaces not picking up a window manager that starts after Barik
+- Fix the Claude Usage reset badge being hard to read in light theme
+
 ## 0.17.0
 
 ### Added
