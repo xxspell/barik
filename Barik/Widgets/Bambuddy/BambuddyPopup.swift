@@ -16,7 +16,7 @@ struct BambuddyPopup: View {
 
     // Same rhythm as the other Barik popups (Claude/Codex usage): flat sections
     // separated by hairline dividers, 20 pt side padding.
-    private let popupWidth: CGFloat = 340
+    private let popupWidth: CGFloat = 380
     private let sectionHorizontalPadding: CGFloat = 20
     private let sectionVerticalPadding: CGFloat = 14
 
@@ -132,6 +132,8 @@ struct BambuddyPopup: View {
                 .barikPopupFont(size: 10, weight: .medium)
                 .foregroundStyle(.white.opacity(0.7))
         }
+        .lineLimit(1)
+        .fixedSize()
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
         .background(color.opacity(0.15))
@@ -291,6 +293,8 @@ struct BambuddyPopup: View {
     private func stateBadge(for state: BambuddyPrinterState) -> some View {
         Text(state.displayName)
             .barikPopupFont(size: 9, weight: .bold, design: .rounded)
+            .lineLimit(1)
+            .fixedSize()
             .foregroundStyle(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -355,6 +359,8 @@ struct BambuddyPopup: View {
                     .foregroundStyle(.white.opacity(0.3))
             }
         }
+        .lineLimit(1)
+        .fixedSize()
     }
 
     /// Target temperature only while heating; an idle printer reports 0.

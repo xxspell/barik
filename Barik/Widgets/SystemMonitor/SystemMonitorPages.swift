@@ -568,8 +568,11 @@ struct SMDiskPage: View {
                     processes: systemMonitor.topDiskProcesses,
                     emptyText: "Idle",
                     valueText: { process in
-                        let write = process.secondary.map { " W " + SMFormat.bytesPerSecond($0) } ?? ""
-                        return "R " + SMFormat.bytesPerSecond(process.primary) + write
+                        // Only the directions that moved: "R 5 KB/s", "W 1 KB/s" or both.
+                        var parts: [String] = []
+                        if process.primary > 0 { parts.append("R " + SMFormat.bytesPerSecond(process.primary)) }
+                        if let write = process.secondary, write > 0 { parts.append("W " + SMFormat.bytesPerSecond(write)) }
+                        return parts.joined(separator: "  ")
                     },
                     tint: .cyan,
                     barUsesSum: true
