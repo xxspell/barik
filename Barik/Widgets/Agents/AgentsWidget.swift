@@ -138,6 +138,20 @@ struct AgentsWidget: View {
                     .environmentObject(configProvider)
             }
         }
+        .debugPopupTrigger(id: "agents", rect: widgetFrame) { info in
+            switch info["toast"] as? String {
+            case "blocked": AgentToastController.shared.showTest(kind: .blocked)
+            case "done": AgentToastController.shared.showTest(kind: .done)
+            default:
+                MenuBarPopup.show(rect: widgetFrame, id: "agents") {
+                    AgentsPopup()
+                        .environmentObject(configProvider)
+                }
+            }
+        }
+        .debugPopupTrigger(id: "hide-popup", rect: widgetFrame) { _ in
+            MenuBarPopup.hide()
+        }
     }
 
     private var idleIcon: some View {

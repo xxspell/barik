@@ -157,6 +157,15 @@ struct SystemMonitorWidget: View {
                     .environmentObject(configProvider)
             }
         }
+        .debugPopupTrigger(id: "system-monitor", rect: rect) { info in
+            if let page = (info["category"] as? String).flatMap(SystemMonitorCategory.init(rawValue:)) {
+                systemMonitor.selectedCategory = page
+            }
+            MenuBarPopup.show(rect: rect, id: "system-monitor") {
+                SystemMonitorPopup()
+                    .environmentObject(configProvider)
+            }
+        }
     }
 
     @ViewBuilder
@@ -242,6 +251,15 @@ struct SystemMonitorWidget: View {
         .background(.black.opacity(0.001))
         .animation(sizeChangeAnimation, value: animatedWidthSignature)
         .onTapGesture {
+            MenuBarPopup.show(rect: rect, id: "system-monitor") {
+                SystemMonitorPopup()
+                    .environmentObject(configProvider)
+            }
+        }
+        .debugPopupTrigger(id: "system-monitor", rect: rect) { info in
+            if let page = (info["category"] as? String).flatMap(SystemMonitorCategory.init(rawValue:)) {
+                systemMonitor.selectedCategory = page
+            }
             MenuBarPopup.show(rect: rect, id: "system-monitor") {
                 SystemMonitorPopup()
                     .environmentObject(configProvider)

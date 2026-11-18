@@ -70,6 +70,12 @@ struct BambuddyWidget: View {
                 }
             }
         }
+        .debugPopupTrigger(id: "bambuddy", rect: widgetFrame) { _ in
+            MenuBarPopup.show(rect: widgetFrame, id: "bambuddy") {
+                BambuddyPopup()
+                    .environmentObject(configProvider)
+            }
+        }
         .onAppear {
             configureManager()
             manager.startUpdating()
@@ -117,6 +123,12 @@ struct BambuddyWidget: View {
                     BambuddyPopup()
                         .environmentObject(configProvider)
                 }
+            }
+        }
+        .debugPopupTrigger(id: "bambuddy", rect: widgetFrame) { _ in
+            MenuBarPopup.show(rect: widgetFrame, id: "bambuddy") {
+                BambuddyPopup()
+                    .environmentObject(configProvider)
             }
         }
         .onAppear {
