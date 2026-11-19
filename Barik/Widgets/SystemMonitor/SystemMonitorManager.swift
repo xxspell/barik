@@ -159,7 +159,9 @@ final class SystemMonitorManager: ObservableObject {
 
     /// Set while the dashboard is open; gates the heavy samplers (ps, nettop,
     /// IORegistry client walk) so a closed popup keeps the old cost profile.
-    @Published private(set) var isPopupVisible = false
+    /// Not @Published: no view reads it, and publishing on open re-rendered
+    /// every bar widget observing the manager right as the popup animated in.
+    private(set) var isPopupVisible = false
 
     /// Survives popup rebuilds (popup content gets a fresh .id(UUID()) per open).
     @Published var selectedCategory: SystemMonitorCategory = .overview
@@ -392,14 +394,23 @@ final class SystemMonitorManager: ObservableObject {
                 }
 
                 if let heavy {
+                    // Rate samplers (GPU, network, disk) return [] on the pass
+                    // that seeds their counters; keep the previous rows then, so
+                    // reopening the popup doesn't flash empty lists and relayout
+                    // mid open-animation. Unchanged lists are not republished.
+                    func publish(_ rows: [TopProcess], seeding: Bool,
+                                 to keyPath: ReferenceWritableKeyPath<SystemMonitorManager, [TopProcess]>) {
+                        guard !seeding, self[keyPath: keyPath] != rows else { return }
+                        self[keyPath: keyPath] = rows
+                    }
+                    publish(heavy.cpu, seeding: false, to: \.topCPUProcesses)
+                    publish(heavy.memory, seeding: false, to: \.topMemoryProcesses)
+                    publish(heavy.gpu, seeding: currentState.gpuClientState == nil, to: \.topGPUProcesses)
+                    publish(heavy.network, seeding: currentState.nettopState == nil, to: \.topNetworkProcesses)
+                    publish(heavy.disk, seeding: currentState.diskProcessState == nil, to: \.topDiskProcesses)
                     self.nettopState = heavy.nettopState
                     self.gpuClientState = heavy.gpuClientState
                     self.diskProcessState = heavy.diskState
-                    self.topDiskProcesses = heavy.disk
-                    self.topCPUProcesses = heavy.cpu
-                    self.topMemoryProcesses = heavy.memory
-                    self.topGPUProcesses = heavy.gpu
-                    self.topNetworkProcesses = heavy.network
                 }
 
                 var sample = SystemMonitorSample()
@@ -1172,11 +1183,11 @@ final class SystemMonitorManager: ObservableObject {
             }
         }
         if topProcessLimit == 0 {
-            topCPUProcesses = []
-            topMemoryProcesses = []
-            topGPUProcesses = []
-            topNetworkProcesses = []
-            topDiskProcesses = []
+            if !topCPUProcesses.isEmpty { topCPUProcesses = [] }
+            if !topMemoryProcesses.isEmpty { topMemoryProcesses = [] }
+            if !topGPUProcesses.isEmpty { topGPUProcesses = [] }
+            if !topNetworkProcesses.isEmpty { topNetworkProcesses = [] }
+            if !topDiskProcesses.isEmpty { topDiskProcesses = [] }
         }
         let capacity = max(40, min(historySeconds, 3600) / 3)
         if capacity != historyCapacity {
@@ -1204,14 +1215,12 @@ final class SystemMonitorManager: ObservableObject {
             // first real rows arrive on the next tick instead of after a gap.
             refresh()
         } else {
+            // Reset rate baselines (they'd span the closed period), but keep
+            // the last rows: the next open shows them instantly and updates
+            // in place instead of growing from empty lists.
             nettopState = nil
             gpuClientState = nil
             diskProcessState = nil
-            topDiskProcesses = []
-            topCPUProcesses = []
-            topMemoryProcesses = []
-            topGPUProcesses = []
-            topNetworkProcesses = []
         }
     }
 }

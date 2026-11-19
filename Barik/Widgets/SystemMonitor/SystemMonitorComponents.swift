@@ -119,7 +119,9 @@ struct SMHistoryChart: View {
 
     @ViewBuilder
     private var chartBody: some View {
-        Canvas { context, size in
+        // Rasterised off the main thread: a dashboard page has several charts
+        // and CPU-drawing them on main stalled the popup's open animation.
+        Canvas(rendersAsynchronously: true) { context, size in
             let allValues = series.flatMap(\.values)
             let dataMax = max(allValues.max() ?? 0, 0.0001)
             let ceiling = maxHeight ?? dataMax * 1.15
