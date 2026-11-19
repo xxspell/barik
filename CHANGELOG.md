@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.1
+
+### Fixed
+- Fix the System Monitor popup not opening when you click the numbers in the bar — it used to open only from the gaps between metrics. Clicking a metric now opens the dashboard on its page, switches pages while it's open, and clicking the current page again closes it
+
+### Performance
+- Cut Barik's idle CPU use from about 23% to about 1% while an AI agent is working: the agent spinner and the "needs you" pulse now animate on the GPU instead of redrawing the whole bar 30 times a second
+- Make the System Monitor dashboard open smoothly: process lists stay filled between opens instead of reloading mid-animation, charts draw off the main thread, and opening it no longer redraws every bar widget
+
 ## 0.18.0
 
 ![Header](https://raw.githubusercontent.com/xxspell/barik/main/resources/changelog/0.18.0/banner-system-monitor.png)
