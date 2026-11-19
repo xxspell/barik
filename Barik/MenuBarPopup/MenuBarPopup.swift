@@ -76,6 +76,13 @@ class HidingPanel: NSPanel, NSWindowDelegate {
 class MenuBarPopup {
     static var lastContentIdentifier: String? = nil
 
+    /// True while the popup with `id` is on screen and focused (a second
+    /// `show` with the same id would close it).
+    static func isShowing(id: String) -> Bool {
+        guard let panel else { return false }
+        return panel.isKeyWindow && lastContentIdentifier == id
+    }
+
     static func hide() {
         guard let panel else { return }
 

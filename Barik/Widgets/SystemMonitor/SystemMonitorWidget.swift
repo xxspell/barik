@@ -141,7 +141,7 @@ struct SystemMonitorWidget: View {
             ForEach(metrics, id: \.rawValue) { metric in
                 tuiMetric(metric, style: style)
                     .contentShape(Rectangle())
-                    .simultaneousGesture(TapGesture().onEnded { systemMonitor.focus(on: metric) })
+                    .onTapGesture { handleTap(on: metric) }
             }
         }
         .barikFont(size: 12, weight: .regular, design: .monospaced)
@@ -151,20 +151,12 @@ struct SystemMonitorWidget: View {
         .captureScreenRect(into: $rect)
         .contentShape(Rectangle())
         .animation(sizeChangeAnimation, value: animatedWidthSignature)
-        .onTapGesture {
-            MenuBarPopup.show(rect: rect, id: "system-monitor") {
-                SystemMonitorPopup()
-                    .environmentObject(configProvider)
-            }
-        }
+        .onTapGesture { handleTap(on: nil) }
         .debugPopupTrigger(id: "system-monitor", rect: rect) { info in
             if let page = (info["category"] as? String).flatMap(SystemMonitorCategory.init(rawValue:)) {
                 systemMonitor.selectedCategory = page
             }
-            MenuBarPopup.show(rect: rect, id: "system-monitor") {
-                SystemMonitorPopup()
-                    .environmentObject(configProvider)
-            }
+            showPopup()
         }
     }
 
@@ -226,7 +218,7 @@ struct SystemMonitorWidget: View {
                                 VStack(alignment: .leading, spacing: columnRowSpacing) {
                                     metricRow(for: metric)
                                         .contentShape(Rectangle())
-                                        .simultaneousGesture(TapGesture().onEnded { systemMonitor.focus(on: metric) })
+                                        .onTapGesture { handleTap(on: metric) }
 
                                     if dividerMode.showsHorizontalDividers && metricIndex < column.count - 1 {
                                         metricDivider()
@@ -250,20 +242,40 @@ struct SystemMonitorWidget: View {
         .frame(maxHeight: .infinity)
         .background(.black.opacity(0.001))
         .animation(sizeChangeAnimation, value: animatedWidthSignature)
-        .onTapGesture {
-            MenuBarPopup.show(rect: rect, id: "system-monitor") {
-                SystemMonitorPopup()
-                    .environmentObject(configProvider)
-            }
-        }
+        .onTapGesture { handleTap(on: nil) }
         .debugPopupTrigger(id: "system-monitor", rect: rect) { info in
             if let page = (info["category"] as? String).flatMap(SystemMonitorCategory.init(rawValue:)) {
                 systemMonitor.selectedCategory = page
             }
-            MenuBarPopup.show(rect: rect, id: "system-monitor") {
-                SystemMonitorPopup()
-                    .environmentObject(configProvider)
+            showPopup()
+        }
+    }
+
+    private static let popupID = "system-monitor"
+
+    /// One tap handler for the whole widget. Metric rows pass themselves in;
+    /// they used to add a separate simultaneous tap, which (as a child gesture)
+    /// beat the parent's open-popup tap, so clicking a number only switched the
+    /// page of a closed popup and nothing opened.
+    /// - closed popup: open it, on the clicked metric's page;
+    /// - open popup, metric of another page: switch page, stay open;
+    /// - otherwise: toggle (close).
+    private func handleTap(on metric: SystemMonitorMetric?) {
+        if let metric {
+            let page = SystemMonitorCategory(rawValue: metric.rawValue) ?? .overview
+            if MenuBarPopup.isShowing(id: Self.popupID), page != systemMonitor.selectedCategory {
+                systemMonitor.selectedCategory = page
+                return
             }
+            systemMonitor.focus(on: metric)
+        }
+        showPopup()
+    }
+
+    private func showPopup() {
+        MenuBarPopup.show(rect: rect, id: Self.popupID) {
+            SystemMonitorPopup()
+                .environmentObject(configProvider)
         }
     }
 
